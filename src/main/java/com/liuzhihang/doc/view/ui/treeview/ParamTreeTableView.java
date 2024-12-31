@@ -57,7 +57,7 @@ public class ParamTreeTableView extends TreeTableView {
                     return "不可修改";
                 }
             },
-            new ColumnInfo("必选") {
+            new ColumnInfo("必填") {
                 @Nullable
                 @Override
                 public Object valueOf(Object o) {

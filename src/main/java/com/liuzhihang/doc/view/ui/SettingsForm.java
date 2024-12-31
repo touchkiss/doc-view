@@ -58,6 +58,10 @@ public class SettingsForm {
      * 字段名称是否取 JsonProperty 注解 checkBox
      */
     private JCheckBox fieldNameJsonPropertyCheckBox;
+    /**
+     * 当没有JsonProperty注解时，是否使用驼峰命名
+     */
+    private JCheckBox fieldNameSnakeCase;
 
     private JPanel exportPanel;
     private JCheckBox mergeExportCheckBox;
@@ -116,6 +120,7 @@ public class SettingsForm {
                 || descSwaggerCheckBox.isSelected() != settings.getDescUseSwagger()
                 || requireCommentTagCheckBox.isSelected() != settings.getRequiredUseCommentTag()
                 || fieldNameJsonPropertyCheckBox.isSelected() != settings.getFieldNameJsonProperty()
+                || fieldNameSnakeCase.isSelected() != settings.getFieldNameCaseType()
                 || mergeExportCheckBox.isSelected() != settings.getMergeExport()
                 || hideLeftCheckBox.isSelected() != settings.getHideLeft()
                 || lineMarkerCheckBox.isSelected() != settings.getLineMarker()
@@ -143,6 +148,7 @@ public class SettingsForm {
         settings.setDescUseSwagger(descSwaggerCheckBox.isSelected());
         settings.setRequiredUseCommentTag(requireCommentTagCheckBox.isSelected());
         settings.setFieldNameJsonProperty(fieldNameJsonPropertyCheckBox.isSelected());
+        settings.setFieldNameCaseType(fieldNameSnakeCase.isSelected());
         settings.setMergeExport(mergeExportCheckBox.isSelected());
         settings.setHideLeft(hideLeftCheckBox.isSelected());
         settings.setLineMarker(lineMarkerCheckBox.isSelected());
@@ -174,6 +180,7 @@ public class SettingsForm {
         descSwaggerCheckBox.setSelected(settings.getDescUseSwagger());
         requireCommentTagCheckBox.setSelected(settings.getRequiredUseCommentTag());
         fieldNameJsonPropertyCheckBox.setSelected(settings.getFieldNameJsonProperty());
+        fieldNameSnakeCase.setSelected(settings.getFieldNameCaseType());
         mergeExportCheckBox.setSelected(settings.getMergeExport());
         hideLeftCheckBox.setSelected(settings.getHideLeft());
         lineMarkerCheckBox.setSelected(settings.getLineMarker());

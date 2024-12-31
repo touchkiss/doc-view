@@ -1,21 +1,12 @@
 package com.liuzhihang.doc.view.utils;
 
 import com.intellij.codeInsight.AnnotationUtil;
+import com.intellij.lang.jvm.annotation.JvmAnnotationAttribute;
+import com.intellij.lang.jvm.annotation.JvmAnnotationConstantValue;
 import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.module.Module;
 import com.intellij.openapi.util.Computable;
-import com.intellij.psi.CommonClassNames;
-import com.intellij.psi.PsiAnnotation;
-import com.intellij.psi.PsiClass;
-import com.intellij.psi.PsiClassType;
-import com.intellij.psi.PsiElement;
-import com.intellij.psi.PsiField;
-import com.intellij.psi.PsiMethod;
-import com.intellij.psi.PsiModifier;
-import com.intellij.psi.PsiModifierList;
-import com.intellij.psi.PsiParameter;
-import com.intellij.psi.PsiPrimitiveType;
-import com.intellij.psi.PsiType;
+import com.intellij.psi.*;
 import com.intellij.psi.impl.java.stubs.index.JavaAnnotationIndex;
 import com.intellij.psi.javadoc.PsiDocComment;
 import com.intellij.psi.search.GlobalSearchScope;
@@ -25,6 +16,7 @@ import com.intellij.psi.util.PsiUtil;
 import com.liuzhihang.doc.view.config.Settings;
 import com.liuzhihang.doc.view.constant.FieldTypeConstant;
 import com.liuzhihang.doc.view.constant.SpringConstant;
+import com.liuzhihang.doc.view.constant.ValidationConstant;
 import com.liuzhihang.doc.view.dto.Body;
 import com.liuzhihang.doc.view.dto.Header;
 import com.liuzhihang.doc.view.dto.Param;
@@ -34,11 +26,7 @@ import org.jetbrains.annotations.NotNull;
 
 import java.util.*;
 
-import static com.liuzhihang.doc.view.constant.MethodConstant.DELETE;
-import static com.liuzhihang.doc.view.constant.MethodConstant.GET;
-import static com.liuzhihang.doc.view.constant.MethodConstant.PATCH;
-import static com.liuzhihang.doc.view.constant.MethodConstant.POST;
-import static com.liuzhihang.doc.view.constant.MethodConstant.PUT;
+import static com.liuzhihang.doc.view.constant.MethodConstant.*;
 
 /**
  * Spring 相关操作工具类
@@ -299,16 +287,36 @@ public class SpringPsiUtils extends ParamPsiUtils {
                 continue;
             }
 
-            PsiType type = parameter.getType();
+//            PsiType type = parameter.getType();
 
             // 不是 String 就不处理了
-            if (!"String".equals(type.getPresentableText())) {
-                continue;
+//            if (!"String".equals(type.getPresentableText())) {
+//                continue;
+//            }
+            PsiAnnotation requestHeader = AnnotationUtil.findAnnotation(parameter, SpringConstant.REQUEST_HEADER);
+
+            List<JvmAnnotationAttribute> attributes = requestHeader.getAttributes();
+
+            String headerName = parameter.getName();
+            String defaultValue = null;
+            boolean required = true;
+            for (JvmAnnotationAttribute attribute : attributes) {
+                if ("name".equals(attribute.getAttributeName()) || "value".equals(attribute.getAttributeName())) {
+//                    获取 headerName
+                    headerName = Objects.requireNonNull(((JvmAnnotationConstantValue) Objects.requireNonNull(attribute.getAttributeValue())).getConstantValue()).toString();
+                }
+                if ("defaultValue".equals(attribute.getAttributeName())) {
+                    defaultValue = Objects.requireNonNull(((JvmAnnotationConstantValue) Objects.requireNonNull(attribute.getAttributeValue())).getConstantValue()).toString();
+                }
+                if ("required".equals(attribute.getAttributeName())) {
+                    required = Boolean.parseBoolean(Objects.requireNonNull(((JvmAnnotationConstantValue) Objects.requireNonNull(attribute.getAttributeValue())).getConstantValue()).toString());
+                }
             }
 
             Header header = new Header();
-            header.setRequired(true);
-            header.setName(parameter.getName());
+            header.setRequired(required);
+            header.setName(headerName);
+            header.setValue(defaultValue);
             list.add(header);
         }
         return list;
@@ -335,6 +343,7 @@ public class SpringPsiUtils extends ParamPsiUtils {
             root.getChildList().add(body);
             return root;
         }
+        boolean isProto = ProtoUtils.isProto(type);
 
         // 对象类型：对对象进行解析
         PsiClass psiClass = PsiUtil.resolveClassInType(type);
@@ -345,11 +354,11 @@ public class SpringPsiUtils extends ParamPsiUtils {
             Map<String, PsiType> genericsMap = CustomPsiUtils.getGenericsMap(psiClassType);
             for (PsiField field : psiClass.getAllFields()) {
                 // 通用排除字段
-                if (DocViewUtils.isExcludeField(field)) {
+                if (DocViewUtils.isExcludeField(field, isProto)) {
                     continue;
                 }
                 // 增加 genericsMap 参数传入，用于将泛型 T 替换为原始对象
-                ParamPsiUtils.buildBodyParam(field, genericsMap, root, new HashMap<>());
+                ParamPsiUtils.buildBodyParam(field, genericsMap, root, new HashMap<>(), isProto);
             }
         }
         return root;
@@ -484,6 +493,7 @@ public class SpringPsiUtils extends ParamPsiUtils {
         param.setRequired(DocViewUtils.isRequired(field));
         param.setName(field.getName());
         param.setDesc(DocViewUtils.fieldDesc(field));
+        param.setExample(DocViewUtils.fieldExample(field));
         param.setType(field.getType().getPresentableText());
 
         return param;
@@ -506,4 +516,21 @@ public class SpringPsiUtils extends ParamPsiUtils {
         return param;
     }
 
+    public static String getValidatedValue(@NotNull PsiField psiField) {
+        StringBuilder validatedValue = new StringBuilder(" ");
+        PsiAnnotation minAnnotation = AnnotationUtil.findAnnotation(psiField, ValidationConstant.MIN);
+        if (minAnnotation != null) {
+            validatedValue.append("最小值:").append(AnnotationUtil.getLongAttributeValue(minAnnotation, "value")).append(";");
+        }
+        PsiAnnotation maxAnnotation = AnnotationUtil.findAnnotation(psiField, ValidationConstant.MAX);
+        if (maxAnnotation != null) {
+            validatedValue.append("最大值:").append(AnnotationUtil.getLongAttributeValue(maxAnnotation, "value")).append(";");
+        }
+        PsiAnnotation sizeAnnotation = AnnotationUtil.findAnnotation(psiField, ValidationConstant.SIZE);
+        if (sizeAnnotation != null) {
+            validatedValue.append("长度范围:").append("最小值:").append(AnnotationUtil.getLongAttributeValue(sizeAnnotation, "min")).append(",");
+            validatedValue.append("最大值:").append(AnnotationUtil.getLongAttributeValue(sizeAnnotation, "max")).append(";");
+        }
+        return validatedValue.toString();
+    }
 }

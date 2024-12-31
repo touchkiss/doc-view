@@ -10,6 +10,7 @@ import com.intellij.openapi.ui.popup.JBPopup;
 import com.intellij.openapi.ui.popup.JBPopupFactory;
 import com.intellij.psi.PsiClass;
 import com.intellij.psi.PsiFile;
+import com.intellij.psi.util.PsiTypesUtil;
 import com.intellij.ui.WindowMoveListener;
 import com.intellij.ui.treeStructure.treetable.ListTreeTableModelOnColumns;
 import com.intellij.util.ui.JBUI;
@@ -23,6 +24,7 @@ import com.liuzhihang.doc.view.ui.treeview.ParamTreeTableView;
 import com.liuzhihang.doc.view.utils.DocViewUtils;
 import com.liuzhihang.doc.view.utils.GsonFormatUtil;
 import com.liuzhihang.doc.view.utils.ParamPsiUtils;
+import com.liuzhihang.doc.view.utils.ProtoUtils;
 import icons.DocViewIcons;
 import org.jetbrains.annotations.Contract;
 import org.jetbrains.annotations.NonNls;
@@ -240,7 +242,8 @@ public class ParamDocEditorForm {
 
         Body rootBody = new Body();
         rootBody.setQualifiedNameForClassType(psiClass.getQualifiedName());
-        ParamPsiUtils.buildBodyList(psiClass, null, rootBody);
+        boolean isProto = ProtoUtils.isProto(PsiTypesUtil.getClassType(psiClass));
+        ParamPsiUtils.buildBodyList(psiClass, null, rootBody, isProto);
 
         List<DocViewParamData> dataList = DocViewData.buildBodyDataList(rootBody.getChildList());
 

@@ -27,6 +27,7 @@
 
         <!-- 相关服务 -->
         <applicationService serviceImplementation="com.liuzhihang.doc.view.service.impl.SpringDocViewServiceImpl"/>
+        <applicationService serviceImplementation="com.liuzhihang.doc.view.service.impl.PojoDocViewServiceImpl"/>
 
         <applicationService serviceImplementation="com.liuzhihang.doc.view.service.impl.DubboDocViewServiceImpl"/>
         <applicationService serviceImplementation="com.liuzhihang.doc.view.service.impl.WriterService"/>

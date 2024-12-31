@@ -6,6 +6,7 @@ import com.liuzhihang.doc.view.config.TemplateSettings;
 import com.liuzhihang.doc.view.enums.FrameworkEnum;
 import com.liuzhihang.doc.view.utils.VelocityUtils;
 import lombok.Data;
+import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.collections.CollectionUtils;
 import org.apache.commons.lang3.StringUtils;
 import org.jetbrains.annotations.Contract;
@@ -23,6 +24,7 @@ import java.util.stream.Collectors;
  * @author liuzhihang
  * @date 2020/11/21 16:39
  */
+@Slf4j
 @Data
 public class DocViewData {
 
@@ -75,6 +77,8 @@ public class DocViewData {
      */
     private final String requestBody;
 
+    private final String requestJsonWithDesc;
+
     /**
      * 请求示例
      */
@@ -85,6 +89,11 @@ public class DocViewData {
      */
     private final List<DocViewParamData> responseParamDataList;
     private final String responseParam;
+
+    /**
+     * 带有 DESC 响应 JSON
+     */
+    private final String responseJsonWithDesc;
 
     /**
      * 返回示例
@@ -111,12 +120,105 @@ public class DocViewData {
 
         this.requestBodyDataList = buildBodyDataList(docView.getReqBody().getChildList());
         this.requestBody = settings.getSeparateParam() ? separateParamMarkdown(requestBodyDataList) : paramMarkdown(requestBodyDataList);
+        this.requestJsonWithDesc = buildJsonWithDesc(requestBodyDataList);
         this.requestExample = requestExample(docView);
 
         this.responseParamDataList = buildBodyDataList(docView.getRespBody().getChildList());
         this.responseParam = settings.getSeparateParam() ? separateParamMarkdown(responseParamDataList) : paramMarkdown(responseParamDataList);
         this.responseExample = respBodyExample(docView.getRespExample());
 
+        this.responseJsonWithDesc = buildJsonWithDesc(responseParamDataList);
+        log.info("responseJsonWithDesc:{}", responseJsonWithDesc);
+    }
+
+    /**
+     * 带有描述的 JSON
+     *
+     * @param responseParamDataList
+     * @return
+     */
+    private String buildJsonWithDesc(List<DocViewParamData> responseParamDataList) {
+        if (CollectionUtils.isEmpty(responseParamDataList)) {
+            return "";
+        }
+        return "{\n" + buildJsonWithDescContent(responseParamDataList) + "}";
+    }
+
+    private String buildJsonWithDescContent(List<DocViewParamData> responseParamDataList) {
+        StringBuilder builder = new StringBuilder();
+        for (int j = 0; j < responseParamDataList.size(); j++) {
+            DocViewParamData data = responseParamDataList.get(j);
+            String tab = "    ";
+            for (int i = 0; i < data.getTabCount(); i++) {
+                builder.append(tab);
+            }
+            builder.append("\"").append(data.getName()).append("\": ");
+            if (CollectionUtils.isNotEmpty(data.getChildList())) {
+                if (data.isArray()) {
+                    builder.append("[");
+                    addDesc(data, builder, tab);
+                    for (int i = 0; i < data.getTabCount() + 1; i++) {
+                        builder.append(tab);
+                    }
+                    builder.append("{\n");
+                } else {
+                    builder.append("{");
+                    addDesc(data, builder, tab);
+                }
+                if (data.getChildList().size() == 1 && "element".equals(data.getChildList().get(0).getName())) {
+                    builder.append(buildJsonWithDescContent(data.getChildList().get(0).getChildList()));
+                } else {
+                    builder.append(buildJsonWithDescContent(data.getChildList()));
+                }
+                if (data.isArray()) {
+                    for (int i = 0; i < data.getTabCount() + 1; i++) {
+                        builder.append(tab);
+                    }
+                    builder.append("}\n");
+                    for (int i = 0; i < data.getTabCount(); i++) {
+                        builder.append(tab);
+                    }
+                    builder.append("]");
+                } else {
+                    for (int i = 0; i < data.getTabCount(); i++) {
+                        builder.append(tab);
+                    }
+                    builder.append("}\n");
+                }
+                if (j < responseParamDataList.size() - 1) {
+                    builder.append(",\n");
+                } else if (data.isArray()) {
+                    builder.append("\n");
+                }
+            } else {
+                if (doNotNeedQuote(data.getType())) {
+                    builder.append(data.getExample());
+                } else {
+                    builder.append("\"").append(data.getExample()).append("\"");
+                }
+                if (j < responseParamDataList.size() - 1) {
+                    builder.append(",");
+                }
+                addDesc(data, builder, tab);
+            }
+        }
+        return builder.toString();
+    }
+
+    private static boolean doNotNeedQuote(String type) {
+        return "int".equals(type) || "Integer".equals(type)
+                || "long".equals(type) || "Long".equals(type)
+                || "float".equals(type) || "Float".equals(type)
+                || "double".equals(type) || "Double".equals(type)
+                || "boolean".equals(type) || "Boolean".equals(type);
+    }
+
+    private static void addDesc(DocViewParamData data, StringBuilder builder, String tab) {
+        if (StringUtils.isNotBlank(data.getDesc())) {
+            builder.append(tab).append("//").append(" ").append(data.getDesc()).append("\n");
+        } else {
+            builder.append("\n");
+        }
     }
 
     @NotNull
@@ -150,7 +252,7 @@ public class DocViewData {
             return "";
         }
 
-        return "|参数名|类型|必选|描述|\n"
+        return "|参数名|类型|必填|描述|\n"
                 + "|:-----|:-----|:-----|:-----|\n"
                 + paramMarkdownContent(dataList);
     }
@@ -165,12 +267,12 @@ public class DocViewData {
         List<DocViewParamData> paramDataList = new ArrayList<>();
 
         StringBuilder builder = new StringBuilder();
-        builder.append("|参数名|类型|必选|描述|\n")
+        builder.append("|参数名|类型|必填|描述|\n")
                 .append("|:-----|:-----|:-----|:-----|\n");
         for (DocViewParamData data : dataList) {
             builder.append("|").append(data.getName())
                     .append("|").append(data.getType())
-                    .append("|").append(data.getRequired() ? "Y" : "N")
+                    .append("|").append(Boolean.TRUE.equals(data.getRequired()) ? "Y" : "N")
                     .append("|").append(data.getDesc())
                     .append("|").append("\n");
             if (CollectionUtils.isNotEmpty(data.getChildList())) {
@@ -293,18 +395,19 @@ public class DocViewData {
             return new ArrayList<>();
         }
 
-        return buildBodyDataList(bodyList, "", "");
+        return buildBodyDataList(bodyList, "", "", 1);
     }
 
     /**
      * 递归 body 生成 List<ParamData>
      *
-     * @param bodyList
      * @param prefixSymbol1,
+     * @param bodyList
      * @param prefixSymbol2
+     * @param i
      */
     @NotNull
-    private static List<DocViewParamData> buildBodyDataList(@NotNull List<Body> bodyList, String prefixSymbol1, String prefixSymbol2) {
+    private static List<DocViewParamData> buildBodyDataList(@NotNull List<Body> bodyList, String prefixSymbol1, String prefixSymbol2, int tabCount) {
 
         List<DocViewParamData> dataList = new ArrayList<>();
 
@@ -320,13 +423,15 @@ public class DocViewData {
 
             data.setPrefixSymbol1(prefixSymbol1);
             data.setPrefixSymbol2(prefixSymbol2);
+            data.setTabCount(tabCount);
+            data.setArray(body.isArray());
 
             if (CollectionUtils.isNotEmpty(body.getChildList())) {
 
                 Settings settings = Settings.getInstance(body.getPsiElement().getProject());
 
                 data.setChildList(
-                        buildBodyDataList(body.getChildList(), settings.getPrefixSymbol1(), prefixSymbol2 + settings.getPrefixSymbol2()));
+                        buildBodyDataList(body.getChildList(), settings.getPrefixSymbol1(), prefixSymbol2 + settings.getPrefixSymbol2(), tabCount + 1));
             }
             dataList.add(data);
         }

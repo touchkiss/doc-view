@@ -133,6 +133,22 @@ public class CustomPsiCommentUtils {
 
     }
 
+    public static String tagValueFromDocComment(PsiDocComment docComment, String tagName) {
+        return ApplicationManager.getApplication().runReadAction((Computable<String>) () -> {
+            String comment = "";
+            if (docComment == null) {
+                return comment;
+            }
+            for (PsiElement element : docComment.getChildren()) {
+                if (!("PsiDocTag:@" + tagName).equalsIgnoreCase(element.toString())) {
+                    continue;
+                }
+                return element.getText().replace(("@" + tagName), StringUtils.EMPTY).trim();
+            }
+            return "";
+        });
+    }
+
     /**
      * 获取注释, 没有 tag 的注释
      *

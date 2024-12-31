@@ -15,6 +15,8 @@ import org.jetbrains.annotations.Nullable;
 import java.util.HashSet;
 import java.util.Set;
 
+import static com.liuzhihang.doc.view.constant.JsonPropertyConstant.SNAKE_CASE;
+
 /**
  * 配置持久保存
  * <p>
@@ -66,6 +68,10 @@ public class Settings implements PersistentStateComponent<Settings> {
      * 字段名称取 JsonProperty 注解
      */
     private Boolean fieldNameJsonProperty = true;
+    /**
+     * 字段名称形式，默认snake_case
+     */
+    private Boolean  fieldNameCaseType = true;
 
     /**
      * 是否合并导出
@@ -102,6 +108,13 @@ public class Settings implements PersistentStateComponent<Settings> {
         add(SpringConstant.DELETE_MAPPING);
         add(SpringConstant.PATCH_MAPPING);
         add(SpringConstant.REQUEST_MAPPING);
+    }};
+
+    /**
+     * 包含lombok.data，认为是pojo类
+     */
+    private Set<String> containPojoClassAnnotationName = new HashSet<>() {{
+        add(SpringConstant.DATA);
     }};
 
 

@@ -1,9 +1,6 @@
 package com.liuzhihang.doc.view.utils;
 
 import com.intellij.codeInsight.AnnotationUtil;
-import com.intellij.openapi.application.ApplicationManager;
-import com.intellij.openapi.application.NonBlockingReadAction;
-import com.intellij.openapi.application.impl.NonBlockingReadActionImpl;
 import com.intellij.openapi.module.Module;
 import com.intellij.openapi.project.Project;
 import com.intellij.psi.*;
@@ -11,6 +8,7 @@ import com.intellij.psi.impl.java.stubs.index.JavaAnnotationIndex;
 import com.intellij.psi.search.GlobalSearchScope;
 import com.intellij.psi.search.searches.ClassInheritorsSearch;
 import com.intellij.psi.util.InheritanceUtil;
+import com.intellij.psi.util.PsiClassUtil;
 import com.intellij.psi.util.PsiTypesUtil;
 import com.intellij.psi.util.PsiUtil;
 import com.intellij.util.xml.DomFileElement;
@@ -127,7 +125,6 @@ public class DubboPsiUtils {
             body.setName(parameter.getName());
             body.setType(type.getPresentableText());
             body.setParent(root);
-
             root.getChildList().add(body);
 
             PsiClass childClass = null;
@@ -140,6 +137,7 @@ public class DubboPsiUtils {
                 childClass = PsiUtil.resolveClassInClassTypeOnly(iterableType);
 
                 body.setPsiElement(childClass);
+                body.setArray(true);
 
             } else if (InheritanceUtil.isInheritor(type, CommonClassNames.JAVA_UTIL_MAP)) {
                 //  map
@@ -163,12 +161,12 @@ public class DubboPsiUtils {
                 // 判断 childClass 是否已经在根节点到当前节点的链表上存在, 存在的话则不继续递归
 
                 String qualifiedName = childClass.getQualifiedName();
-
+                boolean isProto = ProtoUtils.isProto(PsiTypesUtil.getClassType(childClass));
                 if (StringUtils.isNotBlank(qualifiedName) && !ParamPsiUtils.checkLinkedListHasTypeClass(body, qualifiedName)) {
                     body.setQualifiedNameForClassType(qualifiedName);
                     for (PsiField psiField : childClass.getAllFields()) {
-                        if (!DocViewUtils.isExcludeField(psiField)) {
-                            ParamPsiUtils.buildBodyParam(psiField, null, body, new HashMap<>());
+                        if (!DocViewUtils.isExcludeField(psiField, false)) {
+                            ParamPsiUtils.buildBodyParam(psiField, null, body, new HashMap<>(), isProto);
                         }
                     }
                 }

@@ -35,11 +35,12 @@ public class ParamPsiUtils {
     /**
      * 生成 body
      *
-     * @param field       字段
-     * @param genericsMap key 是泛型 value 是对应的类型
-     * @param parent      父字段
+     * @param field         字段
+     * @param genericsMap   key 是泛型 value 是对应的类型
+     * @param parent        父字段
+     * @param parentIsProto
      */
-    public static void buildBodyParam(PsiField field, Map<String, PsiType> genericsMap, Body parent, Map<String, Boolean> parentChildPair) {
+    public static void buildBodyParam(PsiField field, Map<String, PsiType> genericsMap, Body parent, Map<String, Boolean> parentChildPair, boolean parentIsProto) {
 
         String pair = parent.getQualifiedNameForClassType() + "_" + field.getName();
         if (parentChildPair.containsKey(pair)) {
@@ -48,9 +49,10 @@ public class ParamPsiUtils {
         parentChildPair.put(pair, true);
 
         PsiType type = field.getType();
+        boolean isProto = ProtoUtils.isProto(type);
         Body body = new Body();
         body.setRequired(DocViewUtils.isRequired(field));
-        body.setName(DocViewUtils.fieldName(field));
+        body.setName(DocViewUtils.fieldName(field, parentIsProto));
         body.setPsiElement(field);
         body.setType(type.getPresentableText());
         body.setDesc(DocViewUtils.fieldDesc(field));
@@ -99,7 +101,7 @@ public class ParamPsiUtils {
             // 集合参数构建, 集合就一个参数, 泛型 E
             fieldGenericsMap = CustomPsiUtils.getGenericsMap((PsiClassType) iterableType);
             parentBody = buildFieldGenericsBody("element", childClass, body);
-
+            body.setArray(true);
 
         } else if (InheritanceUtil.isInheritor(type, CommonClassNames.JAVA_UTIL_MAP)) {
             // HashMap or Map 的泛型获取 value
@@ -146,8 +148,8 @@ public class ParamPsiUtils {
             return;
         }
         for (PsiField psiField : childClass.getAllFields()) {
-            if (!DocViewUtils.isExcludeField(psiField)) {
-                buildBodyParam(psiField, fieldGenericsMap, parentBody, parentChildPair);
+            if (!DocViewUtils.isExcludeField(psiField, isProto)) {
+                buildBodyParam(psiField, fieldGenericsMap, parentBody, parentChildPair, isProto);
             }
         }
 
@@ -321,14 +323,16 @@ public class ParamPsiUtils {
             return fieldMap;
         }
 
+        boolean isProto = ProtoUtils.isProto(PsiTypesUtil.getClassType(psiClass));
+
         // 设置当前类的类型
         qualifiedNameList.add(psiClass.getQualifiedName());
         for (PsiField field : psiClass.getAllFields()) {
-            if (DocViewUtils.isExcludeField(field)) {
+            if (DocViewUtils.isExcludeField(field, isProto)) {
                 continue;
             }
             PsiType type = field.getType();
-            String name = DocViewUtils.fieldName(field);
+            String name = DocViewUtils.fieldName(field, isProto);
             if (type instanceof PsiPrimitiveType) {
                 // 基本类型
                 fieldMap.put(name, PsiTypesUtil.getDefaultValue(type));
@@ -478,6 +482,7 @@ public class ParamPsiUtils {
             root.getChildList().add(body);
             return root;
         }
+        boolean isProto = ProtoUtils.isProto(returnType);
 
         if (returnType instanceof PsiClassType psiClassType) {
             PsiClass psiClass = PsiUtil.resolveClassInType(returnType);
@@ -504,28 +509,28 @@ public class ParamPsiUtils {
                         // 泛型是类
                         PsiClass genericsPsiClass = PsiUtil.resolveClassInClassTypeOnly(psiType);
                         if (genericsPsiClass != null) {
-                            buildBodyList(genericsPsiClass, null, collectionBody);
+                            buildBodyList(genericsPsiClass, null, collectionBody,isProto);
                         }
                     }
                 } else {
                     // 返回值可能是带泛型的, psiClassType.getParameters() 获取到的
                     Map<String, PsiType> genericMap = CustomPsiUtils.getGenericsMap(psiClassType);
-                    buildBodyList(psiClass, genericMap, root);
+                    buildBodyList(psiClass, genericMap, root, isProto);
                 }
             }
         }
         return root;
     }
 
-    public static void buildBodyList(@NotNull PsiClass psiClass, Map<String, PsiType> genericMap, Body parent) {
+    public static void buildBodyList(@NotNull PsiClass psiClass, Map<String, PsiType> genericMap, Body parent, boolean isProto) {
 
         for (PsiField field : psiClass.getAllFields()) {
 
-            if (DocViewUtils.isExcludeField(field)) {
+            if (DocViewUtils.isExcludeField(field, isProto)) {
                 continue;
             }
 
-            ParamPsiUtils.buildBodyParam(field, genericMap, parent, new HashMap<>());
+            ParamPsiUtils.buildBodyParam(field, genericMap, parent, new HashMap<>(), isProto);
         }
 
     }

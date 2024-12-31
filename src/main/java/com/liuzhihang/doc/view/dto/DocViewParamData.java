@@ -29,6 +29,15 @@ public class DocViewParamData {
      * 前缀 2
      */
     private String prefixSymbol2 = "";
+    /**
+     * 控制 tab 的数量
+     */
+    private int tabCount = 0;
+
+    /**
+     * is 数组
+     */
+    private boolean isArray;
 
     /**
      * 参数名

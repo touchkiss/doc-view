@@ -4,12 +4,14 @@ import com.intellij.psi.PsiClass;
 import com.intellij.psi.PsiMethod;
 import com.intellij.psi.PsiParameter;
 import com.intellij.psi.PsiType;
+import com.intellij.psi.util.PsiUtil;
 import com.liuzhihang.doc.view.dto.DocView;
 import com.liuzhihang.doc.view.enums.ContentTypeEnum;
 import com.liuzhihang.doc.view.enums.FrameworkEnum;
 import com.liuzhihang.doc.view.service.DocViewService;
 import com.liuzhihang.doc.view.utils.DocViewUtils;
 import com.liuzhihang.doc.view.utils.ParamPsiUtils;
+import com.liuzhihang.doc.view.utils.ProtoUtils;
 import com.liuzhihang.doc.view.utils.SpringPsiUtils;
 import org.jetbrains.annotations.NotNull;
 
@@ -89,6 +91,7 @@ public class SpringDocViewServiceImpl implements DocViewService {
         docView.setHeaderList(SpringPsiUtils.buildHeader(psiMethod));
 
         PsiType returnType = psiMethod.getReturnType();
+
         if (returnType != null && returnType.isValid() && !returnType.equalsToText(VOID)) {
             docView.setRespBody(ParamPsiUtils.buildRespBody(returnType));
             docView.setRespExample(ParamPsiUtils.getRespBodyJson(returnType));

@@ -9,9 +9,11 @@ import com.liuzhihang.doc.view.config.Settings;
 import com.liuzhihang.doc.view.dto.DocView;
 import com.liuzhihang.doc.view.exception.DocViewException;
 import com.liuzhihang.doc.view.service.impl.DubboDocViewServiceImpl;
+import com.liuzhihang.doc.view.service.impl.PojoDocViewServiceImpl;
 import com.liuzhihang.doc.view.service.impl.SpringDocViewServiceImpl;
 import com.liuzhihang.doc.view.utils.DubboPsiUtils;
 import com.liuzhihang.doc.view.utils.FeignPsiUtil;
+import com.liuzhihang.doc.view.utils.PojoUtils;
 import com.liuzhihang.doc.view.utils.SpringPsiUtils;
 import org.apache.commons.lang3.RandomStringUtils;
 import org.jetbrains.annotations.NotNull;
@@ -59,6 +61,10 @@ public interface DocViewService {
         // 其他
         if (settings.getIncludeNormalInterface()) {
             return ApplicationManager.getApplication().getService(DubboDocViewServiceImpl.class);
+        }
+
+        if (PojoUtils.isPojoClass(targetClass)) {
+            return ApplicationManager.getApplication().getService(PojoDocViewServiceImpl.class);
         }
 
         throw new DocViewException(DocViewBundle.message("notify.error.not.support"));

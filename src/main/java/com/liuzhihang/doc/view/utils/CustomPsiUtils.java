@@ -1,17 +1,7 @@
 package com.liuzhihang.doc.view.utils;
 
 import com.intellij.openapi.editor.Editor;
-import com.intellij.psi.PsiClass;
-import com.intellij.psi.PsiClassType;
-import com.intellij.psi.PsiElement;
-import com.intellij.psi.PsiField;
-import com.intellij.psi.PsiFile;
-import com.intellij.psi.PsiMethod;
-import com.intellij.psi.PsiModifier;
-import com.intellij.psi.PsiModifierList;
-import com.intellij.psi.PsiType;
-import com.intellij.psi.PsiTypeParameter;
-import com.intellij.psi.SyntheticElement;
+import com.intellij.psi.*;
 import com.intellij.psi.util.PsiTreeUtil;
 import com.intellij.psi.util.PsiUtil;
 import org.jetbrains.annotations.NotNull;
@@ -48,6 +38,11 @@ public class CustomPsiUtils {
     public static PsiClass getTargetClass(@NotNull Editor editor, @NotNull PsiFile file) {
         int offset = editor.getCaretModel().getOffset();
         PsiElement element = file.findElementAt(offset);
+        if ("protobuf".equalsIgnoreCase(file.getLanguage().getDisplayName())) {
+            // Parse the .proto file and generate Java code (this part is simplified)
+            PsiClass psiClass = ProtoToPsiClassConverter.convertProtoToPsiClass(file, editor.getProject());
+            return psiClass;
+        }
         if (element != null) {
             // 当前类
             PsiClass target = PsiTreeUtil.getParentOfType(element, PsiClass.class);
@@ -57,6 +52,7 @@ public class CustomPsiUtils {
 
         return null;
     }
+
 
     /**
      * 获取当前选择的方法
@@ -116,11 +112,16 @@ public class CustomPsiUtils {
 
         Map<PsiTypeParameter, PsiType> substitutionMap = PsiUtil.resolveGenericsClassInType(psiClassType).getSubstitutor().getSubstitutionMap();
         Map<String, PsiType> hashMap = new HashMap<>();
-
+        boolean isProto = ProtoUtils.isProto(psiClassType);
         for (PsiTypeParameter psiTypeParameter : substitutionMap.keySet()) {
             PsiType psiType = substitutionMap.get(psiTypeParameter);
             if (psiType instanceof PsiClassType) {
-                hashMap.put(psiTypeParameter.getName(), psiType);
+
+                String fieldName = psiTypeParameter.getName();
+                if (isProto && fieldName != null && fieldName.endsWith("_")) {
+                    fieldName = fieldName.substring(0, fieldName.length() - 1);
+                }
+                hashMap.put(fieldName, psiType);
             }
         }
         return hashMap;

@@ -81,9 +81,9 @@ public class AbstractAction extends AnAction {
             // 目标类没有方法
             PsiMethod[] methods = targetClass.getMethods();
 
-            if (methods.length == 0) {
-                throw new DocViewException(DocViewBundle.message("notify.error.class.no.method"));
-            }
+//            if (methods.length == 0) {
+//                throw new DocViewException(DocViewBundle.message("notify.error.class.no.method"));
+//            }
 
             // 当前方法
             targetMethod = CustomPsiUtils.getTargetMethod(editor, psiFile);
@@ -112,19 +112,19 @@ public class AbstractAction extends AnAction {
             return;
         }
 
-        PsiClass targetClass = CustomPsiUtils.getTargetClass(editor, psiFile);
+//        PsiClass targetClass = CustomPsiUtils.getTargetClass(editor, psiFile);
 
-        if (!DocViewUtils.isDocViewClass(targetClass)) {
-            presentation.setEnabledAndVisible(false);
-            return;
-        }
+//        if (!DocViewUtils.isDocViewClass(targetClass)) {
+//            presentation.setEnabledAndVisible(false);
+//            return;
+//        }
 
-        PsiMethod targetMethod = CustomPsiUtils.getTargetMethod(editor, psiFile);
-
-        if (targetMethod != null && !DocViewUtils.isDocViewMethod(targetMethod)) {
-            presentation.setEnabledAndVisible(false);
-            return;
-        }
+//        PsiMethod targetMethod = CustomPsiUtils.getTargetMethod(editor, psiFile);
+//
+//        if (targetMethod != null && !DocViewUtils.isDocViewMethod(targetMethod)) {
+//            presentation.setEnabledAndVisible(false);
+//            return;
+//        }
 
         presentation.setEnabledAndVisible(true);
     }

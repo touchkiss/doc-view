@@ -56,6 +56,14 @@ public final class SpringConstant {
     public static final String VALIDATED = "org.springframework.validation.annotation.Validated";
 
     /**
+     * lombok
+     */
+    public static final String DATA = "lombok.Data";
+    public static final String BUILDER = "lombok.Builder";
+    public static final String NO_ARGS_CONSTRUCTOR = "lombok.NoArgsConstructor";
+    public static final String ALL_ARGS_CONSTRUCTOR = "lombok.AllArgsConstructor";
+
+    /**
      * other
      */
     public static final String CONTROLLER_ADVICE      = "org.springframework.web.bind.annotation.ControllerAdvice";

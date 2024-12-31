@@ -254,13 +254,19 @@ public class DocViewUtils {
      * 判断是否是需要排除的字段
      *
      * @param psiField
+     * @param isProto
      * @return 需要排除字段, 返回 true
      */
     @NotNull
-    public static boolean isExcludeField(@NotNull PsiField psiField) {
+    public static boolean isExcludeField(@NotNull PsiField psiField, boolean isProto) {
 
         return ApplicationManager.getApplication().runReadAction((Computable<Boolean>) () -> {
             Settings settings = Settings.getInstance(psiField.getProject());
+
+//            proto类中的字段都是以_结尾的
+            if (isProto&&!psiField.getName().endsWith("_")){
+                return true;
+            }
 
             if (settings.getExcludeFieldNames().contains(psiField.getName())) {
                 return true;
@@ -427,15 +433,22 @@ public class DocViewUtils {
      *
      * @return 字段名称
      */
-    public static String fieldName(PsiField field) {
-        return ApplicationManager.getApplication().runReadAction((Computable<String>) () -> {
+    public static String fieldName(PsiField field, boolean parentIsProto) {
+        String fieldName = ApplicationManager.getApplication().runReadAction((Computable<String>) () -> {
             Settings settings = Settings.getInstance(field.getProject());
             Boolean useJsonProperty = settings.getFieldNameJsonProperty();
-            if (!useJsonProperty) {
+            Boolean fieldNameUseSnakeCase = settings.getFieldNameCaseType();
+            if (!Boolean.TRUE.equals(useJsonProperty)) {
+                if (Boolean.TRUE.equals(fieldNameUseSnakeCase)) {
+                    return camelToSnake(field.getName());
+                }
                 return field.getName();
             }
             // 判断是否有注解
             if (!AnnotationUtil.isAnnotated(field, settings.getFieldNameAnnotation(), 0)) {
+                if (Boolean.TRUE.equals(fieldNameUseSnakeCase)) {
+                    return camelToSnake(field.getName());
+                }
                 return field.getName();
             }
             // 从注解中解析字段名称
@@ -446,8 +459,32 @@ public class DocViewUtils {
                     return value.getText().replace("\"", "");
                 }
             }
+            if (Boolean.TRUE.equals(fieldNameUseSnakeCase)) {
+                return camelToSnake(field.getName());
+            }
             return field.getName();
         });
+        if (parentIsProto&&fieldName.endsWith("_")){
+//            proto类中的字段都是以_结尾的,去掉
+            return fieldName.substring(0, fieldName.length() - 1);
+        }
+        return fieldName;
+    }
+
+    /**
+     * 将 camelCase 转换为 snake_case
+     *
+     * @param camelCaseStr 输入的 camelCase 字符串
+     * @return 转换后的 snake_case 字符串
+     */
+    public static String camelToSnake(String camelCaseStr) {
+        if (camelCaseStr == null || camelCaseStr.isEmpty()) {
+            return "";
+        }
+        // 使用正则表达式将大写字母替换为下划线+小写字母
+        return camelCaseStr
+                .replaceAll("([a-z])([A-Z])", "$1_$2") // 匹配小写字母和大写字母的边界
+                .toLowerCase(); // 转换为小写
     }
 
     /**
@@ -479,15 +516,32 @@ public class DocViewUtils {
                 }
             }
 
+            String getValidatedValue = SpringPsiUtils.getValidatedValue(psiField);
+
             PsiComment comment = PsiTreeUtil.findChildOfType(psiField, PsiComment.class);
 
             if (comment != null) {
                 // param.setExample();
                 // 参数举例, 使用 tag 判断
                 if (comment instanceof PsiDocComment) {
-                    return CustomPsiCommentUtils.tagDocComment((PsiDocComment) comment);
+                    return CustomPsiCommentUtils.tagDocComment((PsiDocComment) comment) + getValidatedValue;
                 }
-                return CustomPsiCommentUtils.fieldComment(comment);
+                return CustomPsiCommentUtils.fieldComment(comment) + getValidatedValue;
+            }
+            return getValidatedValue;
+        });
+    }
+
+    public static String fieldExample(@NotNull PsiField psiField) {
+        return ApplicationManager.getApplication().runReadAction((Computable<String>) () -> {
+            PsiComment comment = PsiTreeUtil.findChildOfType(psiField, PsiComment.class);
+
+            if (comment != null) {
+                // param.setExample();
+                // 参数举例, 使用 tag 判断
+                if (comment instanceof PsiDocComment) {
+                    return CustomPsiCommentUtils.tagValueFromDocComment((PsiDocComment) comment, "value");
+                }
             }
             return "";
         });
