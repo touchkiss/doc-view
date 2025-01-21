@@ -61,6 +61,7 @@ public class ParamPsiUtils {
                         body.setType(returnTypeClass.getName());
                     }
                 }
+                body.setQualifiedNameForClassType("String".equals(body.getType()) ? "java.lang.String" : body.getType());
                 String methodDesc = DocViewUtils.getMethodDesc(method);
 //                去掉<code>int64next_cursor=9;</code>包含的内容
                 methodDesc = methodDesc
@@ -71,9 +72,22 @@ public class ParamPsiUtils {
                 parseProtoFieldDesc = true;
             }
         }
+        // 剩下都是 PsiClass 类型处理
+        PsiClass fieldClass = PsiUtil.resolveClassInClassTypeOnly(type);
+
+        if (fieldClass == null) {
+            return;
+        }
+        String qualifiedName = fieldClass.getQualifiedName();
         if(!parseProtoFieldDesc) {
             body.setType(type.getPresentableText());
             body.setDesc(DocViewUtils.fieldDesc(field));
+
+            // 提前替换字段比如 T -> UserDTO   List<T> -> List<UserDTO>
+            // 如果是泛型, 且泛型字段是当前字段, 将当前字段类型替换为泛型类型, 替换完之后重新设置 body 的 type
+            type = replaceFieldType(genericsMap, type);
+            body.setType(type.getPresentableText());
+            body.setQualifiedNameForClassType(qualifiedName);
         }
         body.setParent(parent);
 
@@ -82,26 +96,11 @@ public class ParamPsiUtils {
             return;
         }
 
-        // 提前替换字段比如 T -> UserDTO   List<T> -> List<UserDTO>
-        // 如果是泛型, 且泛型字段是当前字段, 将当前字段类型替换为泛型类型, 替换完之后重新设置 body 的 type
-        type = replaceFieldType(genericsMap, type);
-        body.setType(type.getPresentableText());
-
-        // 剩下都是 PsiClass 类型处理
-        PsiClass fieldClass = PsiUtil.resolveClassInClassTypeOnly(type);
-
-        if (fieldClass == null) {
-            return;
-        }
-
         // 判断 childClass 是否已经在根节点到当前节点的链表上存在, 存在的话则不继续递归
-        String qualifiedName = fieldClass.getQualifiedName();
-
         if (StringUtils.isBlank(qualifiedName) || checkLinkedListHasTypeClass(body, qualifiedName, type)) {
             return;
         }
 
-        body.setQualifiedNameForClassType(qualifiedName);
         Map<String, PsiType> fieldGenericsMap;
         PsiClass childClass;
         Body parentBody;
@@ -351,22 +350,45 @@ public class ParamPsiUtils {
             if (DocViewUtils.isExcludeField(field, isProto)) {
                 continue;
             }
+//            todo 从get方法中获取到真实类型
+
+            String fieldName = DocViewUtils.fieldName(field, isProto);
+            boolean parseProtoFieldType = false;
+            String fieldTypeName = "";
+            if (isProto) {
+//            snake_case -> PascalCase
+                String pascalCaseName = DocViewUtils.snakeToPascal(fieldName);
+                Optional<PsiMethod> psiMethod = Stream.of(psiClass.getMethods()).filter(method -> method.getName().equals("get" + pascalCaseName)).findFirst();
+                if (psiMethod.isPresent()) {
+                    PsiMethod method = psiMethod.get();
+                    PsiType returnType = method.getReturnType();
+                    if (returnType instanceof PsiPrimitiveType || FieldTypeConstant.FIELD_TYPE.containsKey(returnType.getPresentableText())) {
+                        fieldTypeName = returnType.getPresentableText();
+                    } else {
+                        PsiClass returnTypeClass = PsiUtil.resolveClassInType(returnType);
+                        if (returnTypeClass != null) {
+                            fieldTypeName = returnTypeClass.getName();
+                        }
+                    }
+                    parseProtoFieldType = true;
+                }
+            }
             PsiType type = field.getType();
-            String name = DocViewUtils.fieldName(field, isProto);
             if (type instanceof PsiPrimitiveType) {
                 // 基本类型
-                fieldMap.put(name, PsiTypesUtil.getDefaultValue(type));
+                fieldMap.put(fieldName, PsiTypesUtil.getDefaultValue(type));
                 continue;
             }
+            if (!parseProtoFieldType) {
+                // 如果是泛型, 且泛型字段是当前字段, 将当前字段类型替换为泛型类型
+                type = replaceFieldType(genericMap, type);
 
-            // 如果是泛型, 且泛型字段是当前字段, 将当前字段类型替换为泛型类型
-            type = replaceFieldType(genericMap, type);
-
-            // 引用类型
-            String fieldTypeName = type.getPresentableText();
+                // 引用类型
+                fieldTypeName = type.getPresentableText();
+            }
             // 指定的类型
             if (FieldTypeConstant.FIELD_TYPE.containsKey(fieldTypeName)) {
-                fieldMap.put(name, FieldTypeConstant.FIELD_TYPE.get(fieldTypeName));
+                fieldMap.put(fieldName, FieldTypeConstant.FIELD_TYPE.get(fieldTypeName));
             } else if (type instanceof PsiArrayType) {
                 // 数组类型
                 List<Object> list = new ArrayList<>();
@@ -386,7 +408,7 @@ public class ParamPsiUtils {
                         list.add(getFieldsAndDefaultValue(classInType, null, temp));
                     }
                 }
-                fieldMap.put(name, list);
+                fieldMap.put(fieldName, list);
             } else if (InheritanceUtil.isInheritor(type, CommonClassNames.JAVA_UTIL_COLLECTION)) {
                 // List Set or HashSet
                 List<Object> list = new ArrayList<>();
@@ -408,7 +430,7 @@ public class ParamPsiUtils {
 
                     }
                 }
-                fieldMap.put(name, list);
+                fieldMap.put(fieldName, list);
             } else if (InheritanceUtil.isInheritor(type, CommonClassNames.JAVA_UTIL_MAP)) {
                 // HashMap or Map
 
@@ -430,11 +452,11 @@ public class ParamPsiUtils {
 
                 }
 
-                fieldMap.put(name, hashMap);
+                fieldMap.put(fieldName, hashMap);
 
             } else if (psiClass.isEnum() || psiClass.isInterface() || psiClass.isAnnotationType()) {
                 // enum or interface
-                fieldMap.put(name, "");
+                fieldMap.put(fieldName, "");
             } else {
 
                 // 参数类型为对象 校验是否递归
@@ -442,9 +464,9 @@ public class ParamPsiUtils {
 
                 LinkedList<String> temp = new LinkedList<>(qualifiedNameList);
                 if (classInType != null && hasContainQualifiedName(temp, classInType.getQualifiedName())) {
-                    fieldMap.put(name, "Object for " + classInType.getName());
+                    fieldMap.put(fieldName, "Object for " + classInType.getName());
                 } else {
-                    fieldMap.put(name, getFieldsAndDefaultValue(PsiUtil.resolveClassInType(type), CustomPsiUtils.getGenericsMap((PsiClassType) type), temp));
+                    fieldMap.put(fieldName, getFieldsAndDefaultValue(PsiUtil.resolveClassInType(type), CustomPsiUtils.getGenericsMap((PsiClassType) type), temp));
                 }
 
             }
