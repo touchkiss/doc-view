@@ -488,6 +488,34 @@ public class DocViewUtils {
     }
 
     /**
+     * snakeCase 转换为 PascalCase
+     *
+     * @param snakeCaseStr 蛇壳力量
+     * @return {@link String }
+     */
+    public static String snakeToPascal(String snakeCaseStr) {
+        if (snakeCaseStr == null || snakeCaseStr.isEmpty()) {
+            return "";
+        }
+        // 使用正则表达式将下划线+小写字母替换为大写字母
+        StringBuilder pascalCase = new StringBuilder();
+        boolean capitalizeNext = true;
+
+        for (char c : snakeCaseStr.toCharArray()) {
+            if (c == '_') {
+                capitalizeNext = true;
+            } else if (capitalizeNext) {
+                pascalCase.append(Character.toUpperCase(c));
+                capitalizeNext = false;
+            } else {
+                pascalCase.append(Character.toLowerCase(c));
+            }
+        }
+
+        return pascalCase.toString();
+    }
+
+    /**
      * 获取字段的描述
      * <p>
      * 优先从 swagger 中获取注释

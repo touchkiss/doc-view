@@ -8,7 +8,6 @@ import com.intellij.psi.impl.java.stubs.index.JavaAnnotationIndex;
 import com.intellij.psi.search.GlobalSearchScope;
 import com.intellij.psi.search.searches.ClassInheritorsSearch;
 import com.intellij.psi.util.InheritanceUtil;
-import com.intellij.psi.util.PsiClassUtil;
 import com.intellij.psi.util.PsiTypesUtil;
 import com.intellij.psi.util.PsiUtil;
 import com.intellij.util.xml.DomFileElement;
@@ -166,7 +165,7 @@ public class DubboPsiUtils {
                     body.setQualifiedNameForClassType(qualifiedName);
                     for (PsiField psiField : childClass.getAllFields()) {
                         if (!DocViewUtils.isExcludeField(psiField, false)) {
-                            ParamPsiUtils.buildBodyParam(psiField, null, body, new HashMap<>(), isProto);
+                            ParamPsiUtils.buildBodyParam(childClass, psiField, null, body, new HashMap<>(), isProto);
                         }
                     }
                 }

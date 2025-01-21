@@ -5,9 +5,7 @@ import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.util.Computable;
 import com.intellij.psi.*;
 import com.intellij.psi.util.PsiTypesUtil;
-import com.intellij.psi.util.PsiUtil;
 import com.liuzhihang.doc.view.config.Settings;
-import com.liuzhihang.doc.view.constant.FieldTypeConstant;
 import com.liuzhihang.doc.view.dto.Body;
 import org.jetbrains.annotations.NotNull;
 
@@ -48,7 +46,7 @@ public class PojoUtils extends ParamPsiUtils {
                     continue;
                 }
                 // 增加 genericsMap 参数传入，用于将泛型 T 替换为原始对象
-                ParamPsiUtils.buildBodyParam(field, genericsMap, root, new HashMap<>(), isProto);
+                ParamPsiUtils.buildBodyParam(psiClass, field, genericsMap, root, new HashMap<>(), isProto);
             }
         }
         return root;

@@ -1,13 +1,6 @@
 package com.liuzhihang.doc.view.utils;
 
-import com.intellij.psi.CommonClassNames;
-import com.intellij.psi.PsiArrayType;
-import com.intellij.psi.PsiClass;
-import com.intellij.psi.PsiClassType;
-import com.intellij.psi.PsiElementFactory;
-import com.intellij.psi.PsiField;
-import com.intellij.psi.PsiPrimitiveType;
-import com.intellij.psi.PsiType;
+import com.intellij.psi.*;
 import com.intellij.psi.impl.source.PsiClassReferenceType;
 import com.intellij.psi.util.InheritanceUtil;
 import com.intellij.psi.util.PsiTypesUtil;
@@ -17,12 +10,8 @@ import com.liuzhihang.doc.view.dto.Body;
 import org.apache.commons.lang3.StringUtils;
 import org.jetbrains.annotations.NotNull;
 
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.LinkedHashMap;
-import java.util.LinkedList;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
+import java.util.stream.Stream;
 
 /**
  * 参数处理工具
@@ -35,12 +24,13 @@ public class ParamPsiUtils {
     /**
      * 生成 body
      *
+     * @param childClass
      * @param field         字段
      * @param genericsMap   key 是泛型 value 是对应的类型
      * @param parent        父字段
      * @param parentIsProto
      */
-    public static void buildBodyParam(PsiField field, Map<String, PsiType> genericsMap, Body parent, Map<String, Boolean> parentChildPair, boolean parentIsProto) {
+    public static void buildBodyParam(PsiClass parentClass, PsiField field, Map<String, PsiType> genericsMap, Body parent, Map<String, Boolean> parentChildPair, boolean parentIsProto) {
 
         String pair = parent.getQualifiedNameForClassType() + "_" + field.getName();
         if (parentChildPair.containsKey(pair)) {
@@ -52,10 +42,39 @@ public class ParamPsiUtils {
         boolean isProto = ProtoUtils.isProto(type);
         Body body = new Body();
         body.setRequired(DocViewUtils.isRequired(field));
-        body.setName(DocViewUtils.fieldName(field, parentIsProto));
+        String fieldName = DocViewUtils.fieldName(field, parentIsProto);
+        body.setName(fieldName);
         body.setPsiElement(field);
-        body.setType(type.getPresentableText());
-        body.setDesc(DocViewUtils.fieldDesc(field));
+        boolean parseProtoFieldDesc = false;
+        if (parentIsProto) {
+//            snake_case -> PascalCase
+            String pascalCaseName = DocViewUtils.snakeToPascal(fieldName);
+            Optional<PsiMethod> psiMethod = Stream.of(parentClass.getMethods()).filter(method -> method.getName().equals("get" + pascalCaseName)).findFirst();
+            if (psiMethod.isPresent()) {
+                PsiMethod method = psiMethod.get();
+                PsiType returnType = method.getReturnType();
+                if (returnType instanceof PsiPrimitiveType || FieldTypeConstant.FIELD_TYPE.containsKey(returnType.getPresentableText())) {
+                    body.setType(returnType.getPresentableText());
+                } else {
+                    PsiClass returnTypeClass = PsiUtil.resolveClassInType(returnType);
+                    if (returnTypeClass != null) {
+                        body.setType(returnTypeClass.getName());
+                    }
+                }
+                String methodDesc = DocViewUtils.getMethodDesc(method);
+//                去掉<code>int64next_cursor=9;</code>包含的内容
+                methodDesc = methodDesc
+                        .replaceAll("<code>.*?</code>", "")
+//                        只保留<pre>部落名称</pre>中的内容
+                        .replaceAll(".*?<pre>(.*?)</pre>.*?", "$1");
+                body.setDesc(methodDesc);
+                parseProtoFieldDesc = true;
+            }
+        }
+        if(!parseProtoFieldDesc) {
+            body.setType(type.getPresentableText());
+            body.setDesc(DocViewUtils.fieldDesc(field));
+        }
         body.setParent(parent);
 
         parent.getChildList().add(body);
@@ -102,6 +121,7 @@ public class ParamPsiUtils {
             fieldGenericsMap = CustomPsiUtils.getGenericsMap((PsiClassType) iterableType);
             parentBody = buildFieldGenericsBody("element", childClass, body);
             body.setArray(true);
+            isProto = ProtoUtils.isProto(iterableType);
 
         } else if (InheritanceUtil.isInheritor(type, CommonClassNames.JAVA_UTIL_MAP)) {
             // HashMap or Map 的泛型获取 value
@@ -131,7 +151,7 @@ public class ParamPsiUtils {
 
             fieldGenericsMap = CustomPsiUtils.getGenericsMap((PsiClassType) matValueType);
             parentBody = buildFieldGenericsBody("value", childClass, body);
-
+            isProto = ProtoUtils.isProto(matValueType);
 
         } else if (fieldClass.isEnum() || fieldClass.isInterface() || fieldClass.isAnnotationType()) {
             // 字段是类, 也可能带泛型
@@ -149,7 +169,7 @@ public class ParamPsiUtils {
         }
         for (PsiField psiField : childClass.getAllFields()) {
             if (!DocViewUtils.isExcludeField(psiField, isProto)) {
-                buildBodyParam(psiField, fieldGenericsMap, parentBody, parentChildPair, isProto);
+                buildBodyParam(childClass, psiField, fieldGenericsMap, parentBody, parentChildPair, isProto);
             }
         }
 
@@ -515,7 +535,7 @@ public class ParamPsiUtils {
                 } else {
                     // 返回值可能是带泛型的, psiClassType.getParameters() 获取到的
                     Map<String, PsiType> genericMap = CustomPsiUtils.getGenericsMap(psiClassType);
-                    buildBodyList(psiClass, genericMap, root, isProto);
+                     buildBodyList(psiClass, genericMap, root, isProto);
                 }
             }
         }
@@ -530,7 +550,7 @@ public class ParamPsiUtils {
                 continue;
             }
 
-            ParamPsiUtils.buildBodyParam(field, genericMap, parent, new HashMap<>(), isProto);
+            ParamPsiUtils.buildBodyParam(psiClass, field, genericMap, parent, new HashMap<>(), isProto);
         }
 
     }
