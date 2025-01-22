@@ -75,11 +75,14 @@ public class ParamPsiUtils {
         // 剩下都是 PsiClass 类型处理
         PsiClass fieldClass = PsiUtil.resolveClassInClassTypeOnly(type);
 
-        if (fieldClass == null) {
+        String qualifiedName = "";
+        if (fieldClass == null && !parentIsProto) {
             return;
         }
-        String qualifiedName = fieldClass.getQualifiedName();
-        if(!parseProtoFieldDesc) {
+        if (fieldClass != null) {
+            qualifiedName = fieldClass.getQualifiedName();
+        }
+        if (!parseProtoFieldDesc) {
             body.setType(type.getPresentableText());
             body.setDesc(DocViewUtils.fieldDesc(field));
 
@@ -285,19 +288,19 @@ public class ParamPsiUtils {
      * 排除多个List，Map类型只能递归到第一个集合
      * eg:
      * class A {
-     *     List<B> bs;
-     *     public static class B {
-     *         String b1;
-     *         String b2
-     *         List<C> cs;
-     *     }
-     *
-     *     public static class C {
-     *         String c1;
-     *         String c2
-     *     }
+     * List<B> bs;
+     * public static class B {
+     * String b1;
+     * String b2
+     * List<C> cs;
      * }
-     *
+     * <p>
+     * public static class C {
+     * String c1;
+     * String c2
+     * }
+     * }
+     * <p>
      * 只能展示 B 类型的字段，C 类型的字段不展示
      *
      * @param body
@@ -551,13 +554,13 @@ public class ParamPsiUtils {
                         // 泛型是类
                         PsiClass genericsPsiClass = PsiUtil.resolveClassInClassTypeOnly(psiType);
                         if (genericsPsiClass != null) {
-                            buildBodyList(genericsPsiClass, null, collectionBody,isProto);
+                            buildBodyList(genericsPsiClass, null, collectionBody, isProto);
                         }
                     }
                 } else {
                     // 返回值可能是带泛型的, psiClassType.getParameters() 获取到的
                     Map<String, PsiType> genericMap = CustomPsiUtils.getGenericsMap(psiClassType);
-                     buildBodyList(psiClass, genericMap, root, isProto);
+                    buildBodyList(psiClass, genericMap, root, isProto);
                 }
             }
         }

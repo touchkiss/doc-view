@@ -183,11 +183,11 @@ public class DocViewData {
                     for (int i = 0; i < data.getTabCount(); i++) {
                         builder.append(tab);
                     }
-                    builder.append("}\n");
+                    builder.append("}");
                 }
                 if (j < responseParamDataList.size() - 1) {
                     builder.append(",\n");
-                } else if (data.isArray()) {
+                } else {
                     builder.append("\n");
                 }
             } else {
