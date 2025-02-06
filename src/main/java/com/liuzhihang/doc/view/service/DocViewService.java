@@ -58,13 +58,14 @@ public interface DocViewService {
             return ApplicationManager.getApplication().getService(SpringDocViewServiceImpl.class);
         }
 
+//        pojo类
+        if (PojoUtils.isPojoClass(targetClass)) {
+            return ApplicationManager.getApplication().getService(PojoDocViewServiceImpl.class);
+        }
+
         // 其他
         if (settings.getIncludeNormalInterface()) {
             return ApplicationManager.getApplication().getService(DubboDocViewServiceImpl.class);
-        }
-
-        if (PojoUtils.isPojoClass(targetClass)) {
-            return ApplicationManager.getApplication().getService(PojoDocViewServiceImpl.class);
         }
 
         throw new DocViewException(DocViewBundle.message("notify.error.not.support"));

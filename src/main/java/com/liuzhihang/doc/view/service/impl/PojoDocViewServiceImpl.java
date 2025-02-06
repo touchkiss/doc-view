@@ -2,22 +2,17 @@ package com.liuzhihang.doc.view.service.impl;
 
 import com.intellij.psi.PsiClass;
 import com.intellij.psi.PsiMethod;
-import com.intellij.psi.PsiParameter;
-import com.intellij.psi.PsiType;
 import com.liuzhihang.doc.view.dto.DocView;
-import com.liuzhihang.doc.view.enums.ContentTypeEnum;
 import com.liuzhihang.doc.view.enums.FrameworkEnum;
 import com.liuzhihang.doc.view.service.DocViewService;
 import com.liuzhihang.doc.view.utils.DocViewUtils;
-import com.liuzhihang.doc.view.utils.ParamPsiUtils;
-import com.liuzhihang.doc.view.utils.SpringPsiUtils;
+import com.liuzhihang.doc.view.utils.PojoUtils;
+import com.liuzhihang.doc.view.utils.ProtoUtils;
 import org.jetbrains.annotations.NotNull;
 
 import java.util.Collections;
 import java.util.LinkedList;
 import java.util.List;
-
-import static com.intellij.psi.PsiKeyword.VOID;
 
 /**
  * Pojo doc View Service Impl
@@ -37,23 +32,28 @@ public class PojoDocViewServiceImpl implements DocViewService {
     public List<DocView> buildClassDoc(@NotNull PsiClass psiClass) {
 
         List<DocView> docViewList = new LinkedList<>();
-
+        docViewList.add(buildClassMethodDoc(psiClass, null));
         return docViewList;
     }
 
     @NotNull
     @Override
-    public DocView buildClassMethodDoc(PsiClass psiClass, @NotNull PsiMethod psiMethod) {
+    public DocView buildClassMethodDoc(PsiClass psiClass, PsiMethod psiMethod) {
 
         DocView docView = new DocView();
         docView.setPsiClass(psiClass);
-        docView.setPsiMethod(psiMethod);
-        docView.setDocTitle(DocViewUtils.getTitle(psiClass));
-        docView.setName(DocViewUtils.getName(psiMethod));
-        docView.setDesc(DocViewUtils.getMethodDesc(psiMethod));
-        docView.setPath(SpringPsiUtils.path(psiClass, psiMethod));
-        docView.setMethod(SpringPsiUtils.method(psiMethod));
+        String title = DocViewUtils.getTitle(psiClass);
+        if (ProtoUtils.isProto(psiClass)) {
+//            proto只取<pre>标签中的内容
+            title = title.substring(title.indexOf("<pre>") + 5, title.indexOf("</pre>"));
+        }
+        docView.setDocTitle(title);
+        docView.setDesc(title);
+        docView.setName(psiClass.getName());
+        docView.setType(FrameworkEnum.NONE_POJO);
         docView.setDomain(Collections.emptyList());
+        docView.setReqBody(PojoUtils.buildBody(psiClass));
+        docView.setReqBodyExample(PojoUtils.reqBodyJson(psiClass));
         return docView;
     }
 

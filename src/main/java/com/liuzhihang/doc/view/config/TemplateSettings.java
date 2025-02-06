@@ -23,6 +23,7 @@ public class TemplateSettings implements PersistentStateComponent<TemplateSettin
      */
     private String springTemplate = DocViewBundle.message("template.spring.init");
     private String dubboTemplate = DocViewBundle.message("template.dubbo.init");
+    private String pojoTemplate = DocViewBundle.message("template.pojo.init");
 
     public static TemplateSettings getInstance(@NotNull Project project) {
         return project.getService(TemplateSettings.class);
@@ -55,5 +56,13 @@ public class TemplateSettings implements PersistentStateComponent<TemplateSettin
 
     public void setDubboTemplate(String dubboTemplate) {
         this.dubboTemplate = dubboTemplate;
+    }
+
+    public String getPojoTemplate() {
+        return pojoTemplate;
+    }
+
+    public void setPojoTemplate(String pojoTemplate) {
+        this.pojoTemplate = pojoTemplate;
     }
 }

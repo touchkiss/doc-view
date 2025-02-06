@@ -33,9 +33,11 @@ public class TemplateSettingForm extends DialogWrapper {
     private JPanel springTemplatePanel;
     private JPanel descriptionPanel;
     private JPanel dubboTemplatePanel;
+    private JPanel pojoTemplatePanel;
 
     private EditorEx springTemplateEditor;
     private EditorEx dubboTemplateEditor;
+    private EditorEx pojoTemplateEditor;
 
     private final Project project;
 
@@ -54,6 +56,7 @@ public class TemplateSettingForm extends DialogWrapper {
 
         initSpringTemplatePanel(project, fileType);
         initDubboTemplatePanel(project, fileType);
+        initPojoTemplatePanel(project, fileType);
         initDescriptionPanel(project, fileType);
 
     }
@@ -112,6 +115,30 @@ public class TemplateSettingForm extends DialogWrapper {
     }
 
     /**
+     * init pojo 模板面板
+     *
+     * @param project  项目
+     * @param fileType 文件类型
+     */
+    private void initPojoTemplatePanel(Project project, FileType fileType) {
+
+        Document document = EditorFactory.getInstance().createDocument(TemplateSettings.getInstance(project).getPojoTemplate());
+
+        pojoTemplateEditor = (EditorEx) EditorFactory.getInstance().createEditor(document, project, fileType, false);
+        EditorUtils.renderMarkdownEditor(pojoTemplateEditor);
+
+
+        final EditorHighlighter editorHighlighter =
+                HighlighterFactory.createHighlighter(fileType, EditorColorsManager.getInstance().getGlobalScheme(), project);
+
+        pojoTemplateEditor.setHighlighter(editorHighlighter);
+
+        JBScrollPane templateScrollPane = new JBScrollPane(pojoTemplateEditor.getComponent());
+        pojoTemplatePanel.add(templateScrollPane, BorderLayout.CENTER);
+
+    }
+
+    /**
      * 显示字段描述
      *
      * @param project
@@ -137,7 +164,9 @@ public class TemplateSettingForm extends DialogWrapper {
         if (!templateSettings.getDubboTemplate().equals(dubboTemplateEditor.getDocument().getText())) {
             return true;
         }
-
+        if (!templateSettings.getPojoTemplate().equals(pojoTemplateEditor.getDocument().getText())) {
+            return true;
+        }
 
         return false;
     }
@@ -147,7 +176,7 @@ public class TemplateSettingForm extends DialogWrapper {
         TemplateSettings templateSettings = TemplateSettings.getInstance(project);
         templateSettings.setSpringTemplate(springTemplateEditor.getDocument().getText());
         templateSettings.setDubboTemplate(dubboTemplateEditor.getDocument().getText());
-
+        templateSettings.setPojoTemplate(pojoTemplateEditor.getDocument().getText());
     }
 
 
@@ -155,5 +184,6 @@ public class TemplateSettingForm extends DialogWrapper {
         TemplateSettings templateSettings = TemplateSettings.getInstance(project);
         templateSettings.setSpringTemplate(DocViewBundle.message("template.spring.init"));
         templateSettings.setDubboTemplate(DocViewBundle.message("template.dubbo.init"));
+        templateSettings.setPojoTemplate(DocViewBundle.message("template.pojo.init"));
     }
 }

@@ -8,6 +8,10 @@ import com.intellij.psi.util.PsiUtil;
 public class ProtoUtils {
     public static boolean isProto(PsiType psiType) {
         PsiClass returnClass = PsiUtil.resolveClassInType(psiType);
+        return isProto(returnClass);
+    }
+
+    public static boolean isProto(PsiClass returnClass) {
         if (returnClass == null) {
             return false;
         }

@@ -15,6 +15,11 @@ public enum FrameworkEnum {
     /**
      * Dubbo
      */
-    DUBBO;
+    DUBBO,
+    /**
+     * 无框架，普通的 POJO 类
+     */
+    NONE_POJO,
+    ;
 
 }

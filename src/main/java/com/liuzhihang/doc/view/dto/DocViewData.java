@@ -233,7 +233,9 @@ public class DocViewData {
 
         if (docView.getType() == FrameworkEnum.DUBBO) {
             return VelocityUtils.convert(TemplateSettings.getInstance(project).getDubboTemplate(), docViewData);
-        } else {
+        } else if (docView.getType() == FrameworkEnum.NONE_POJO) {
+            return VelocityUtils.convert(TemplateSettings.getInstance(project).getPojoTemplate(), docViewData);
+        }else {
             // 按照 Spring 模版
             return VelocityUtils.convert(TemplateSettings.getInstance(project).getSpringTemplate(), docViewData);
         }
