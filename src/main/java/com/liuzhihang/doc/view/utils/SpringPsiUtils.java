@@ -445,22 +445,35 @@ public class SpringPsiUtils extends ParamPsiUtils {
             if (DocViewUtils.isExcludeParameter(parameter)) {
                 continue;
             }
+            String parameterName = parameter.getName();
+            if(AnnotationUtil.isAnnotated(parameter, SpringConstant.REQUEST_PARAM, 0)){
+                PsiAnnotation requestParam = AnnotationUtil.findAnnotation(parameter, SpringConstant.REQUEST_PARAM);
+                if (requestParam != null) {
+                    List<JvmAnnotationAttribute> attributes = requestParam.getAttributes();
+                    for (JvmAnnotationAttribute attribute : attributes) {
+                        if ("name".equals(attribute.getAttributeName()) || "value".equals(attribute.getAttributeName())) {
+//                    获取 headerName
+                            parameterName = Objects.requireNonNull(((JvmAnnotationConstantValue) Objects.requireNonNull(attribute.getAttributeValue())).getConstantValue()).toString();
+                        }
+                    }
+                }
+            }
 
             // 已经包含该字段
-            if (!paramNameSet.add(parameter.getName())) {
+            if (!paramNameSet.add(parameterName)) {
                 continue;
             }
 
             PsiType type = parameter.getType();
 
             if (type instanceof PsiPrimitiveType || FieldTypeConstant.FIELD_TYPE.containsKey(type.getPresentableText())) {
-                list.add(buildPramFromParameter(psiMethod, parameter));
+                list.add(buildPramFromParameter(psiMethod, parameter, parameterName));
             } else if (InheritanceUtil.isInheritor(type, "org.springframework.core.io.InputStreamSource")) {
-                list.add(buildPramFromParameter(psiMethod, parameter));
+                list.add(buildPramFromParameter(psiMethod, parameter, parameterName));
             } else if (InheritanceUtil.isInheritor(type, CommonClassNames.JAVA_UTIL_COLLECTION)) {
-                list.add(buildPramFromParameter(psiMethod, parameter));
+                list.add(buildPramFromParameter(psiMethod, parameter, parameterName));
             } else if (InheritanceUtil.isInheritor(type, CommonClassNames.JAVA_UTIL_MAP)) {
-                list.add(buildPramFromParameter(psiMethod, parameter));
+                list.add(buildPramFromParameter(psiMethod, parameter, parameterName));
             } else {
                 PsiClass fieldClass = PsiUtil.resolveClassInClassTypeOnly(type);
                 if (fieldClass == null) {
@@ -470,7 +483,7 @@ public class SpringPsiUtils extends ParamPsiUtils {
                 PsiField[] psiFields = fieldClass.getAllFields();
                 for (PsiField field : psiFields) {
                     // 已经包含该字段
-                    if (!paramNameSet.add(field.getName())) {
+                    if (!paramNameSet.add(parameterName)) {
                         continue;
                     }
                     if (field.getType() instanceof PsiPrimitiveType || FieldTypeConstant.FIELD_TYPE.containsKey(field.getType().getPresentableText())) {
@@ -500,11 +513,11 @@ public class SpringPsiUtils extends ParamPsiUtils {
     }
 
     @NotNull
-    private static Param buildPramFromParameter(PsiMethod psiMethod, PsiParameter parameter) {
+    private static Param buildPramFromParameter(PsiMethod psiMethod, PsiParameter parameter, String parameterName) {
 
         Param param = new Param();
         param.setRequired(DocViewUtils.isRequired(parameter));
-        param.setName(parameter.getName());
+        param.setName(parameterName);
         param.setType(parameter.getType().getPresentableText());
 
         // 备注需要从注释中获取
