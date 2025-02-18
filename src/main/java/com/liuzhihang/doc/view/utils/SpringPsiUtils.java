@@ -522,9 +522,15 @@ public class SpringPsiUtils extends ParamPsiUtils {
 
         // 备注需要从注释中获取
         PsiDocComment docComment = psiMethod.getDocComment();
+        String desc = "";
         if (docComment != null) {
-            param.setDesc(CustomPsiCommentUtils.paramDocComment(docComment, parameter));
+            desc+= CustomPsiCommentUtils.paramDocComment(docComment, parameter);
         }
+        String getValidatedValue = SpringPsiUtils.getValidatedValue(parameter);
+        if (StringUtils.isNotBlank(getValidatedValue)) {
+            desc += getValidatedValue;
+        }
+        param.setDesc(desc);
 
         return param;
     }
@@ -543,6 +549,33 @@ public class SpringPsiUtils extends ParamPsiUtils {
         if (sizeAnnotation != null) {
             validatedValue.append("长度范围:").append("最小值:").append(AnnotationUtil.getLongAttributeValue(sizeAnnotation, "min")).append(",");
             validatedValue.append("最大值:").append(AnnotationUtil.getLongAttributeValue(sizeAnnotation, "max")).append(";");
+        }
+        return validatedValue.toString();
+    }
+
+    public static String getValidatedValue(@NotNull PsiParameter psiParameter) {
+        StringBuilder validatedValue = new StringBuilder(" ");
+        PsiAnnotation minAnnotation = AnnotationUtil.findAnnotation(psiParameter, ValidationConstant.MIN);
+        if (minAnnotation != null) {
+            validatedValue.append("最小值:").append(AnnotationUtil.getLongAttributeValue(minAnnotation, "value")).append(";");
+        }
+        PsiAnnotation maxAnnotation = AnnotationUtil.findAnnotation(psiParameter, ValidationConstant.MAX);
+        if (maxAnnotation != null) {
+            validatedValue.append("最大值:").append(AnnotationUtil.getLongAttributeValue(maxAnnotation, "value")).append(";");
+        }
+        PsiAnnotation sizeAnnotation = AnnotationUtil.findAnnotation(psiParameter, ValidationConstant.SIZE);
+        if (sizeAnnotation != null) {
+            validatedValue.append("长度范围:").append("最小值:").append(AnnotationUtil.getLongAttributeValue(sizeAnnotation, "min")).append(",");
+            validatedValue.append("最大值:").append(AnnotationUtil.getLongAttributeValue(sizeAnnotation, "max")).append(";");
+        }
+        PsiAnnotation requestParam = AnnotationUtil.findAnnotation(psiParameter, SpringConstant.REQUEST_PARAM);
+        if (requestParam != null) {
+            List<JvmAnnotationAttribute> attributes = requestParam.getAttributes();
+            for (JvmAnnotationAttribute attribute : attributes) {
+                if ("defaultValue".equals(attribute.getAttributeName())) {
+                    validatedValue.append("默认值:").append(Objects.requireNonNull(((JvmAnnotationConstantValue) Objects.requireNonNull(attribute.getAttributeValue())).getConstantValue()).toString()).append(";");
+                }
+            }
         }
         return validatedValue.toString();
     }

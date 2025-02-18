@@ -120,7 +120,7 @@ public class DocViewData {
 
         this.requestBodyDataList = buildBodyDataList(docView.getReqBody().getChildList());
         this.requestBody = settings.getSeparateParam() ? separateParamMarkdown(requestBodyDataList) : paramMarkdown(requestBodyDataList);
-        this.requestJsonWithDesc = buildJsonWithDesc(requestBodyDataList);
+         this.requestJsonWithDesc = buildJsonWithDesc(requestBodyDataList);
         this.requestExample = requestExample(docView);
 
         this.responseParamDataList = buildBodyDataList(docView.getRespBody().getChildList());
@@ -147,7 +147,7 @@ public class DocViewData {
     private String buildJsonWithDescContent(List<DocViewParamData> responseParamDataList) {
         StringBuilder builder = new StringBuilder();
         for (int j = 0; j < responseParamDataList.size(); j++) {
-            DocViewParamData data = responseParamDataList.get(j);
+              DocViewParamData data = responseParamDataList.get(j);
             String tab = "    ";
             for (int i = 0; i < data.getTabCount(); i++) {
                 builder.append(tab);
@@ -193,6 +193,10 @@ public class DocViewData {
             } else {
                 if (doNotNeedQuote(data.getType())) {
                     builder.append(data.getExample());
+                } else if (data.isArray()) {
+                    builder.append("[\"").append(data.getExample()).append("\"]");
+                }else if ("Map".equals(data.getType())){
+                    builder.append("{}");
                 } else {
                     builder.append("\"").append(data.getExample()).append("\"");
                 }
