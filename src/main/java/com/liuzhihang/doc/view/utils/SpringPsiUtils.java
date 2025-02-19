@@ -506,10 +506,32 @@ public class SpringPsiUtils extends ParamPsiUtils {
         param.setRequired(DocViewUtils.isRequired(field));
         param.setName(field.getName());
         param.setDesc(DocViewUtils.fieldDesc(field));
-        param.setExample(DocViewUtils.fieldExample(field));
+        String example = DocViewUtils.fieldExample(field);
+        param.setExample(getExample(field, example));
         param.setType(field.getType().getPresentableText());
 
         return param;
+    }
+
+    private static String getExample(PsiModifierListOwner psiField, String exampleFromComment) {
+        PsiAnnotation requestParam = AnnotationUtil.findAnnotation(psiField, SpringConstant.REQUEST_PARAM);
+        if (requestParam != null) {
+            List<JvmAnnotationAttribute> attributes = requestParam.getAttributes();
+            for (JvmAnnotationAttribute attribute : attributes) {
+                if ("defaultValue".equals(attribute.getAttributeName())) {
+                    return Objects.requireNonNull(((JvmAnnotationConstantValue) Objects.requireNonNull(attribute.getAttributeValue())).getConstantValue()).toString();
+                }
+            }
+        }
+        PsiAnnotation minAnnotation = AnnotationUtil.findAnnotation(psiField, ValidationConstant.MIN);
+        if (minAnnotation != null) {
+            return AnnotationUtil.getLongAttributeValue(minAnnotation, "value").toString();
+        }
+        PsiAnnotation maxAnnotation = AnnotationUtil.findAnnotation(psiField, ValidationConstant.MAX);
+        if (maxAnnotation != null) {
+            return AnnotationUtil.getLongAttributeValue(maxAnnotation, "value").toString();
+        }
+        return exampleFromComment;
     }
 
     @NotNull
@@ -531,11 +553,12 @@ public class SpringPsiUtils extends ParamPsiUtils {
             desc += getValidatedValue;
         }
         param.setDesc(desc);
+        param.setExample(getExample(parameter,null));
 
         return param;
     }
 
-    public static String getValidatedValue(@NotNull PsiField psiField) {
+    public static String getValidatedValue(@NotNull PsiModifierListOwner psiField) {
         StringBuilder validatedValue = new StringBuilder(" ");
         PsiAnnotation minAnnotation = AnnotationUtil.findAnnotation(psiField, ValidationConstant.MIN);
         if (minAnnotation != null) {
@@ -550,25 +573,7 @@ public class SpringPsiUtils extends ParamPsiUtils {
             validatedValue.append("长度范围:").append("最小值:").append(AnnotationUtil.getLongAttributeValue(sizeAnnotation, "min")).append(",");
             validatedValue.append("最大值:").append(AnnotationUtil.getLongAttributeValue(sizeAnnotation, "max")).append(";");
         }
-        return validatedValue.toString();
-    }
-
-    public static String getValidatedValue(@NotNull PsiParameter psiParameter) {
-        StringBuilder validatedValue = new StringBuilder(" ");
-        PsiAnnotation minAnnotation = AnnotationUtil.findAnnotation(psiParameter, ValidationConstant.MIN);
-        if (minAnnotation != null) {
-            validatedValue.append("最小值:").append(AnnotationUtil.getLongAttributeValue(minAnnotation, "value")).append(";");
-        }
-        PsiAnnotation maxAnnotation = AnnotationUtil.findAnnotation(psiParameter, ValidationConstant.MAX);
-        if (maxAnnotation != null) {
-            validatedValue.append("最大值:").append(AnnotationUtil.getLongAttributeValue(maxAnnotation, "value")).append(";");
-        }
-        PsiAnnotation sizeAnnotation = AnnotationUtil.findAnnotation(psiParameter, ValidationConstant.SIZE);
-        if (sizeAnnotation != null) {
-            validatedValue.append("长度范围:").append("最小值:").append(AnnotationUtil.getLongAttributeValue(sizeAnnotation, "min")).append(",");
-            validatedValue.append("最大值:").append(AnnotationUtil.getLongAttributeValue(sizeAnnotation, "max")).append(";");
-        }
-        PsiAnnotation requestParam = AnnotationUtil.findAnnotation(psiParameter, SpringConstant.REQUEST_PARAM);
+        PsiAnnotation requestParam = AnnotationUtil.findAnnotation(psiField, SpringConstant.REQUEST_PARAM);
         if (requestParam != null) {
             List<JvmAnnotationAttribute> attributes = requestParam.getAttributes();
             for (JvmAnnotationAttribute attribute : attributes) {

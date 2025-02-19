@@ -1,6 +1,5 @@
 package com.liuzhihang.doc.view.utils;
 
-import com.google.protobuf.LazyStringList;
 import com.intellij.psi.*;
 import com.intellij.psi.impl.source.PsiClassReferenceType;
 import com.intellij.psi.util.InheritanceUtil;
@@ -51,25 +50,25 @@ public class ParamPsiUtils {
         if (parentIsProto) {
 //            snake_case -> PascalCase
             String pascalCaseName = DocViewUtils.snakeToPascal(fieldName);
-            boolean isList = false;
+            boolean isProtoList = false;
             if (type.getCanonicalText().matches("com\\.google\\.protobuf\\..+List")) {
                 pascalCaseName += "List";
-                isList = true;
-            }else if (type.getCanonicalText().matches("com\\.google\\.protobuf\\.MapField.*")) {
+                isProtoList = true;
+            } else if (type.getCanonicalText().matches("com\\.google\\.protobuf\\.MapField.*")) {
                 pascalCaseName += "Map";
                 isProtoMap = true;
             }
-
+//            field.getType().getPresentableText()
             final String finalPascalCaseName = pascalCaseName;
             Optional<PsiMethod> psiMethod = Stream.of(parentClass.getMethods()).filter(m -> m.getName().equals("get" + finalPascalCaseName)).findFirst();
             if (psiMethod.isPresent()) {
                 PsiMethod method = psiMethod.get();
                 PsiType returnType = method.getReturnType();
                 String methodDesc = DocViewUtils.getMethodDesc(method);
-                if (isList) {
-                    body.setType("List");
+                if (isProtoList) {
+                    body.setType(returnType.getPresentableText());
                     body.setArray(true);
-                } else if (returnType instanceof PsiPrimitiveType || FieldTypeConstant.FIELD_TYPE.containsKey(returnType.getPresentableText())) {
+                } else if (returnType instanceof PsiPrimitiveType || FieldTypeConstant.FIELD_TYPE.containsKey(returnType.getPresentableText())|| isProtoMap) {
                     body.setType(returnType.getPresentableText());
                 } else {
                     PsiClass returnTypeClass = PsiUtil.resolveClassInType(returnType);
@@ -368,7 +367,7 @@ public class ParamPsiUtils {
         qualifiedNameList.add(psiClass.getQualifiedName());
         for (PsiField field : psiClass.getAllFields()) {
 //            proto的map类型，不展示子属性
-            if ("Map".equals(psiClass.getName()) && isProto) {
+            if (("Map".equals(psiClass.getName())|| Objects.requireNonNull(psiClass.getName()).startsWith("Map<")) && isProto) {
                 break;
             }
             if (DocViewUtils.isExcludeField(field, isProto)) {
@@ -384,11 +383,11 @@ public class ParamPsiUtils {
             if (isProto) {
 //            snake_case -> PascalCase
                 String pascalCaseName = DocViewUtils.snakeToPascal(fieldName);
-                boolean isList = false;
+                boolean isProtoList = false;
                 if (field.getType().getCanonicalText().matches("com\\.google\\.protobuf\\..+List")) {
                     pascalCaseName += "List";
-                    isList = true;
-                }else if (field.getType().getCanonicalText().matches("com\\.google\\.protobuf\\.MapField.*")) {
+                    isProtoList = true;
+                } else if (field.getType().getCanonicalText().matches("com\\.google\\.protobuf\\.MapField.*")) {
                     pascalCaseName += "Map";
                     isProtoMap = true;
                 }
@@ -397,9 +396,7 @@ public class ParamPsiUtils {
                 if (psiMethod.isPresent()) {
                     PsiMethod method = psiMethod.get();
                     type = method.getReturnType();
-                    if (isList){
-                        fieldTypeName = "List";
-                    } else if (type instanceof PsiPrimitiveType || FieldTypeConstant.FIELD_TYPE.containsKey(type.getPresentableText())) {
+                    if (type instanceof PsiPrimitiveType || FieldTypeConstant.FIELD_TYPE.containsKey(type.getPresentableText()) || isProtoMap || isProtoList) {
                         fieldTypeName = type.getPresentableText();
                     } else {
                         PsiClass returnTypeClass = PsiUtil.resolveClassInType(type);

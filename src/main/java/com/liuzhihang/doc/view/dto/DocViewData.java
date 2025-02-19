@@ -195,7 +195,7 @@ public class DocViewData {
                     builder.append(data.getExample());
                 } else if (data.isArray()) {
                     builder.append("[\"").append(data.getExample()).append("\"]");
-                }else if ("Map".equals(data.getType())){
+                } else if ("Map".equals(data.getType()) || data.getType().startsWith("Map<")) {
                     builder.append("{}");
                 } else {
                     builder.append("\"").append(data.getExample()).append("\"");
