@@ -11,10 +11,7 @@ import com.liuzhihang.doc.view.DocViewBundle;
 import com.liuzhihang.doc.view.config.YApiSettings;
 import com.liuzhihang.doc.view.config.YApiSettingsConfigurable;
 import com.liuzhihang.doc.view.constant.FieldTypeConstant;
-import com.liuzhihang.doc.view.dto.Body;
-import com.liuzhihang.doc.view.dto.DocView;
-import com.liuzhihang.doc.view.dto.Header;
-import com.liuzhihang.doc.view.dto.Param;
+import com.liuzhihang.doc.view.dto.*;
 import com.liuzhihang.doc.view.enums.ContentTypeEnum;
 import com.liuzhihang.doc.view.integration.YApiFacadeService;
 import com.liuzhihang.doc.view.integration.dto.YApiCat;
@@ -118,19 +115,18 @@ public final class YApiServiceImpl implements DocViewUploadService {
      */
     @NotNull
     private String buildDesc(DocView docView) {
-
-
+        DocViewData docViewData = new DocViewData(docView);
         return "**接口名称:**\n\n"
                 + docView.getName() + "\n\n"
                 + "**接口描述:**\n\n"
                 + docView.getDesc() + "\n\n"
                 + "**请求示例:**\n\n"
                 + "```" + docView.getContentType() + "\n" +
-                (docView.getReqBodyExample() == null ? "" : docView.getReqBodyExample()) + "\n" +
+                (StringUtils.isBlank(docViewData.getRequestJsonWithDesc()) ? "" : docView.getReqBodyExample()) + "\n" +
                 "```" + "\n\n"
                 + "**返回示例:**\n\n"
                 + "```json\n" +
-                (docView.getRespExample() == null ? "" : docView.getRespExample()) + "\n" +
+                (StringUtils.isBlank(docViewData.getResponseJsonWithDesc()) ? "" : docView.getRespExample()) + "\n" +
                 "```\n\n";
     }
 
