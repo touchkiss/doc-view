@@ -122,11 +122,11 @@ public final class YApiServiceImpl implements DocViewUploadService {
                 + docView.getDesc() + "\n\n"
                 + "**请求示例:**\n\n"
                 + "```" + docView.getContentType() + "\n" +
-                (StringUtils.isBlank(docViewData.getRequestJsonWithDesc()) ? "" : docView.getReqBodyExample()) + "\n" +
+                (StringUtils.isBlank(docViewData.getRequestJsonWithDesc()) ? docView.getReqBodyExample() : docViewData.getRequestJsonWithDesc()) + "\n" +
                 "```" + "\n\n"
                 + "**返回示例:**\n\n"
                 + "```json\n" +
-                (StringUtils.isBlank(docViewData.getResponseJsonWithDesc()) ? "" : docView.getRespExample()) + "\n" +
+                (StringUtils.isBlank(docViewData.getResponseJsonWithDesc()) ? docView.getRespExample() : docViewData.getResponseJsonWithDesc()) + "\n" +
                 "```\n\n";
     }
 
