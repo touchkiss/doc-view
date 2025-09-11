@@ -13,6 +13,7 @@ import org.jetbrains.annotations.Contract;
 import org.jetbrains.annotations.NotNull;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -258,8 +259,8 @@ public class DocViewData {
             return "";
         }
 
-        return "|参数名|类型|必填|描述|\n"
-                + "|:-----|:-----|:-----|:-----|\n"
+        return "|参数名|类型|必填|描述|版本|\n"
+                + "|:-----|:-----|:-----|:-----|:-----|\n"
                 + paramMarkdownContent(dataList);
     }
 
@@ -273,13 +274,14 @@ public class DocViewData {
         List<DocViewParamData> paramDataList = new ArrayList<>();
 
         StringBuilder builder = new StringBuilder();
-        builder.append("|参数名|类型|必填|描述|\n")
-                .append("|:-----|:-----|:-----|:-----|\n");
+        builder.append("|参数名|类型|必填|描述|版本|\n")
+                .append("|:-----|:-----|:-----|:-----|:-----|\n");
         for (DocViewParamData data : dataList) {
             builder.append("|").append(data.getName())
                     .append("|").append(data.getType())
                     .append("|").append(Boolean.TRUE.equals(data.getRequired()) ? "Y" : "N")
                     .append("|").append(data.getDesc())
+                    .append("|").append(Arrays.stream(new String[]{data.getSince(), data.getVersion()}).filter(StringUtils::isNotBlank).collect(Collectors.joining("-")))
                     .append("|").append("\n");
             if (CollectionUtils.isNotEmpty(data.getChildList())) {
                 paramDataList.add(data);
@@ -299,6 +301,28 @@ public class DocViewData {
 
         StringBuilder builder = new StringBuilder();
         for (DocViewParamData data : dataList) {
+            List<DocViewParamData> childList = data.getChildList();
+
+            if (CollectionUtils.isNotEmpty(childList)) {
+                if (childList.size() == 1) {
+                    DocViewParamData docViewParamData = childList.get(0);
+                    if (docViewParamData.isCollection()) {
+                        builder.append("\n- ").append(docViewParamData.getType()).append(" ").append(docViewParamData.getName()).append("\n\n");
+                        builder.append(separateParamMarkdown(docViewParamData.getChildList()));
+                        continue;
+                    }
+                }
+                if (childList.size() == 2) {
+                    DocViewParamData docViewParamData = childList.get(1);
+                    if (docViewParamData.isMap()) {
+                        builder.append("\n- ").append(docViewParamData.getType()).append(" ").append(docViewParamData.getName()).append("\n\n");
+                        builder.append(separateParamMarkdown(docViewParamData.getChildList()));
+                        continue;
+                    }
+                }
+            }
+
+
             builder.append("\n- ").append(data.getType()).append(" ").append(data.getName()).append("\n\n");
             builder.append(separateParamMarkdown(data.getChildList()));
         }
@@ -319,6 +343,7 @@ public class DocViewData {
                     .append("|").append(data.getType())
                     .append("|").append(data.getRequired() ? "Y" : "N")
                     .append("|").append(data.getDesc())
+                    .append("|").append(Arrays.stream(new String[]{data.getSince(), data.getVersion()}).filter(StringUtils::isNotBlank).collect(Collectors.joining("-")))
                     .append("|").append("\n");
             if (CollectionUtils.isNotEmpty(data.getChildList())) {
                 builder.append(paramMarkdownContent(data.getChildList()));
@@ -342,11 +367,12 @@ public class DocViewData {
                     .append("|").append(data.getExample())
                     .append("|").append(data.getRequired() ? "Y" : "N")
                     .append("|").append(data.getDesc())
+                    .append("|").append(Arrays.stream(new String[]{data.getSince(), data.getVersion()}).filter(StringUtils::isNotBlank).collect(Collectors.joining("-")))
                     .append("|").append("\n");
         }
 
-        return "|参数名|参数值|必填|描述|\n"
-                + "|:-----|:-----|:-----|:-----|\n"
+        return "|参数名|参数值|必填|描述|版本|\n"
+                + "|:-----|:-----|:-----|:-----|:-----|\n"
                 + builder;
     }
 
@@ -383,6 +409,15 @@ public class DocViewData {
             data.setRequired(param.getRequired());
             data.setType(param.getType());
             data.setDesc(StringUtils.isNotBlank(param.getDesc()) ? param.getDesc() : "");
+
+            data.setVersion(param.getVersion());
+            data.setSince(param.getSince());
+            if (StringUtils.isNotBlank(data.getDesc())) {
+                if (data.getDesc().contains("@since") || data.getDesc().contains("@version")) {
+                    data.setSince("");
+                    data.setDesc("");
+                }
+            }
 
             return data;
         }).collect(Collectors.toList());
@@ -427,10 +462,21 @@ public class DocViewData {
             data.setType(body.getType());
             data.setDesc(StringUtils.isNotBlank(body.getDesc()) ? body.getDesc() : "");
 
+            data.setVersion(body.getVersion());
+            data.setSince(body.getSince());
+            if (StringUtils.isNotBlank(data.getDesc())) {
+                if (data.getDesc().contains("@since") || data.getDesc().contains("@version")) {
+                    data.setSince("");
+                    data.setDesc("");
+                }
+            }
+
             data.setPrefixSymbol1(prefixSymbol1);
             data.setPrefixSymbol2(prefixSymbol2);
             data.setTabCount(tabCount);
             data.setArray(body.isArray());
+            data.setCollection(body.isCollection());
+            data.setMap(body.isMap());
 
             if (CollectionUtils.isNotEmpty(body.getChildList())) {
 

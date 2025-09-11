@@ -45,6 +45,16 @@ public class Body {
     private String type;
 
     /**
+     * since
+     */
+    private String since;
+
+    /**
+     * version
+     */
+    private String version;
+
+    /**
      * 初始化时创建集合
      */
     private List<Body> childList = new LinkedList<>();
@@ -61,5 +71,15 @@ public class Body {
      * 如果是 HashMap 则是内部泛型的类型
      */
     private String qualifiedNameForClassType;
+
+    /**
+     * 是否是集合
+     */
+    private boolean isCollection = false;
+
+    /**
+     * 是否是 map
+     */
+    private boolean isMap = false;
 
 }

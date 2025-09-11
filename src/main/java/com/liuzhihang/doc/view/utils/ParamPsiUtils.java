@@ -171,6 +171,8 @@ public class ParamPsiUtils {
             parentBody = buildFieldGenericsBody("value", childClass, body);
             isProto = ProtoUtils.isProto(matValueType);
 
+            parentBody.setMap(true);
+
         } else if (fieldClass.isEnum() || fieldClass.isInterface() || fieldClass.isAnnotationType()) {
             // 字段是类, 也可能带泛型
             return;
