@@ -155,7 +155,7 @@ public class DocViewData {
             }
             builder.append("\"").append(data.getName()).append("\": ");
             if (CollectionUtils.isNotEmpty(data.getChildList())) {
-                if (data.isArray()) {
+                if (data.isCollection()) {
                     builder.append("[");
                     addDesc(data, builder, tab);
                     for (int i = 0; i < data.getTabCount() + 1; i++) {
@@ -171,7 +171,7 @@ public class DocViewData {
                 } else {
                     builder.append(buildJsonWithDescContent(data.getChildList()));
                 }
-                if (data.isArray()) {
+                if (data.isCollection()) {
                     for (int i = 0; i < data.getTabCount() + 1; i++) {
                         builder.append(tab);
                     }
@@ -194,7 +194,7 @@ public class DocViewData {
             } else {
                 if (doNotNeedQuote(data.getType())) {
                     builder.append(data.getExample());
-                } else if (data.isArray()) {
+                } else if (data.isCollection()) {
                     builder.append("[\"").append(data.getExample()).append("\"]");
                 } else if ("Map".equals(data.getType()) || data.getType().startsWith("Map<")) {
                     builder.append("{}");
@@ -474,7 +474,6 @@ public class DocViewData {
             data.setPrefixSymbol1(prefixSymbol1);
             data.setPrefixSymbol2(prefixSymbol2);
             data.setTabCount(tabCount);
-            data.setArray(body.isArray());
             data.setCollection(body.isCollection());
             data.setMap(body.isMap());
 

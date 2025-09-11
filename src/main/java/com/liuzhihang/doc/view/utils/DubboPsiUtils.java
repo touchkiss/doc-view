@@ -1,9 +1,6 @@
 package com.liuzhihang.doc.view.utils;
 
 import com.intellij.codeInsight.AnnotationUtil;
-import com.intellij.openapi.application.ApplicationManager;
-import com.intellij.openapi.application.NonBlockingReadAction;
-import com.intellij.openapi.application.impl.NonBlockingReadActionImpl;
 import com.intellij.openapi.module.Module;
 import com.intellij.openapi.project.Project;
 import com.intellij.psi.*;
@@ -12,7 +9,6 @@ import com.intellij.psi.javadoc.PsiDocTag;
 import com.intellij.psi.search.GlobalSearchScope;
 import com.intellij.psi.search.searches.ClassInheritorsSearch;
 import com.intellij.psi.util.InheritanceUtil;
-import com.intellij.psi.util.PsiTreeUtil;
 import com.intellij.psi.util.PsiTypesUtil;
 import com.intellij.psi.util.PsiUtil;
 import com.intellij.util.xml.DomFileElement;
@@ -161,7 +157,7 @@ public class DubboPsiUtils {
                 childClass = PsiUtil.resolveClassInClassTypeOnly(iterableType);
 
                 body.setPsiElement(childClass);
-                body.setArray(true);
+                body.setCollection(true);
 
             } else if (InheritanceUtil.isInheritor(type, CommonClassNames.JAVA_UTIL_MAP)) {
                 //  map

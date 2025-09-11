@@ -32,6 +32,7 @@ public class PojoUtils extends ParamPsiUtils {
                 return true;
             }
             String className = Objects.requireNonNull(psiClass.getName()).toLowerCase();
+//            粗暴判断
             return className.endsWith("dto") || className.endsWith("vo") || className.endsWith("bo") || className.endsWith("po") || className.endsWith("entity") || className.endsWith("model") || className.endsWith("bean");
         });
     }

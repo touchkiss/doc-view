@@ -24,11 +24,12 @@ public class ParamPsiUtils {
     /**
      * 生成 body
      *
-     * @param childClass
-     * @param field         字段
-     * @param genericsMap   key 是泛型 value 是对应的类型
-     * @param parent        父字段
-     * @param parentIsProto
+     * @param parentClass     父类
+     * @param field           字段
+     * @param genericsMap     key 是泛型 value 是对应的类型
+     * @param parent          父字段
+     * @param parentChildPair 父子对
+     * @param parentIsProto   parent 是 proto
      */
     public static void buildBodyParam(PsiClass parentClass, PsiField field, Map<String, PsiType> genericsMap, Body parent, Map<String, Boolean> parentChildPair, boolean parentIsProto) {
 
@@ -67,7 +68,7 @@ public class ParamPsiUtils {
                 String methodDesc = DocViewUtils.getMethodDesc(method);
                 if (isProtoList) {
                     body.setType(returnType.getPresentableText());
-                    body.setArray(true);
+                    body.setCollection(true);
                 } else if (returnType instanceof PsiPrimitiveType || FieldTypeConstant.FIELD_TYPE.containsKey(returnType.getPresentableText())|| isProtoMap) {
                     body.setType(returnType.getPresentableText());
                 } else {
@@ -138,7 +139,7 @@ public class ParamPsiUtils {
             // 集合参数构建, 集合就一个参数, 泛型 E
             fieldGenericsMap = CustomPsiUtils.getGenericsMap((PsiClassType) iterableType);
             parentBody = buildFieldGenericsBody("element", childClass, body);
-            body.setArray(true);
+            body.setCollection(true);
             isProto = ProtoUtils.isProto(iterableType);
 
         } else if (InheritanceUtil.isInheritor(type, CommonClassNames.JAVA_UTIL_MAP)) {

@@ -35,11 +35,6 @@ public class DocViewParamData {
     private int tabCount = 0;
 
     /**
-     * is 数组
-     */
-    private boolean isArray;
-
-    /**
      * 参数名
      */
     private String name;

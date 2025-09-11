@@ -53,7 +53,6 @@ public class CustomPsiUtils {
         return null;
     }
 
-
     /**
      * 获取当前选择的方法
      *

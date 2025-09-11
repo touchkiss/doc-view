@@ -62,11 +62,6 @@ public class Body {
     private Body parent;
 
     /**
-     * 是否是数组
-     */
-    private boolean isArray;
-
-    /**
      * 当类型是类时, 全路径
      * 如果是 HashMap 则是内部泛型的类型
      */
