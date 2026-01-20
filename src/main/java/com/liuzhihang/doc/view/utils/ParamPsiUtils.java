@@ -13,6 +13,7 @@ import org.jetbrains.annotations.NotNull;
 import java.util.*;
 import java.util.stream.Stream;
 
+
 /**
  * 参数处理工具
  *
@@ -102,7 +103,7 @@ public class ParamPsiUtils {
             body.setDesc(DocViewUtils.fieldDesc(field));
 
             // 提前替换字段比如 T -> UserDTO   List<T> -> List<UserDTO>
-            // 如果是泛型, 且泛型字段是当前字段, 将当前字段类型替换为泛型类型, 替换完之后重新设置 body 的 type
+            // 如果是泛型, 且泛型字段是当前字段, 将当前字段类型替换為泛型類型, 替換完之後重新設置 body 的 type
             type = replaceFieldType(genericsMap, type);
             body.setType(type.getPresentableText());
             qualifiedName = type.getPresentableText();
@@ -121,7 +122,7 @@ public class ParamPsiUtils {
             return;
         }
 
-        Map<String, PsiType> fieldGenericsMap;
+        Map<String, PsiType> fieldGenericsMap = null;
         PsiClass childClass;
         Body parentBody;
         // List Set or HashSet
@@ -129,19 +130,32 @@ public class ParamPsiUtils {
 
             PsiType iterableType = PsiUtil.extractIterableTypeParameter(type, false);
 
-            if (ignoreField(iterableType)) {
+            body.setCollection(true);
+
+            if (iterableType == null) {
                 return;
             }
+
             childClass = PsiUtil.resolveClassInClassTypeOnly(iterableType);
             if (childClass == null) {
                 return;
             }
-            // 集合参数构建, 集合就一个参数, 泛型 E
-            fieldGenericsMap = CustomPsiUtils.getGenericsMap((PsiClassType) iterableType);
-            parentBody = buildFieldGenericsBody("element", childClass, body);
-            body.setCollection(true);
-            isProto = ProtoUtils.isProto(iterableType);
+            // 基本类型或者包装类型：不要创建 name="" 的子节点，否则 JSON5 会生成 {"":"..."}
+            // 这里保持字段本身是 collection，仅设置 example 为元素示例，渲染层会输出 [example]
+            if (iterableType instanceof PsiPrimitiveType
+                    || FieldTypeConstant.FIELD_TYPE.containsKey(iterableType.getPresentableText())) {
+                Object defaultValue = iterableType instanceof PsiPrimitiveType
+                        ? PsiTypesUtil.getDefaultValue(iterableType)
+                        : FieldTypeConstant.FIELD_TYPE.get(iterableType.getPresentableText());
+                body.setExample(defaultValue == null ? "null" : String.valueOf(defaultValue));
+                return;
+            } else {
+                parentBody = buildFieldGenericsBody("element", childClass, body);
 
+                // 集合参数构建, 集合就一个参数, 泛型 E
+                fieldGenericsMap = CustomPsiUtils.getGenericsMap((PsiClassType) iterableType);
+                isProto = ProtoUtils.isProto(iterableType);
+            }
         } else if (InheritanceUtil.isInheritor(type, CommonClassNames.JAVA_UTIL_MAP)) {
             // HashMap or Map 的泛型获取 value
             PsiType matKeyType = PsiUtil.substituteTypeParameter(type, CommonClassNames.JAVA_UTIL_MAP, 0, false);

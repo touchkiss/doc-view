@@ -78,7 +78,7 @@ public class DocViewData {
      */
     private final String requestBody;
 
-    private final String requestJsonWithDesc;
+    private final String requestJson5;
 
     /**
      * 请求示例
@@ -94,7 +94,7 @@ public class DocViewData {
     /**
      * 带有 DESC 响应 JSON
      */
-    private final String responseJsonWithDesc;
+    private final String responseJson5;
 
     /**
      * 返回示例
@@ -121,15 +121,15 @@ public class DocViewData {
 
         this.requestBodyDataList = buildBodyDataList(docView.getReqBody().getChildList());
         this.requestBody = settings.getSeparateParam() ? separateParamMarkdown(requestBodyDataList) : paramMarkdown(requestBodyDataList);
-         this.requestJsonWithDesc = buildJsonWithDesc(requestBodyDataList);
+         this.requestJson5 = buildJson5(requestBodyDataList);
         this.requestExample = requestExample(docView);
 
         this.responseParamDataList = buildBodyDataList(docView.getRespBody().getChildList());
         this.responseParam = settings.getSeparateParam() ? separateParamMarkdown(responseParamDataList) : paramMarkdown(responseParamDataList);
         this.responseExample = respBodyExample(docView.getRespExample());
 
-        this.responseJsonWithDesc = buildJsonWithDesc(responseParamDataList);
-        log.info("responseJsonWithDesc:{}", responseJsonWithDesc);
+        this.responseJson5 = buildJson5(responseParamDataList);
+        log.info("responseJson5:{}", responseJson5);
     }
 
     /**
@@ -138,7 +138,7 @@ public class DocViewData {
      * @param responseParamDataList
      * @return
      */
-    private String buildJsonWithDesc(List<DocViewParamData> responseParamDataList) {
+    private String buildJson5(List<DocViewParamData> responseParamDataList) {
         if (CollectionUtils.isEmpty(responseParamDataList)) {
             return "";
         }
@@ -148,7 +148,7 @@ public class DocViewData {
     private String buildJsonWithDescContent(List<DocViewParamData> responseParamDataList) {
         StringBuilder builder = new StringBuilder();
         for (int j = 0; j < responseParamDataList.size(); j++) {
-              DocViewParamData data = responseParamDataList.get(j);
+            DocViewParamData data = responseParamDataList.get(j);
             String tab = "    ";
             for (int i = 0; i < data.getTabCount(); i++) {
                 builder.append(tab);
@@ -192,10 +192,15 @@ public class DocViewData {
                     builder.append("\n");
                 }
             } else {
-                if (doNotNeedQuote(data.getType())) {
+                // 集合（无子节点）必须输出数组；并根据元素类型决定是否需要引号
+                if (data.isCollection()) {
+                    if (doNotNeedQuote(extractCollectionItemType(data.getType()))) {
+                        builder.append("[").append(data.getExample()).append("]");
+                    } else {
+                        builder.append("[\"").append(data.getExample()).append("\"]");
+                    }
+                } else if (doNotNeedQuote(data.getType())) {
                     builder.append(data.getExample());
-                } else if (data.isCollection()) {
-                    builder.append("[\"").append(data.getExample()).append("\"]");
                 } else if ("Map".equals(data.getType()) || data.getType().startsWith("Map<")) {
                     builder.append("{}");
                 } else {
@@ -208,6 +213,28 @@ public class DocViewData {
             }
         }
         return builder.toString();
+    }
+
+    /**
+     * 从类似 List<Integer> / Set<Long> / Collection<Boolean> 提取元素类型名。
+     * 解析失败时返回原 type，保持兼容。
+     */
+    private static String extractCollectionItemType(String type) {
+        if (StringUtils.isBlank(type)) {
+            return type;
+        }
+        int lt = type.indexOf('<');
+        int gt = type.lastIndexOf('>');
+        if (lt < 0 || gt < 0 || gt <= lt) {
+            return type;
+        }
+        String inner = type.substring(lt + 1, gt).trim();
+        // 处理 Map<K,V> 之类的情况：取第一个类型参数（K），但本方法主要用于 collection
+        int comma = inner.indexOf(',');
+        if (comma > -1) {
+            inner = inner.substring(0, comma).trim();
+        }
+        return inner;
     }
 
     private static boolean doNotNeedQuote(String type) {

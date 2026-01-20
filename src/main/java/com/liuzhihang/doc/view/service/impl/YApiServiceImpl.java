@@ -6,7 +6,6 @@ import com.intellij.openapi.components.Service;
 import com.intellij.openapi.options.ShowSettingsUtil;
 import com.intellij.openapi.project.Project;
 import com.intellij.psi.*;
-import com.intellij.psi.util.InheritanceUtil;
 import com.liuzhihang.doc.view.DocViewBundle;
 import com.liuzhihang.doc.view.config.YApiSettings;
 import com.liuzhihang.doc.view.config.YApiSettingsConfigurable;
@@ -122,11 +121,11 @@ public final class YApiServiceImpl implements DocViewUploadService {
                 + docView.getDesc() + "\n\n"
                 + "**请求示例:**\n\n"
                 + "```" + docView.getContentType() + "\n" +
-                (StringUtils.isBlank(docViewData.getRequestJsonWithDesc()) ? docView.getReqBodyExample() : docViewData.getRequestJsonWithDesc()) + "\n" +
+                (StringUtils.isBlank(docViewData.getRequestJson5()) ? docView.getReqBodyExample() : docViewData.getRequestJson5()) + "\n" +
                 "```" + "\n\n"
                 + "**返回示例:**\n\n"
                 + "```json\n" +
-                (StringUtils.isBlank(docViewData.getResponseJsonWithDesc()) ? docView.getRespExample() : docViewData.getResponseJsonWithDesc()) + "\n" +
+                (StringUtils.isBlank(docViewData.getResponseJson5()) ? docView.getRespExample() : docViewData.getResponseJson5()) + "\n" +
                 "```\n\n";
     }
 
@@ -172,82 +171,37 @@ public final class YApiServiceImpl implements DocViewUploadService {
         for (Body body : bodyList) {
 
             Map<String, Object> innerProperties = new LinkedHashMap<>();
-            // mock 数据先不填充
 
-            // 设置 body
-            if (CollectionUtils.isNotEmpty(body.getChildList()) && body.getPsiElement() instanceof PsiField) {
+            // 统一到前端类型：string/number/boolean/array/object
+            String schemaType = toYapiSchemaType(body);
 
-                PsiField field = (PsiField) body.getPsiElement();
-                PsiType type = field.getType();
+            // 数组类型：items 需要根据元素类型决定（基础类型用基础类型；对象用 object + properties）
+            if ("array".equals(schemaType)) {
+                innerProperties.put("type", "array");
+                innerProperties.put("description", body.getDesc());
 
-                if (type instanceof PsiPrimitiveType || FieldTypeConstant.FIELD_TYPE.containsKey(type.getPresentableText())) {
-                    // 基础类型
-                    innerProperties.put("type", body.getType());
-                    innerProperties.put("description", body.getDesc());
-                } else if (InheritanceUtil.isInheritor(type, CommonClassNames.JAVA_UTIL_COLLECTION)) {
-                    // 集合 还要被 items 包裹
-                    List<String> itermRequiredList = new LinkedList<>();
-                    Map<String, Object> iterm = new LinkedHashMap<>();
-                    Map<String, Object> itermProperties = new LinkedHashMap<>();
-                    buildProperties(itermRequiredList, itermProperties, body.getChildList());
-                    iterm.put("type", "object");
-                    iterm.put("required", itermRequiredList);
-                    iterm.put("description", body.getType());
-                    iterm.put("properties", itermProperties);
+                Map<String, Object> items = buildArrayItemsSchema(body);
+                innerProperties.put("items", items);
 
-                    innerProperties.put("type", "array");
-                    innerProperties.put("description", body.getType());
-                    innerProperties.put("items", iterm);
+            } else if ("object".equals(schemaType)) {
+                // 对象 / Map
+                List<String> objectRequiredList = new LinkedList<>();
+                Map<String, Object> objectProperties = new LinkedHashMap<>();
+                buildProperties(objectRequiredList, objectProperties, body.getChildList());
 
-                } else {
-                    // InheritanceUtil.isInheritor(type, CommonClassNames.JAVA_UTIL_MAP)
-                    // 对象 和 Map
-                    List<String> objectRequiredList = new LinkedList<>();
-                    Map<String, Object> objectProperties = new LinkedHashMap<>();
-
-                    buildProperties(objectRequiredList, objectProperties, body.getChildList());
-                    innerProperties.put("type", "object");
-                    innerProperties.put("required", objectRequiredList);
-                    innerProperties.put("description", body.getType());
-                    innerProperties.put("properties", objectProperties);
-                }
-
-            } else if (body.getPsiElement() instanceof PsiClass) {
-
-                if (InheritanceUtil.isInheritor((PsiClass) body.getPsiElement(), CommonClassNames.JAVA_UTIL_COLLECTION)) {
-                    // 参数是 List<User>
-                    List<String> itermRequiredList = new LinkedList<>();
-                    Map<String, Object> iterm = new LinkedHashMap<>();
-                    Map<String, Object> itermProperties = new LinkedHashMap<>();
-                    buildProperties(itermRequiredList, itermProperties, body.getChildList());
-                    iterm.put("type", "object");
-                    iterm.put("required", itermRequiredList);
-                    iterm.put("description", body.getType());
-                    iterm.put("properties", itermProperties);
-
-                    innerProperties.put("type", "array");
-                    innerProperties.put("description", body.getType());
-                    innerProperties.put("items", iterm);
-                } else {
-                    // InheritanceUtil.isInheritor(type, CommonClassNames.JAVA_UTIL_MAP)
-                    List<String> objectRequiredList = new LinkedList<>();
-                    Map<String, Object> objectProperties = new LinkedHashMap<>();
-
-                    buildProperties(objectRequiredList, objectProperties, body.getChildList());
-                    innerProperties.put("type", "object");
-                    innerProperties.put("required", objectRequiredList);
-                    innerProperties.put("description", body.getType());
-                    innerProperties.put("properties", objectProperties);
-
-                }
+                innerProperties.put("type", "object");
+                innerProperties.put("required", objectRequiredList);
+                innerProperties.put("description", body.getDesc());
+                innerProperties.put("properties", objectProperties);
 
             } else {
-                // 基础类型
-                innerProperties.put("type", body.getType());
+                // 基础类型：string/number/boolean
+                innerProperties.put("type", schemaType);
                 innerProperties.put("description", body.getDesc());
             }
+
             // 是否必填
-            if (body.getRequired()) {
+            if (Boolean.TRUE.equals(body.getRequired())) {
                 requiredList.add(body.getName());
             }
             properties.put(body.getName(), innerProperties);
@@ -256,6 +210,111 @@ public final class YApiServiceImpl implements DocViewUploadService {
 
     }
 
+    /**
+     * YApi Schema: string/number/boolean/array/object
+     */
+    private static String toYapiSchemaType(@NotNull Body body) {
+        if (body.isCollection()) {
+            return "array";
+        }
+        if (body.isMap()) {
+            return "object";
+        }
+        String type = body.getType();
+        if (StringUtils.isBlank(type)) {
+            return "object";
+        }
+        // 原始/包装数字
+        if ("byte".equals(type) || "short".equals(type) || "int".equals(type) || "long".equals(type)
+                || "float".equals(type) || "double".equals(type)
+                || "Byte".equals(type) || "Short".equals(type) || "Integer".equals(type) || "Long".equals(type)
+                || "Float".equals(type) || "Double".equals(type)
+                || "BigDecimal".equals(type)) {
+            return "number";
+        }
+        if ("boolean".equals(type) || "Boolean".equals(type)) {
+            return "boolean";
+        }
+        if (type.endsWith("[]")) {
+            return "array";
+        }
+        // 其他已知基础类型（String/Date/...）统一按 string
+        if (FieldTypeConstant.FIELD_TYPE.containsKey(type) || CommonClassNames.JAVA_LANG_STRING_SHORT.equals(type)) {
+            return "string";
+        }
+        // 默认对象
+        return "object";
+    }
+
+    /**
+     * 构建数组 items 的 schema。
+     * - 若 childList 为空：尝试从 body.type 的泛型推断元素类型，基础类型返回 {type:string/number/boolean}
+     * - 若 childList 非空：返回 object + properties（兼容 List<UserDTO>）
+     */
+    private Map<String, Object> buildArrayItemsSchema(@NotNull Body body) {
+        Map<String, Object> items = new LinkedHashMap<>();
+
+        // 有子字段：说明数组元素是对象
+        if (CollectionUtils.isNotEmpty(body.getChildList())) {
+            List<String> itemRequiredList = new LinkedList<>();
+            Map<String, Object> itemProperties = new LinkedHashMap<>();
+            buildProperties(itemRequiredList, itemProperties, body.getChildList());
+
+            items.put("type", "object");
+            items.put("required", itemRequiredList);
+            items.put("description", body.getDesc());
+            items.put("properties", itemProperties);
+            return items;
+        }
+
+        // 无子字段：数组元素为基础类型（例如 List<Integer>）
+        String itemType = extractCollectionItemType(body.getType());
+        String itemSchemaType = toYapiSchemaType(simpleBodyForType(itemType));
+
+        items.put("type", itemSchemaType);
+        items.put("description", body.getDesc());
+
+        // 对于 object 类型，YApi schema 通常还需要 properties，这里给空对象
+        if ("object".equals(itemSchemaType)) {
+            items.put("properties", new LinkedHashMap<>());
+        }
+
+        return items;
+    }
+
+    /**
+     * 从 List<Integer> / Set<Long> / Collection<Boolean> 提取元素类型名。
+     */
+    private static String extractCollectionItemType(String type) {
+        if (StringUtils.isBlank(type)) {
+            return type;
+        }
+        int lt = type.indexOf('<');
+        int gt = type.lastIndexOf('>');
+        if (lt < 0 || gt < 0 || gt <= lt) {
+            return type;
+        }
+        String inner = type.substring(lt + 1, gt).trim();
+        int comma = inner.indexOf(',');
+        if (comma > -1) {
+            inner = inner.substring(0, comma).trim();
+        }
+        return inner;
+    }
+
+    /**
+     * 仅用于 items 类型推断的轻量 Body。
+     */
+    private static Body simpleBodyForType(String type) {
+        Body b = new Body();
+        b.setType(type);
+        b.setCollection(false);
+        b.setMap(false);
+        b.setRequired(false);
+        b.setName("");
+        b.setDesc("");
+        return b;
+    }
 
     private List<YApiQuery> buildReqQuery(List<Param> paramList) {
 
