@@ -12,6 +12,7 @@ import lombok.Data;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
+import java.util.Arrays;
 import java.util.HashSet;
 import java.util.Set;
 
@@ -132,9 +133,9 @@ public class Settings implements PersistentStateComponent<Settings> {
      * 字段必填注解
      */
     private Set<String> requiredFieldAnnotation = new HashSet<>() {{
-        add(ValidationConstant.NOT_BLANK);
-        add(ValidationConstant.NOT_EMPTY);
-        add(ValidationConstant.NOT_NULL);
+        add(Arrays.toString(ValidationConstant.NOT_BLANK));
+        add(Arrays.toString(ValidationConstant.NOT_EMPTY));
+        add(Arrays.toString(ValidationConstant.NOT_NULL));
         add(LombokConstant.NON_NULL);
     }};
 
@@ -159,6 +160,13 @@ public class Settings implements PersistentStateComponent<Settings> {
     private Set<String> excludeParameterType = new HashSet<>() {{
         add("javax.servlet.ServletResponse");
         add("javax.servlet.ServletRequest");
+        add("javax.servlet.http.HttpServletResponse");
+        add("javax.servlet.http.HttpServletRequest");
+        // jakarta
+        add("jakarta.servlet.ServletResponse");
+        add("jakarta.servlet.ServletRequest");
+        add("jakarta.servlet.http.HttpServletResponse");
+        add("jakarta.servlet.http.HttpServletRequest");
     }};
 
     /**
@@ -166,6 +174,8 @@ public class Settings implements PersistentStateComponent<Settings> {
      */
     private Set<String> excludeFieldAnnotation = new HashSet<>() {{
         add("javax.annotation.Resource");
+        // jakarta
+        add("jakarta.annotation.Resource");
         add("org.springframework.beans.factory.annotation.Autowired");
         add("org.apache.dubbo.config.annotation.Reference");
         add("org.apache.dubbo.config.annotation.DubboReference");
