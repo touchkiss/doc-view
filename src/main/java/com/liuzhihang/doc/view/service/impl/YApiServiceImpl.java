@@ -198,6 +198,7 @@ public final class YApiServiceImpl implements DocViewUploadService {
                 // 基础类型：string/number/boolean
                 innerProperties.put("type", schemaType);
                 innerProperties.put("description", body.getDesc());
+                innerProperties.put("default", body.getExample());
             }
 
             // 是否必填
@@ -345,6 +346,7 @@ public final class YApiServiceImpl implements DocViewUploadService {
             apiHeader.setName(header.getName());
             apiHeader.setDesc(header.getDesc());
             apiHeader.setValue(header.getValue());
+            apiHeader.setExample(header.getValue());
             apiHeader.setRequired(header.getRequired() ? "1" : "0");
             return apiHeader;
         }).collect(Collectors.toList());
