@@ -24,6 +24,7 @@ import com.liuzhihang.doc.view.dto.Param;
 import com.liuzhihang.doc.view.enums.ContentTypeEnum;
 import org.apache.commons.lang3.StringUtils;
 import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
 
 import java.util.*;
 import java.util.stream.Collectors;
@@ -319,6 +320,16 @@ public class SpringPsiUtils extends ParamPsiUtils {
             header.setRequired(required);
             header.setName(headerName);
             header.setValue(defaultValue);
+            PsiDocComment docComment = psiMethod.getDocComment();
+            String desc = "";
+            if (docComment != null) {
+                desc += CustomPsiCommentUtils.paramDocComment(docComment, parameter);
+            }
+            String getValidatedValue = SpringPsiUtils.getValidatedValue(parameter);
+            if (StringUtils.isNotBlank(getValidatedValue)) {
+                desc += getValidatedValue;
+            }
+            header.setDesc(desc);
             list.add(header);
         }
         return list;
@@ -377,11 +388,12 @@ public class SpringPsiUtils extends ParamPsiUtils {
         Map<String, Object> fieldMap = new LinkedHashMap<>();
         String name = parameter.getName();
         PsiType type = parameter.getType();
+        Object defaultValue = getDefaultValue(parameter, type);
 
         if (type instanceof PsiPrimitiveType) {
-            fieldMap.put(name, PsiTypesUtil.getDefaultValue(type));
+            fieldMap.put(name, defaultValue == null ? PsiTypesUtil.getDefaultValue(type) : defaultValue);
         } else if (FieldTypeConstant.FIELD_TYPE.containsKey(type.getPresentableText())) {
-            fieldMap.put(name, FieldTypeConstant.FIELD_TYPE.get(type.getPresentableText()));
+            fieldMap.put(name, defaultValue == null ? FieldTypeConstant.FIELD_TYPE.get(type.getPresentableText()) : defaultValue);
         } else {
             PsiClass psiClass = PsiUtil.resolveClassInType(type);
             if (psiClass != null) {
@@ -391,6 +403,45 @@ public class SpringPsiUtils extends ParamPsiUtils {
 
         return GsonFormatUtil.gsonFormat(fieldMap);
 
+    }
+
+    public static @Nullable Object getDefaultValue(@NotNull PsiVariable parameter, PsiType type) {
+        Object defaultValue = null;
+        if (type instanceof PsiPrimitiveType || FieldTypeConstant.FIELD_TYPE.containsKey(type.getPresentableText())) {
+
+            // 没有注释 tag 时, 回退读取字段的默认初始化值
+            // 例如: int age = 15;  ->  "15"
+            //       String name = "hello";  ->  "hello"
+            PsiExpression initializer = parameter.getInitializer();
+            if (initializer != null) {
+                String initText = initializer.getText();
+                if (StringUtils.isNotBlank(initText)) {
+                    // 去掉字符串字面量两侧的双引号
+                    String defaultValueStr = initText.replaceAll("^\"|\"$", "");
+                    // 现在完整的类型转换逻辑
+                    String typeName = type instanceof PsiPrimitiveType
+                            ? type.getCanonicalText()    // "int", "long", ...
+                            : type.getPresentableText(); // "Integer", "Long", "String", ...
+
+                    try {
+                        defaultValue = switch (typeName) {
+                            case "int", "Integer" -> Integer.parseInt(defaultValueStr);
+                            case "long", "Long" -> Long.parseLong(defaultValueStr);
+                            case "double", "Double" -> Double.parseDouble(defaultValueStr);
+                            case "float", "Float" -> Float.parseFloat(defaultValueStr);
+                            case "boolean", "Boolean" -> Boolean.parseBoolean(defaultValueStr);
+                            case "short", "Short" -> Short.parseShort(defaultValueStr);
+                            case "byte", "Byte" -> Byte.parseByte(defaultValueStr);
+                            case "char", "Character" -> defaultValueStr.charAt(0); // 取字符串第一个字符
+                            default -> defaultValueStr;         // String 等直接用
+                        };
+                    } catch (NumberFormatException e) {
+                        defaultValue = defaultValueStr; // initializer 是复杂表达式时回退字符串
+                    }
+                }
+            }
+        }
+        return defaultValue;
     }
 
     /**
@@ -448,7 +499,7 @@ public class SpringPsiUtils extends ParamPsiUtils {
                 continue;
             }
             String parameterName = parameter.getName();
-            if(AnnotationUtil.isAnnotated(parameter, SpringConstant.REQUEST_PARAM, 0)){
+            if (AnnotationUtil.isAnnotated(parameter, SpringConstant.REQUEST_PARAM, 0)) {
                 PsiAnnotation requestParam = AnnotationUtil.findAnnotation(parameter, SpringConstant.REQUEST_PARAM);
                 if (requestParam != null) {
                     List<JvmAnnotationAttribute> attributes = requestParam.getAttributes();
@@ -525,6 +576,19 @@ public class SpringPsiUtils extends ParamPsiUtils {
                 }
             }
         }
+        if (psiField instanceof PsiField psiField1) {
+            // 没有注释 tag 时, 回退读取字段的默认初始化值
+            // 例如: int age = 15;  ->  "15"
+            //       String name = "hello";  ->  "hello"
+            PsiExpression initializer = psiField1.getInitializer();
+            if (initializer != null) {
+                String initText = initializer.getText();
+                if (StringUtils.isNotBlank(initText)) {
+                    // 去掉字符串字面量两侧的双引号
+                    return initText.replaceAll("^\"|\"$", "");
+                }
+            }
+        }
         PsiAnnotation minAnnotation = AnnotationUtil.findAnnotation(psiField, ValidationConstant.MIN);
         if (minAnnotation != null) {
             return AnnotationUtil.getLongAttributeValue(minAnnotation, "value").toString();
@@ -548,14 +612,14 @@ public class SpringPsiUtils extends ParamPsiUtils {
         PsiDocComment docComment = psiMethod.getDocComment();
         String desc = "";
         if (docComment != null) {
-            desc+= CustomPsiCommentUtils.paramDocComment(docComment, parameter);
+            desc += CustomPsiCommentUtils.paramDocComment(docComment, parameter);
         }
         String getValidatedValue = SpringPsiUtils.getValidatedValue(parameter);
         if (StringUtils.isNotBlank(getValidatedValue)) {
             desc += getValidatedValue;
         }
         param.setDesc(desc);
-        param.setExample(getExample(parameter,null));
+        param.setExample(getExample(parameter, null));
 
         if (psiMethod.getDocComment() != null) {
             Optional<PsiDocTag> sinceTag = Arrays.stream(psiMethod.getDocComment().getTags()).filter(a -> a.getName().equals("since")).findFirst();

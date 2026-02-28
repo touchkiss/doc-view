@@ -70,7 +70,7 @@ public class ParamPsiUtils {
                 if (isProtoList) {
                     body.setType(returnType.getPresentableText());
                     body.setCollection(true);
-                } else if (returnType instanceof PsiPrimitiveType || FieldTypeConstant.FIELD_TYPE.containsKey(returnType.getPresentableText())|| isProtoMap) {
+                } else if (returnType instanceof PsiPrimitiveType || FieldTypeConstant.FIELD_TYPE.containsKey(returnType.getPresentableText()) || isProtoMap) {
                     body.setType(returnType.getPresentableText());
                 } else {
                     PsiClass returnTypeClass = PsiUtil.resolveClassInType(returnType);
@@ -114,6 +114,19 @@ public class ParamPsiUtils {
 
         parent.getChildList().add(body);
         if (type instanceof PsiPrimitiveType || FieldTypeConstant.FIELD_TYPE.containsKey(type.getPresentableText())) {
+
+            // 没有注释 tag 时, 回退读取字段的默认初始化值
+            // 例如: int age = 15;  ->  "15"
+            //       String name = "hello";  ->  "hello"
+            PsiExpression initializer = field.getInitializer();
+            if (initializer != null) {
+                String initText = initializer.getText();
+                if (StringUtils.isNotBlank(initText)) {
+                    // 去掉字符串字面量两侧的双引号
+                    String defaultValueStr = initText.replaceAll("^\"|\"$", "");
+                    body.setExample(defaultValueStr);
+                }
+            }
             return;
         }
 
@@ -188,7 +201,7 @@ public class ParamPsiUtils {
 
             parentBody.setMap(true);
 
-        } else if (fieldClass.isEnum() || fieldClass.isInterface() || fieldClass.isAnnotationType()) {
+        } else if (fieldClass == null || fieldClass.isEnum() || fieldClass.isInterface() || fieldClass.isAnnotationType()) {
             // 字段是类, 也可能带泛型
             return;
 
@@ -199,7 +212,7 @@ public class ParamPsiUtils {
             childClass = fieldClass;
         }
 
-        if (type instanceof PsiPrimitiveType || FieldTypeConstant.FIELD_TYPE.containsKey(type.getPresentableText()) || isProtoMap) {
+        if (FieldTypeConstant.FIELD_TYPE.containsKey(type.getPresentableText()) || isProtoMap) {
             return;
         }
         for (PsiField psiField : childClass.getAllFields()) {
@@ -384,7 +397,7 @@ public class ParamPsiUtils {
         qualifiedNameList.add(psiClass.getQualifiedName());
         for (PsiField field : psiClass.getAllFields()) {
 //            proto的map类型，不展示子属性
-            if (("Map".equals(psiClass.getName())|| Objects.requireNonNull(psiClass.getName()).startsWith("Map<")) && isProto) {
+            if (("Map".equals(psiClass.getName()) || Objects.requireNonNull(psiClass.getName()).startsWith("Map<")) && isProto) {
                 break;
             }
             if (DocViewUtils.isExcludeField(field, isProto)) {
@@ -424,9 +437,10 @@ public class ParamPsiUtils {
                     parseProtoFieldType = true;
                 }
             }
+            Object defaultValue = SpringPsiUtils.getDefaultValue(field, type);
             if (type instanceof PsiPrimitiveType) {
                 // 基本类型
-                fieldMap.put(fieldName, PsiTypesUtil.getDefaultValue(type));
+                fieldMap.put(fieldName, defaultValue == null ? PsiTypesUtil.getDefaultValue(type) : defaultValue);
                 continue;
             }
             if (!parseProtoFieldType) {
@@ -438,7 +452,7 @@ public class ParamPsiUtils {
             }
             // 指定的类型
             if (FieldTypeConstant.FIELD_TYPE.containsKey(fieldTypeName)) {
-                fieldMap.put(fieldName, FieldTypeConstant.FIELD_TYPE.get(fieldTypeName));
+                fieldMap.put(fieldName, defaultValue == null ? FieldTypeConstant.FIELD_TYPE.get(fieldTypeName) : defaultValue);
             } else if (type instanceof PsiArrayType) {
                 // 数组类型
                 List<Object> list = new ArrayList<>();
@@ -633,9 +647,7 @@ public class ParamPsiUtils {
 
         if (returnType instanceof PsiPrimitiveType || FieldTypeConstant.FIELD_TYPE.containsKey(returnType.getPresentableText())) {
             return "";
-        } else if (returnType instanceof PsiClassType) {
-
-            PsiClassType psiClassType = (PsiClassType) returnType;
+        } else if (returnType instanceof PsiClassType psiClassType) {
 
             PsiClass psiClass = PsiUtil.resolveClassInType(returnType);
             if (psiClass != null) {

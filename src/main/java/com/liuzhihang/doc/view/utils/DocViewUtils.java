@@ -565,12 +565,27 @@ public class DocViewUtils {
             PsiComment comment = PsiTreeUtil.findChildOfType(psiField, PsiComment.class);
 
             if (comment != null) {
-                // param.setExample();
-                // 参数举例, 使用 tag 判断
+                // 参数举例, 优先使用 @value 注释 tag
                 if (comment instanceof PsiDocComment) {
-                    return CustomPsiCommentUtils.tagValueFromDocComment((PsiDocComment) comment, "value");
+                    String tagValue = CustomPsiCommentUtils.tagValueFromDocComment((PsiDocComment) comment, "value");
+                    if (StringUtils.isNotBlank(tagValue)) {
+                        return tagValue;
+                    }
                 }
             }
+
+            // 没有注释 tag 时, 回退读取字段的默认初始化值
+            // 例如: int age = 15;  ->  "15"
+            //       String name = "hello";  ->  "hello"
+            PsiExpression initializer = psiField.getInitializer();
+            if (initializer != null) {
+                String initText = initializer.getText();
+                if (StringUtils.isNotBlank(initText)) {
+                    // 去掉字符串字面量两侧的双引号
+                    return initText.replaceAll("^\"|\"$", "");
+                }
+            }
+
             return "";
         });
     }

@@ -286,7 +286,7 @@ public class DocViewData {
             return "";
         }
 
-        return "|参数名|类型|必填|描述|版本|\n"
+        return "|参数名|类型|必填|默认值|描述|版本|\n"
                 + "|:-----|:-----|:-----|:-----|:-----|\n"
                 + paramMarkdownContent(dataList);
     }
@@ -301,12 +301,13 @@ public class DocViewData {
         List<DocViewParamData> paramDataList = new ArrayList<>();
 
         StringBuilder builder = new StringBuilder();
-        builder.append("|参数名|类型|必填|描述|版本|\n")
+        builder.append("|参数名|类型|必填|默认值|描述|版本|\n")
                 .append("|:-----|:-----|:-----|:-----|:-----|\n");
         for (DocViewParamData data : dataList) {
             builder.append("|").append(data.getName())
                     .append("|").append(data.getType())
                     .append("|").append(Boolean.TRUE.equals(data.getRequired()) ? "Y" : "N")
+                    .append("|").append(data.getExample())
                     .append("|").append(data.getDesc())
                     .append("|").append(Arrays.stream(new String[]{data.getSince(), data.getVersion()}).filter(StringUtils::isNotBlank).collect(Collectors.joining("-")))
                     .append("|").append("\n");
@@ -369,6 +370,7 @@ public class DocViewData {
             builder.append("|").append(data.getPrefixSymbol1()).append(data.getPrefixSymbol2()).append(data.getName())
                     .append("|").append(data.getType())
                     .append("|").append(data.getRequired() ? "Y" : "N")
+                    .append("|").append(data.getExample())
                     .append("|").append(data.getDesc())
                     .append("|").append(Arrays.stream(new String[]{data.getSince(), data.getVersion()}).filter(StringUtils::isNotBlank).collect(Collectors.joining("-")))
                     .append("|").append("\n");
