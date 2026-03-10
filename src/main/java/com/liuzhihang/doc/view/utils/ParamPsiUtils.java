@@ -34,11 +34,19 @@ public class ParamPsiUtils {
      */
     public static void buildBodyParam(PsiClass parentClass, PsiField field, Map<String, PsiType> genericsMap, Body parent, Map<String, Boolean> parentChildPair, boolean parentIsProto) {
 
-        String pair = parent.getQualifiedNameForClassType() + "_" + field.getName();
+        // parentChildPair 语义：当前递归路径栈（而非"全局已访问集合"）
+        // - 进入时入栈，退出时出栈（try-finally 保证）
+        // - 仅防止同一条递归链上重复出现（如 A→B→A、List<A>→B→List<A>）
+        // - 不同分支（A.c 和 B.c 都持有 C 类型字段）可以各自完整解析 C 的子字段
+        String parentQName = (parentClass != null && parentClass.getQualifiedName() != null)
+                ? parentClass.getQualifiedName() : "";
+        String pair = parentQName + "_" + field.getName();
         if (parentChildPair.containsKey(pair)) {
+            // 当前字段已在递归路径上，跳过以防循环
             return;
         }
         parentChildPair.put(pair, true);
+        try {
 
         PsiType type = field.getType();
         boolean isProto = ProtoUtils.isProto(type);
@@ -215,12 +223,23 @@ public class ParamPsiUtils {
         if (FieldTypeConstant.FIELD_TYPE.containsKey(type.getPresentableText()) || isProtoMap) {
             return;
         }
+        // 用 seenFieldNames 处理 getAllFields() 可能返回父类同名字段的情况（继承字段去重）
+        // 不依赖 parentChildPair 去重，因为 pair 在退出时会被移除（递归栈语义）
+        Set<String> seenFieldNames = new HashSet<>();
         for (PsiField psiField : childClass.getAllFields()) {
             if (!DocViewUtils.isExcludeField(psiField, isProto)) {
+                // 同一个类的 getAllFields() 可能因继承返回同名字段，保留第一个（子类优先）
+                if (!seenFieldNames.add(psiField.getName())) {
+                    continue;
+                }
                 buildBodyParam(childClass, psiField, fieldGenericsMap, parentBody, parentChildPair, isProto);
             }
         }
 
+        } finally {
+            // 出栈：退出时从路径栈中移除，允许同类型字段在不同分支中各自被完整解析
+            parentChildPair.remove(pair);
+        }
     }
 
     /**
@@ -292,6 +311,8 @@ public class ParamPsiUtils {
         listBody.setName(name);
         listBody.setPsiElement(genericsClass);
         listBody.setType(genericsClass.getName());
+        // 设置全限定类名，避免 checkLinkedListHasTypeClass 环检测因 qualifiedNameForClassType 为 null 而失效
+        listBody.setQualifiedNameForClassType(genericsClass.getQualifiedName());
         listBody.setDesc("");
         listBody.setParent(parent);
 

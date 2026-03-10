@@ -2,13 +2,14 @@ package com.liuzhihang.doc.view.utils;
 
 import com.google.common.collect.Lists;
 import com.intellij.openapi.application.ApplicationManager;
+import com.intellij.openapi.project.Project;
 import com.intellij.openapi.util.Computable;
-import com.intellij.psi.PsiComment;
-import com.intellij.psi.PsiElement;
-import com.intellij.psi.PsiParameter;
+import com.intellij.psi.*;
 import com.intellij.psi.javadoc.PsiDocComment;
 import com.intellij.psi.javadoc.PsiDocTag;
 import com.intellij.psi.javadoc.PsiDocTagValue;
+import com.intellij.psi.search.GlobalSearchScope;
+import com.intellij.psi.search.PsiShortNamesCache;
 import com.liuzhihang.doc.view.constant.FieldTypeConstant;
 import org.apache.commons.lang3.StringUtils;
 import org.jetbrains.annotations.NotNull;
@@ -176,7 +177,8 @@ public class CustomPsiCommentUtils {
     /**
      * 获取字段的注释
      * <p>
-     * 举例 // xxx
+     * 支持普通注释 (// xxx) 和 JavaDoc 注释，若 JavaDoc 中含有 @see 指向枚举，
+     * 则自动遍历枚举常量将约束信息追加到注释中
      *
      * @param psiComment 字段的注释 PSI
      * @return 注释
@@ -184,18 +186,197 @@ public class CustomPsiCommentUtils {
     @NotNull
     public static String fieldComment(PsiComment psiComment) {
 
-        return ApplicationManager.getApplication().runReadAction(new Computable<String>() {
-            @Override
-            public String compute() {
-                if (psiComment != null && StringUtils.isNotBlank(psiComment.getText())) {
-                    // 原注释中的换行符移除
-                    return psiComment.getText().replace("/", StringUtils.EMPTY).trim();
-
-                }
+        return ApplicationManager.getApplication().runReadAction((Computable<String>) () -> {
+            if (psiComment == null) {
                 return "";
             }
+
+            // JavaDoc 注释 (/** ... */)：提取主注释文本并处理 @see 枚举
+            if (psiComment instanceof PsiDocComment) {
+                PsiDocComment docComment = (PsiDocComment) psiComment;
+
+                // 提取主注释文本（与 tagDocComment 逻辑一致）
+                StringBuilder sb = new StringBuilder();
+                for (PsiElement element : docComment.getChildren()) {
+                    if ("PsiDocToken:DOC_COMMENT_DATA".equalsIgnoreCase(element.toString())) {
+                        sb.append(element.getText().replaceAll("[* \\n]|<p>|</p>", ""));
+                    }
+                }
+                String mainComment = sb.toString();
+
+                // 解析 @see 标签，若指向枚举则拼接枚举值描述
+                String enumInfo = resolveEnumInfoFromSeeTag(docComment);
+                if (StringUtils.isNotBlank(enumInfo)) {
+                    if (StringUtils.isNotBlank(mainComment)) {
+                        return mainComment + "(" + enumInfo + ")";
+                    }
+                    return enumInfo;
+                }
+                return mainComment;
+            }
+
+            // 普通注释 (// xxx 或 /* xxx */)
+            if (StringUtils.isNotBlank(psiComment.getText())) {
+                // 原注释中的换行符移除
+                return psiComment.getText().replace("/", StringUtils.EMPTY).trim();
+            }
+            return "";
         });
 
+    }
+
+    /**
+     * 从 @see 标签中解析枚举约束信息
+     * <p>
+     * 格式：@see EnumClass#fieldName 或 @see EnumClass
+     *
+     * @param docComment JavaDoc 注释 PSI
+     * @return 枚举约束描述，如 "click: 商品点击; cart: 加入购物车"，未找到枚举时返回空字符串
+     */
+    @NotNull
+    private static String resolveEnumInfoFromSeeTag(@NotNull PsiDocComment docComment) {
+        for (PsiElement element : docComment.getChildren()) {
+            if (!("PsiDocTag:@see").equalsIgnoreCase(element.toString())) {
+                continue;
+            }
+
+            // 取 @see 后面的值，如 "UserLogEnum#name" 或 "UserLogEnum"
+            String seeText = element.getText().replace("@see", "").trim();
+            if (StringUtils.isBlank(seeText)) {
+                continue;
+            }
+
+            // 解析类名和字段名
+            String className;
+            String fieldName = null;
+            if (seeText.contains("#")) {
+                String[] parts = seeText.split("#", 2);
+                className = parts[0].trim();
+                fieldName = parts[1].trim();
+            } else {
+                className = seeText.trim();
+            }
+
+            if (StringUtils.isBlank(className)) {
+                continue;
+            }
+
+            // 根据类名查找 PsiClass
+            Project project = docComment.getProject();
+            PsiClass psiClass = findClassByName(project, className);
+            if (psiClass == null || !psiClass.isEnum()) {
+                continue;
+            }
+
+            // 校验字段是否真实存在于枚举中（排除枚举常量本身）
+            String resolvedFieldName = fieldName;
+            if (resolvedFieldName != null) {
+                boolean fieldExists = false;
+                for (PsiField f : psiClass.getFields()) {
+                    if (!(f instanceof PsiEnumConstant) && resolvedFieldName.equals(f.getName())) {
+                        fieldExists = true;
+                        break;
+                    }
+                }
+                if (!fieldExists) {
+                    resolvedFieldName = null;
+                }
+            }
+
+            // 遍历枚举常量，拼接说明
+            StringBuilder enumInfo = new StringBuilder();
+            for (PsiField field : psiClass.getFields()) {
+                if (!(field instanceof PsiEnumConstant)) {
+                    continue;
+                }
+                PsiEnumConstant enumConstant = (PsiEnumConstant) field;
+                String constantComment = getEnumConstantComment(enumConstant);
+
+                if (resolvedFieldName != null) {
+                    String fieldValue = getEnumConstantFieldValue(enumConstant, resolvedFieldName);
+                    String key = fieldValue != null ? fieldValue : enumConstant.getName();
+                    enumInfo.append(key).append(": ").append(constantComment).append("; ");
+                } else {
+                    enumInfo.append(enumConstant.getName()).append(": ").append(constantComment).append("; ");
+                }
+            }
+
+            if (enumInfo.length() > 0) {
+                String result = enumInfo.toString().trim();
+                // 去掉末尾多余的分号
+                if (result.endsWith(";")) {
+                    result = result.substring(0, result.length() - 1).trim();
+                }
+                return result;
+            }
+        }
+        return "";
+    }
+
+    /**
+     * 根据类名（短名或全限定名）在项目中查找 PsiClass
+     */
+    @Nullable
+    private static PsiClass findClassByName(@NotNull Project project, @NotNull String className) {
+        try {
+            JavaPsiFacade facade = JavaPsiFacade.getInstance(project);
+            if (className.contains(".")) {
+                // 全限定类名
+                return facade.findClass(className, GlobalSearchScope.allScope(project));
+            }
+            // 短类名：在整个项目范围内搜索
+            PsiClass[] classes = PsiShortNamesCache.getInstance(project)
+                    .getClassesByName(className, GlobalSearchScope.allScope(project));
+            return classes.length > 0 ? classes[0] : null;
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    /**
+     * 获取枚举常量自身的注释（JavaDoc 首行）；无注释时回退为常量名
+     */
+    @NotNull
+    private static String getEnumConstantComment(@NotNull PsiEnumConstant enumConstant) {
+        PsiDocComment docComment = enumConstant.getDocComment();
+        if (docComment != null) {
+            String comment = tagDocComment(docComment);
+            if (StringUtils.isNotBlank(comment)) {
+                return comment;
+            }
+        }
+        return enumConstant.getName();
+    }
+
+    /**
+     * 获取枚举常量中指定字段对应的构造参数值
+     * <p>
+     * 约定：构造器参数名与字段名相同，如 {@code this.name = name}
+     *
+     * @param enumConstant 枚举常量
+     * @param fieldName    目标字段名
+     * @return 字段值字符串（去除首尾引号），找不到时返回 null
+     */
+    @Nullable
+    private static String getEnumConstantFieldValue(@NotNull PsiEnumConstant enumConstant,
+                                                     @NotNull String fieldName) {
+        PsiClass enumClass = enumConstant.getContainingClass();
+        if (enumClass == null) {
+            return null;
+        }
+        for (PsiMethod constructor : enumClass.getConstructors()) {
+            PsiParameter[] params = constructor.getParameterList().getParameters();
+            for (int i = 0; i < params.length; i++) {
+                if (fieldName.equals(params[i].getName())) {
+                    PsiExpressionList argList = enumConstant.getArgumentList();
+                    if (argList != null && i < argList.getExpressionCount()) {
+                        // 去掉字符串字面量两侧的双引号
+                        return argList.getExpressions()[i].getText().replaceAll("^\"|\"$", "");
+                    }
+                }
+            }
+        }
+        return null;
     }
 
     /**

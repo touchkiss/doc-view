@@ -550,10 +550,7 @@ public class DocViewUtils {
 
             if (comment != null) {
                 // param.setExample();
-                // 参数举例, 使用 tag 判断
-                if (comment instanceof PsiDocComment) {
-                    return CustomPsiCommentUtils.tagDocComment((PsiDocComment) comment) + getValidatedValue;
-                }
+                // 参数举例, 使用 tag 判断; fieldComment 已统一支持 PsiDocComment 及 @see 枚举解析
                 return CustomPsiCommentUtils.fieldComment(comment) + getValidatedValue;
             }
             return getValidatedValue;
