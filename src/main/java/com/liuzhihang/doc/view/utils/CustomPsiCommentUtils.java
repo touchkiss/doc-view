@@ -17,6 +17,8 @@ import org.jetbrains.annotations.Nullable;
 
 import java.util.Iterator;
 import java.util.List;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 /**
  * 从注释中解析注解的工具类
@@ -177,7 +179,7 @@ public class CustomPsiCommentUtils {
     /**
      * 获取字段的注释
      * <p>
-     * 支持普通注释 (// xxx) 和 JavaDoc 注释，若 JavaDoc 中含有 @see 指向枚举，
+     * 支持普通注释 (// xxx) 和 JavaDoc 注释，若 JavaDoc 中含有 @see / @link 指向枚举，
      * 则自动遍历枚举常量将约束信息追加到注释中
      *
      * @param psiComment 字段的注释 PSI
@@ -204,7 +206,7 @@ public class CustomPsiCommentUtils {
                 }
                 String mainComment = sb.toString();
 
-                // 解析 @see 标签，若指向枚举则拼接枚举值描述
+                // 解析 @see / @link 标签，若指向枚举则拼接枚举值描述
                 String enumInfo = resolveEnumInfoFromSeeTag(docComment);
                 if (StringUtils.isNotBlank(enumInfo)) {
                     if (StringUtils.isNotBlank(mainComment)) {
@@ -226,22 +228,18 @@ public class CustomPsiCommentUtils {
     }
 
     /**
-     * 从 @see 标签中解析枚举约束信息
+     * 从 @see / @link 标签中解析枚举约束信息
      * <p>
-     * 格式：@see EnumClass#fieldName 或 @see EnumClass
+     * 支持格式：@see EnumClass#fieldName、@see EnumClass、@link EnumClass#fieldName、@link EnumClass
      *
      * @param docComment JavaDoc 注释 PSI
      * @return 枚举约束描述，如 "click: 商品点击; cart: 加入购物车"，未找到枚举时返回空字符串
      */
     @NotNull
     private static String resolveEnumInfoFromSeeTag(@NotNull PsiDocComment docComment) {
-        for (PsiElement element : docComment.getChildren()) {
-            if (!("PsiDocTag:@see").equalsIgnoreCase(element.toString())) {
-                continue;
-            }
-
-            // 取 @see 后面的值，如 "UserLogEnum#name" 或 "UserLogEnum"
-            String seeText = element.getText().replace("@see", "").trim();
+        for (String referenceText : collectReferenceTexts(docComment)) {
+            // 引用值示例："UserLogEnum#name" 或 "UserLogEnum"
+            String seeText = referenceText;
             if (StringUtils.isBlank(seeText)) {
                 continue;
             }
@@ -503,4 +501,49 @@ public class CustomPsiCommentUtils {
 
     }
 
+    @NotNull
+    private static List<String> collectReferenceTexts(@NotNull PsiDocComment docComment) {
+        List<String> references = Lists.newArrayList();
+
+        for (PsiElement element : docComment.getChildren()) {
+            String elementType = element.toString();
+
+            if ("PsiDocTag:@see".equalsIgnoreCase(elementType)) {
+                addReference(references, extractFirstReferenceToken(
+                        element.getText().replaceFirst("(?i)^@see\\s*", "")));
+                continue;
+            }
+
+            if (elementType.toLowerCase().contains("@link")) {
+                String linkText = element.getText().replaceFirst("(?i)^\\{@link\\s*", "");
+                linkText = StringUtils.removeEnd(linkText, "}");
+                addReference(references, extractFirstReferenceToken(linkText));
+            }
+        }
+
+        // 兜底：某些 PSI 结构下，{@link ...} 可能未按独立元素暴露
+        Matcher matcher = Pattern.compile("\\{@link\\s+([^\\s}]+)", Pattern.CASE_INSENSITIVE)
+                .matcher(docComment.getText());
+        while (matcher.find()) {
+            addReference(references, extractFirstReferenceToken(matcher.group(1)));
+        }
+        return references;
+    }
+
+    private static void addReference(@NotNull List<String> references, @Nullable String reference) {
+        if (StringUtils.isBlank(reference) || references.contains(reference)) {
+            return;
+        }
+        references.add(reference);
+    }
+
+    @Nullable
+    private static String extractFirstReferenceToken(@Nullable String rawText) {
+        if (StringUtils.isBlank(rawText)) {
+            return null;
+        }
+        String trimmed = rawText.trim();
+        int index = StringUtils.indexOfAny(trimmed, " \t\n\r");
+        return index >= 0 ? trimmed.substring(0, index).trim() : trimmed;
+    }
 }
