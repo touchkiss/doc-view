@@ -26,6 +26,10 @@ public class PojoUtils extends ParamPsiUtils {
     public static final boolean isPojoClass(@NotNull PsiClass psiClass) {
         return ApplicationManager.getApplication().runReadAction((Computable<Boolean>) () -> {
 
+            if (psiClass.isRecord()) {
+                return true;
+            }
+
             Settings settings = Settings.getInstance(psiClass.getProject());
 
             if (AnnotationUtil.isAnnotated(psiClass, settings.getContainPojoClassAnnotationName(), 0) || ProtoUtils.isProto(psiClass)) {
@@ -48,13 +52,20 @@ public class PojoUtils extends ParamPsiUtils {
         // 获取请求的参数中，是否存在泛型，将泛型与原始对象存储到 map 中
         PsiClassType psiClassType = (PsiClassType) type;
         Map<String, PsiType> genericsMap = CustomPsiUtils.getGenericsMap(psiClassType);
-        for (PsiField field : psiClass.getAllFields()) {
-            // 通用排除字段
-            if (DocViewUtils.isExcludeField(field, isProto)) {
-                continue;
+
+        if (psiClass.isRecord()) {
+            for (PsiRecordComponent component : psiClass.getRecordComponents()) {
+                ParamPsiUtils.buildBodyParamFromComponent(psiClass, component, genericsMap, root, new HashMap<>());
             }
-            // 增加 genericsMap 参数传入，用于将泛型 T 替换为原始对象
-            ParamPsiUtils.buildBodyParam(psiClass, field, genericsMap, root, new HashMap<>(), isProto);
+        } else {
+            for (PsiField field : psiClass.getAllFields()) {
+                // 通用排除字段
+                if (DocViewUtils.isExcludeField(field, isProto)) {
+                    continue;
+                }
+                // 增加 genericsMap 参数传入，用于将泛型 T 替换为原始对象
+                ParamPsiUtils.buildBodyParam(psiClass, field, genericsMap, root, new HashMap<>(), isProto);
+            }
         }
         return root;
     }
@@ -71,7 +82,11 @@ public class PojoUtils extends ParamPsiUtils {
             fieldMap.put(name, FieldTypeConstant.FIELD_TYPE.get(type.getPresentableText()));
         } else {
             if (psiClass != null) {
-                fieldMap = ParamPsiUtils.getFieldsAndDefaultValue(psiClass, null);
+                if (psiClass.isRecord()) {
+                    fieldMap = ParamPsiUtils.getFieldsAndDefaultValueForRecord(psiClass, null);
+                } else {
+                    fieldMap = ParamPsiUtils.getFieldsAndDefaultValue(psiClass, null);
+                }
             }
         }
 

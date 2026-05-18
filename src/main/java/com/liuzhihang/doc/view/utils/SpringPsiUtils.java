@@ -365,13 +365,19 @@ public class SpringPsiUtils extends ParamPsiUtils {
             // 获取请求的参数中，是否存在泛型，将泛型与原始对象存储到 map 中
             PsiClassType psiClassType = (PsiClassType) type;
             Map<String, PsiType> genericsMap = CustomPsiUtils.getGenericsMap(psiClassType);
-            for (PsiField field : psiClass.getAllFields()) {
-                // 通用排除字段
-                if (DocViewUtils.isExcludeField(field, isProto)) {
-                    continue;
+            if (psiClass.isRecord()) {
+                for (PsiRecordComponent component : psiClass.getRecordComponents()) {
+                    ParamPsiUtils.buildBodyParamFromComponent(psiClass, component, genericsMap, root, new HashMap<>());
                 }
-                // 增加 genericsMap 参数传入，用于将泛型 T 替换为原始对象
-                ParamPsiUtils.buildBodyParam(psiClass, field, genericsMap, root, new HashMap<>(), isProto);
+            } else {
+                for (PsiField field : psiClass.getAllFields()) {
+                    // 通用排除字段
+                    if (DocViewUtils.isExcludeField(field, isProto)) {
+                        continue;
+                    }
+                    // 增加 genericsMap 参数传入，用于将泛型 T 替换为原始对象
+                    ParamPsiUtils.buildBodyParam(psiClass, field, genericsMap, root, new HashMap<>(), isProto);
+                }
             }
         }
         return root;
@@ -533,16 +539,26 @@ public class SpringPsiUtils extends ParamPsiUtils {
                     continue;
                 }
                 // 参数是类, get 请求只有一层
-                PsiField[] psiFields = fieldClass.getAllFields();
-                for (PsiField field : psiFields) {
-                    // 已经包含该字段
-                    if (!paramNameSet.add(parameterName)) {
-                        continue;
+                if (fieldClass.isRecord()) {
+                    for (PsiRecordComponent component : fieldClass.getRecordComponents()) {
+                        if (!paramNameSet.add(component.getName())) {
+                            continue;
+                        }
+                        if (component.getType() instanceof PsiPrimitiveType || FieldTypeConstant.FIELD_TYPE.containsKey(component.getType().getPresentableText())) {
+                            list.add(buildPramFromComponent(component));
+                        }
                     }
-                    if (field.getType() instanceof PsiPrimitiveType || FieldTypeConstant.FIELD_TYPE.containsKey(field.getType().getPresentableText())) {
-                        list.add(buildPramFromField(field));
+                } else {
+                    PsiField[] psiFields = fieldClass.getAllFields();
+                    for (PsiField field : psiFields) {
+                        // 已经包含该字段
+                        if (!paramNameSet.add(parameterName)) {
+                            continue;
+                        }
+                        if (field.getType() instanceof PsiPrimitiveType || FieldTypeConstant.FIELD_TYPE.containsKey(field.getType().getPresentableText())) {
+                            list.add(buildPramFromField(field));
+                        }
                     }
-
                 }
             }
 
@@ -563,6 +579,17 @@ public class SpringPsiUtils extends ParamPsiUtils {
         param.setExample(getExample(field, example));
         param.setType(field.getType().getPresentableText());
 
+        return param;
+    }
+
+    private static Param buildPramFromComponent(PsiRecordComponent component) {
+        Param param = new Param();
+        param.setPsiElement(component);
+        param.setRequired(DocViewUtils.isRequired(component));
+        param.setName(DocViewUtils.fieldName(component, false));
+        param.setDesc(DocViewUtils.fieldDesc(component));
+        param.setExample(getExample(component, ""));
+        param.setType(component.getType().getPresentableText());
         return param;
     }
 

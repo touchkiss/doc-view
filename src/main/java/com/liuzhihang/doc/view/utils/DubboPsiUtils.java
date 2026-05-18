@@ -184,9 +184,15 @@ public class DubboPsiUtils {
                 boolean isProto = ProtoUtils.isProto(PsiTypesUtil.getClassType(childClass));
                 if (StringUtils.isNotBlank(qualifiedName) && !ParamPsiUtils.checkLinkedListHasTypeClass(body, qualifiedName)) {
                     body.setQualifiedNameForClassType(qualifiedName);
-                    for (PsiField psiField : childClass.getAllFields()) {
-                        if (!DocViewUtils.isExcludeField(psiField, false)) {
-                            ParamPsiUtils.buildBodyParam(childClass, psiField, null, body, new HashMap<>(), isProto);
+                    if (childClass.isRecord()) {
+                        for (PsiRecordComponent component : childClass.getRecordComponents()) {
+                            ParamPsiUtils.buildBodyParamFromComponent(childClass, component, null, body, new HashMap<>());
+                        }
+                    } else {
+                        for (PsiField psiField : childClass.getAllFields()) {
+                            if (!DocViewUtils.isExcludeField(psiField, false)) {
+                                ParamPsiUtils.buildBodyParam(childClass, psiField, null, body, new HashMap<>(), isProto);
+                            }
                         }
                     }
                 }

@@ -223,6 +223,12 @@ public class ParamPsiUtils {
         if (FieldTypeConstant.FIELD_TYPE.containsKey(type.getPresentableText()) || isProtoMap) {
             return;
         }
+        if (childClass.isRecord()) {
+            for (PsiRecordComponent rc : childClass.getRecordComponents()) {
+                buildBodyParamFromComponent(childClass, rc, fieldGenericsMap, parentBody, parentChildPair);
+            }
+            return;
+        }
         // 用 seenFieldNames 处理 getAllFields() 可能返回父类同名字段的情况（继承字段去重）
         // 不依赖 parentChildPair 去重，因为 pair 在退出时会被移除（递归栈语义）
         Set<String> seenFieldNames = new HashSet<>();
@@ -412,6 +418,10 @@ public class ParamPsiUtils {
             return fieldMap;
         }
 
+        if (psiClass.isRecord()) {
+            return getFieldsAndDefaultValueForRecord(psiClass, genericMap, qualifiedNameList);
+        }
+
         boolean isProto = ProtoUtils.isProto(PsiTypesUtil.getClassType(psiClass));
 
         // 设置当前类的类型
@@ -560,6 +570,99 @@ public class ParamPsiUtils {
         return fieldMap;
     }
 
+    public static Map<String, Object> getFieldsAndDefaultValueForRecord(@NotNull PsiClass psiClass, Map<String, PsiType> genericMap) {
+        return getFieldsAndDefaultValueForRecord(psiClass, genericMap, new LinkedList<>());
+    }
+
+    public static Map<String, Object> getFieldsAndDefaultValueForRecord(@NotNull PsiClass psiClass,
+                                                                         Map<String, PsiType> genericMap,
+                                                                         @NotNull LinkedList<String> qualifiedNameList) {
+        Map<String, Object> fieldMap = new LinkedHashMap<>();
+        qualifiedNameList.add(psiClass.getQualifiedName());
+
+        for (PsiRecordComponent component : psiClass.getRecordComponents()) {
+            String fieldName = DocViewUtils.fieldName(component, false);
+            PsiType type = replaceFieldType(genericMap, component.getType());
+            String fieldTypeName = type.getPresentableText();
+
+            if (type instanceof PsiPrimitiveType) {
+                fieldMap.put(fieldName, PsiTypesUtil.getDefaultValue(type));
+                continue;
+            }
+
+            if (FieldTypeConstant.FIELD_TYPE.containsKey(fieldTypeName)) {
+                fieldMap.put(fieldName, FieldTypeConstant.FIELD_TYPE.get(fieldTypeName));
+            } else if (type instanceof PsiArrayType) {
+                List<Object> list = new ArrayList<>();
+                PsiType deepType = type.getDeepComponentType();
+                if (deepType instanceof PsiPrimitiveType) {
+                    list.add(PsiTypesUtil.getDefaultValue(deepType));
+                } else if (FieldTypeConstant.FIELD_TYPE.containsKey(deepType.getPresentableText())) {
+                    list.add(FieldTypeConstant.FIELD_TYPE.get(deepType.getPresentableText()));
+                } else {
+                    PsiClass classInType = PsiUtil.resolveClassInType(deepType);
+                    LinkedList<String> temp = new LinkedList<>(qualifiedNameList);
+                    if (classInType != null && hasContainQualifiedName(temp, classInType.getQualifiedName())) {
+                        list.add("Object for " + classInType.getName());
+                    } else if (classInType != null && classInType.isRecord()) {
+                        list.add(getFieldsAndDefaultValueForRecord(classInType, null, temp));
+                    } else {
+                        list.add(getFieldsAndDefaultValue(classInType, null, temp));
+                    }
+                }
+                fieldMap.put(fieldName, list);
+            } else if (InheritanceUtil.isInheritor(type, CommonClassNames.JAVA_UTIL_COLLECTION)) {
+                List<Object> list = new ArrayList<>();
+                PsiType iterableType = PsiUtil.extractIterableTypeParameter(type, false);
+                PsiClass iterableClass = PsiUtil.resolveClassInClassTypeOnly(iterableType);
+                if (iterableClass != null) {
+                    if (FieldTypeConstant.FIELD_TYPE.containsKey(iterableClass.getName())) {
+                        list.add(FieldTypeConstant.FIELD_TYPE.get(iterableClass.getName()));
+                    } else {
+                        LinkedList<String> temp = new LinkedList<>(qualifiedNameList);
+                        if (hasContainQualifiedName(temp, iterableClass.getQualifiedName())) {
+                            list.add("Object for " + iterableClass.getName());
+                        } else if (iterableClass.isRecord()) {
+                            list.add(getFieldsAndDefaultValueForRecord(iterableClass, null, temp));
+                        } else {
+                            list.add(getFieldsAndDefaultValue(iterableClass, null, temp));
+                        }
+                    }
+                }
+                fieldMap.put(fieldName, list);
+            } else if (InheritanceUtil.isInheritor(type, CommonClassNames.JAVA_UTIL_MAP)) {
+                HashMap<String, Object> hashMap = new HashMap<>(4);
+                PsiType matKeyType = PsiUtil.substituteTypeParameter(type, CommonClassNames.JAVA_UTIL_MAP, 0, false);
+                if (matKeyType != null && FieldTypeConstant.PACKAGE_TYPE_SET.contains(matKeyType.getPresentableText())) {
+                    PsiType matValueType = PsiUtil.substituteTypeParameter(type, CommonClassNames.JAVA_UTIL_MAP, 1, false);
+                    if (!ignoreField(matValueType)) {
+                        PsiClass valueClass = PsiUtil.resolveClassInClassTypeOnly(matValueType);
+                        if (valueClass != null) {
+                            LinkedList<String> temp = new LinkedList<>(qualifiedNameList);
+                            if (valueClass.isRecord()) {
+                                hashMap.put(matKeyType.getPresentableText(), getFieldsAndDefaultValueForRecord(valueClass, CustomPsiUtils.getGenericsMap((PsiClassType) matValueType), temp));
+                            } else {
+                                hashMap.put(matKeyType.getPresentableText(), getFieldsAndDefaultValue(valueClass, CustomPsiUtils.getGenericsMap((PsiClassType) matValueType), temp));
+                            }
+                        }
+                    }
+                }
+                fieldMap.put(fieldName, hashMap);
+            } else {
+                PsiClass classInType = PsiUtil.resolveClassInType(type);
+                LinkedList<String> temp = new LinkedList<>(qualifiedNameList);
+                if (classInType != null && hasContainQualifiedName(temp, classInType.getQualifiedName())) {
+                    fieldMap.put(fieldName, "Object for " + classInType.getName());
+                } else if (classInType != null && classInType.isRecord()) {
+                    fieldMap.put(fieldName, getFieldsAndDefaultValueForRecord(classInType, type instanceof PsiClassType ? CustomPsiUtils.getGenericsMap((PsiClassType) type) : null, temp));
+                } else {
+                    fieldMap.put(fieldName, getFieldsAndDefaultValue(classInType, type instanceof PsiClassType ? CustomPsiUtils.getGenericsMap((PsiClassType) type) : null, temp));
+                }
+            }
+        }
+        return fieldMap;
+    }
+
     private static boolean hasContainQualifiedName(LinkedList<String> qualifiedNameList, String qualifiedName) {
 
         if (qualifiedNameList.isEmpty()) {
@@ -651,6 +754,13 @@ public class ParamPsiUtils {
 
     public static void buildBodyList(@NotNull PsiClass psiClass, Map<String, PsiType> genericMap, Body parent, boolean isProto) {
 
+        if (psiClass.isRecord()) {
+            for (PsiRecordComponent component : psiClass.getRecordComponents()) {
+                buildBodyParamFromComponent(psiClass, component, genericMap, parent, new HashMap<>());
+            }
+            return;
+        }
+
         for (PsiField field : psiClass.getAllFields()) {
 
             if (DocViewUtils.isExcludeField(field, isProto)) {
@@ -660,6 +770,100 @@ public class ParamPsiUtils {
             ParamPsiUtils.buildBodyParam(psiClass, field, genericMap, parent, new HashMap<>(), isProto);
         }
 
+    }
+
+    public static void buildBodyParamFromComponent(@NotNull PsiClass parentClass, @NotNull PsiRecordComponent component,
+                                                   Map<String, PsiType> genericsMap, @NotNull Body parent,
+                                                   @NotNull Map<String, Boolean> parentChildPair) {
+        String parentQName = parentClass.getQualifiedName() != null ? parentClass.getQualifiedName() : "";
+        String pair = parentQName + "_" + component.getName();
+        if (parentChildPair.containsKey(pair)) {
+            return;
+        }
+        parentChildPair.put(pair, true);
+        try {
+            PsiType type = component.getType();
+            Body body = new Body();
+            body.setRequired(DocViewUtils.isRequired(component));
+            body.setName(DocViewUtils.fieldName(component, false));
+            body.setPsiElement(component);
+            body.setDesc(DocViewUtils.fieldDesc(component));
+
+            type = replaceFieldType(genericsMap, type);
+            body.setType(type.getPresentableText());
+            String qualifiedName = type.getPresentableText();
+            body.setQualifiedNameForClassType(qualifiedName);
+            PsiClass fieldClass = PsiUtil.resolveClassInType(type);
+
+            body.setParent(parent);
+            parent.getChildList().add(body);
+
+            if (type instanceof PsiPrimitiveType || FieldTypeConstant.FIELD_TYPE.containsKey(type.getPresentableText())) {
+                return;
+            }
+
+            if (StringUtils.isBlank(qualifiedName) || checkLinkedListHasTypeClass(body, qualifiedName, type)) {
+                return;
+            }
+
+            Map<String, PsiType> fieldGenericsMap;
+            PsiClass childClass;
+            Body parentBody;
+
+            if (InheritanceUtil.isInheritor(type, CommonClassNames.JAVA_UTIL_COLLECTION)) {
+                PsiType iterableType = PsiUtil.extractIterableTypeParameter(type, false);
+                body.setCollection(true);
+                if (iterableType == null) return;
+                childClass = PsiUtil.resolveClassInClassTypeOnly(iterableType);
+                if (childClass == null) return;
+                if (iterableType instanceof PsiPrimitiveType || FieldTypeConstant.FIELD_TYPE.containsKey(iterableType.getPresentableText())) {
+                    Object defaultValue = iterableType instanceof PsiPrimitiveType
+                            ? PsiTypesUtil.getDefaultValue(iterableType)
+                            : FieldTypeConstant.FIELD_TYPE.get(iterableType.getPresentableText());
+                    body.setExample(defaultValue == null ? "null" : String.valueOf(defaultValue));
+                    return;
+                }
+                parentBody = buildFieldGenericsBody("element", childClass, body);
+                fieldGenericsMap = CustomPsiUtils.getGenericsMap((PsiClassType) iterableType);
+            } else if (InheritanceUtil.isInheritor(type, CommonClassNames.JAVA_UTIL_MAP)) {
+                PsiType matKeyType = PsiUtil.substituteTypeParameter(type, CommonClassNames.JAVA_UTIL_MAP, 0, false);
+                if (matKeyType == null || !FieldTypeConstant.PACKAGE_TYPE_SET.contains(matKeyType.getPresentableText())) return;
+                PsiClass matKeyClass = PsiUtil.resolveClassInClassTypeOnly(matKeyType);
+                if (matKeyClass == null) return;
+                buildFieldGenericsBody("key", matKeyClass, body);
+                PsiType matValueType = PsiUtil.substituteTypeParameter(type, CommonClassNames.JAVA_UTIL_MAP, 1, false);
+                if (ignoreField(matValueType)) return;
+                childClass = PsiUtil.resolveClassInClassTypeOnly(matValueType);
+                if (childClass == null) return;
+                fieldGenericsMap = CustomPsiUtils.getGenericsMap((PsiClassType) matValueType);
+                parentBody = buildFieldGenericsBody("value", childClass, body);
+                parentBody.setMap(true);
+            } else if (fieldClass == null || fieldClass.isEnum() || fieldClass.isInterface() || fieldClass.isAnnotationType()) {
+                return;
+            } else {
+                fieldGenericsMap = CustomPsiUtils.getGenericsMap((PsiClassType) type);
+                parentBody = body;
+                childClass = fieldClass;
+            }
+
+            if (FieldTypeConstant.FIELD_TYPE.containsKey(type.getPresentableText())) return;
+
+            if (childClass.isRecord()) {
+                for (PsiRecordComponent rc : childClass.getRecordComponents()) {
+                    buildBodyParamFromComponent(childClass, rc, fieldGenericsMap, parentBody, parentChildPair);
+                }
+            } else {
+                Set<String> seenFieldNames = new HashSet<>();
+                for (PsiField psiField : childClass.getAllFields()) {
+                    if (!DocViewUtils.isExcludeField(psiField, false)) {
+                        if (!seenFieldNames.add(psiField.getName())) continue;
+                        buildBodyParam(childClass, psiField, fieldGenericsMap, parentBody, parentChildPair, false);
+                    }
+                }
+            }
+        } finally {
+            parentChildPair.remove(pair);
+        }
     }
 
 

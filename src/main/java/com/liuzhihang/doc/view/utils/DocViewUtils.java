@@ -50,6 +50,10 @@ public class DocViewUtils {
             return false;
         }
 
+        if (psiClass.isRecord()) {
+            return true;
+        }
+
         // Spring Controller 还需要检查方法是否满足条件
         if (SpringPsiUtils.isSpringClass(psiClass)) {
             return true;
@@ -584,6 +588,124 @@ public class DocViewUtils {
             }
 
             return "";
+        });
+    }
+
+    // ── PsiRecordComponent overloads (JDK 16+ record support) ──────────────
+
+    @NotNull
+    public static String fieldDesc(@NotNull PsiRecordComponent component) {
+        return ApplicationManager.getApplication().runReadAction((Computable<String>) () -> {
+            // 1. @Schema annotation on component
+            PsiAnnotation schemaAnnotation = component.getAnnotation(SwaggerConstant.SCHEMA);
+            if (schemaAnnotation != null) {
+                PsiAnnotationMemberValue value = schemaAnnotation.findAttributeValue("description");
+                if (value != null && StringUtils.isNotBlank(value.getText())) {
+                    return value.getText().replace("\"", "");
+                }
+            }
+            // 2. @ApiModelProperty annotation on component
+            PsiAnnotation apiModelPropertyAnnotation = component.getAnnotation(SwaggerConstant.API_MODEL_PROPERTY);
+            if (apiModelPropertyAnnotation != null) {
+                PsiAnnotationMemberValue value = apiModelPropertyAnnotation.findAttributeValue("value");
+                if (value != null && StringUtils.isNotBlank(value.getText())) {
+                    return value.getText().replace("\"", "");
+                }
+            }
+            String validatedValue = SpringPsiUtils.getValidatedValue(component);
+            // 3. Inline comment directly on the component declaration
+            PsiComment inlineComment = PsiTreeUtil.findChildOfType(component, PsiComment.class);
+            if (inlineComment != null) {
+                String desc = CustomPsiCommentUtils.fieldComment(inlineComment);
+                if (StringUtils.isNotBlank(desc)) {
+                    return desc + validatedValue;
+                }
+            }
+            // 4. Class-level @param tag in the containing record's JavaDoc
+            //    e.g.  /** @param name 名称 */  public record Foo(String name) {}
+            PsiClass containingClass = component.getContainingClass();
+            if (containingClass != null) {
+                PsiDocComment classDoc = containingClass.getDocComment();
+                if (classDoc != null) {
+                    String paramDesc = recordComponentParamDesc(classDoc, component.getName());
+                    if (StringUtils.isNotBlank(paramDesc)) {
+                        return paramDesc + validatedValue;
+                    }
+                }
+            }
+            return validatedValue;
+        });
+    }
+
+    private static String recordComponentParamDesc(@NotNull PsiDocComment classDoc, @NotNull String componentName) {
+        for (PsiDocTag tag : classDoc.findTagsByName("param")) {
+            if (tag.getValueElement() == null) continue;
+            String paramName = tag.getValueElement().getText().trim();
+            if (!componentName.equals(paramName)) continue;
+            PsiElement[] dataElements = tag.getDataElements();
+            StringBuilder desc = new StringBuilder();
+            // dataElements[0] is the param name; collect everything after it
+            for (int i = 1; i < dataElements.length; i++) {
+                String part = dataElements[i].getText();
+                // stop at newline to avoid picking up continuation lines from next tags
+                int nl = part.indexOf('\n');
+                if (nl >= 0) {
+                    desc.append(part, 0, nl);
+                    break;
+                }
+                desc.append(part);
+            }
+            return desc.toString().trim();
+        }
+        return "";
+    }
+
+    public static String fieldName(@NotNull PsiRecordComponent component, boolean parentIsProto) {
+        return ApplicationManager.getApplication().runReadAction((Computable<String>) () -> {
+            Settings settings = Settings.getInstance(component.getProject());
+            Boolean useJsonProperty = settings.getFieldNameJsonProperty();
+            Boolean fieldNameUseSnakeCase = settings.getFieldNameCaseType();
+            if (!Boolean.TRUE.equals(useJsonProperty) || !AnnotationUtil.isAnnotated(component, settings.getFieldNameAnnotation(), 0)) {
+                return Boolean.TRUE.equals(fieldNameUseSnakeCase) ? camelToSnake(component.getName()) : component.getName();
+            }
+            PsiAnnotation jsonPropertyAnnotation = component.getAnnotation(JsonPropertyConstant.JSON_PROPERTY);
+            if (jsonPropertyAnnotation != null) {
+                PsiAnnotationMemberValue value = jsonPropertyAnnotation.findAttributeValue("value");
+                if (value != null && StringUtils.isNotBlank(value.getText())) {
+                    return value.getText().replace("\"", "");
+                }
+            }
+            return Boolean.TRUE.equals(fieldNameUseSnakeCase) ? camelToSnake(component.getName()) : component.getName();
+        });
+    }
+
+    public static boolean isRequired(@NotNull PsiRecordComponent component) {
+        return ApplicationManager.getApplication().runReadAction((Computable<Boolean>) () -> {
+            Settings settings = Settings.getInstance(component.getProject());
+            if (AnnotationUtil.isAnnotated(component, settings.getRequiredFieldAnnotation(), 0)) {
+                return true;
+            }
+            PsiAnnotation schemaAnnotation = component.getAnnotation(SwaggerConstant.SCHEMA);
+            if (schemaAnnotation != null) {
+                PsiAnnotationMemberValue value = schemaAnnotation.findAttributeValue("required");
+                if (value != null && StringUtils.isNotBlank(value.getText()) && value.getText().contains("true")) {
+                    return true;
+                }
+            }
+            PsiAnnotation apiModelPropertyAnnotation = component.getAnnotation(SwaggerConstant.API_MODEL_PROPERTY);
+            if (apiModelPropertyAnnotation != null) {
+                PsiAnnotationMemberValue value = apiModelPropertyAnnotation.findAttributeValue("required");
+                if (value != null && StringUtils.isNotBlank(value.getText()) && value.getText().contains("true")) {
+                    return true;
+                }
+            }
+            if (settings.getRequiredUseCommentTag()) {
+                PsiDocComment docComment = PsiTreeUtil.findChildOfType(component, PsiDocComment.class);
+                if (docComment != null && docComment.findTagByName(settings.getRequired()) != null) {
+                    return true;
+                }
+            }
+            return false;
         });
     }
 

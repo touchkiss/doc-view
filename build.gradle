@@ -22,9 +22,9 @@ repositories {
 }
 
 dependencies {
-    compileOnly group: 'org.projectlombok', name: 'lombok', version: '1.18.20'
+    compileOnly group: 'org.projectlombok', name: 'lombok', version: '1.18.36'
     compileOnly group:'com.google.protobuf', name: 'protobuf-java', version: '3.21.12'
-    annotationProcessor group: 'org.projectlombok', name: 'lombok', version: '1.18.20'
+    annotationProcessor group: 'org.projectlombok', name: 'lombok', version: '1.18.36'
 }
 
 // See https://github.com/JetBrains/gradle-intellij-plugin/

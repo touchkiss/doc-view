@@ -58,6 +58,11 @@ public interface DocViewService {
             return ApplicationManager.getApplication().getService(SpringDocViewServiceImpl.class);
         }
 
+        // Record (JDK 16+)
+        if (targetClass.isRecord()) {
+            return ApplicationManager.getApplication().getService(PojoDocViewServiceImpl.class);
+        }
+
 //        pojo类
         if (PojoUtils.isPojoClass(targetClass)) {
             return ApplicationManager.getApplication().getService(PojoDocViewServiceImpl.class);
