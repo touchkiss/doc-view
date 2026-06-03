@@ -287,7 +287,7 @@ public class DocViewData {
         }
 
         return "|参数名|类型|必填|默认值|描述|版本|\n"
-                + "|:-----|:-----|:-----|:-----|:-----|\n"
+                + "|:-----|:-----|:-----|:-----|:-----|:-----|\n"
                 + paramMarkdownContent(dataList);
     }
 
@@ -302,13 +302,13 @@ public class DocViewData {
 
         StringBuilder builder = new StringBuilder();
         builder.append("|参数名|类型|必填|默认值|描述|版本|\n")
-                .append("|:-----|:-----|:-----|:-----|:-----|\n");
+                .append("|:-----|:-----|:-----|:-----|:-----|:-----|\n");
         for (DocViewParamData data : dataList) {
             builder.append("|").append(data.getName())
                     .append("|").append(data.getType())
                     .append("|").append(Boolean.TRUE.equals(data.getRequired()) ? "Y" : "N")
                     .append("|").append(data.getExample())
-                    .append("|").append(data.getDesc())
+                    .append("|").append(markdownBr(data.getDesc()))
                     .append("|").append(Arrays.stream(new String[]{data.getSince(), data.getVersion()}).filter(StringUtils::isNotBlank).collect(Collectors.joining("-")))
                     .append("|").append("\n");
             if (CollectionUtils.isNotEmpty(data.getChildList())) {
@@ -371,7 +371,7 @@ public class DocViewData {
                     .append("|").append(data.getType())
                     .append("|").append(data.getRequired() ? "Y" : "N")
                     .append("|").append(data.getExample())
-                    .append("|").append(data.getDesc())
+                    .append("|").append(markdownBr(data.getDesc()))
                     .append("|").append(Arrays.stream(new String[]{data.getSince(), data.getVersion()}).filter(StringUtils::isNotBlank).collect(Collectors.joining("-")))
                     .append("|").append("\n");
             if (CollectionUtils.isNotEmpty(data.getChildList())) {
@@ -380,6 +380,13 @@ public class DocViewData {
         }
 
         return builder;
+    }
+
+    private static String markdownBr(String text) {
+        if (StringUtils.isBlank(text)) {
+            return "";
+        }
+        return text.replace("\n", "<br>");
     }
 
     @NotNull
