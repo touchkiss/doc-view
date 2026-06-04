@@ -207,14 +207,7 @@ public class CustomPsiCommentUtils {
                 String mainComment = sb.toString();
 
                 // 解析 @see / @link 标签，若指向枚举则拼接枚举值描述
-                String enumInfo = resolveEnumInfoFromSeeTag(docComment);
-                if (StringUtils.isNotBlank(enumInfo)) {
-                    if (StringUtils.isNotBlank(mainComment)) {
-                        return mainComment + "(" + enumInfo + ")";
-                    }
-                    return enumInfo;
-                }
-                return mainComment;
+                return appendEnumInfoFromSeeTag(docComment, mainComment);
             }
 
             // 普通注释 (// xxx 或 /* xxx */)
@@ -225,6 +218,33 @@ public class CustomPsiCommentUtils {
             return "";
         });
 
+    }
+
+    /**
+     * 在已有主注释基础上, 解析 @see / @link 指向的枚举并拼接约束信息
+     * <p>
+     * 供 JavaDoc 字段注释 及 proto 生成类的 getter 注释复用同一套 @see 枚举解析逻辑
+     *
+     * @param docComment  JavaDoc 注释 PSI, 为空时直接返回主注释
+     * @param mainComment 已提取的主注释文本
+     * @return 拼接枚举信息后的注释, 如 "订单状态(0: 待支付; 1: 已支付)"
+     */
+    @NotNull
+    public static String appendEnumInfoFromSeeTag(@Nullable PsiDocComment docComment, @Nullable String mainComment) {
+        return ApplicationManager.getApplication().runReadAction((Computable<String>) () -> {
+            String base = mainComment == null ? "" : mainComment;
+            if (docComment == null) {
+                return base;
+            }
+            String enumInfo = resolveEnumInfoFromSeeTag(docComment);
+            if (StringUtils.isNotBlank(enumInfo)) {
+                if (StringUtils.isNotBlank(base)) {
+                    return base + "(" + enumInfo + ")";
+                }
+                return enumInfo;
+            }
+            return base;
+        });
     }
 
     /**
@@ -267,17 +287,64 @@ public class CustomPsiCommentUtils {
             }
 
             // 校验字段是否真实存在于枚举中（排除枚举常量本身）
+            // 支持 @see EnumClass#field / @see EnumClass#getField() / @see EnumClass#isFlag() 等形式
             String resolvedFieldName = fieldName;
             if (resolvedFieldName != null) {
+                // 规范化：去掉可能的括号，例如 getCode() -> getCode
+                String raw = resolvedFieldName.trim();
+                if (raw.endsWith("()")) {
+                    raw = raw.substring(0, raw.length() - 2);
+                }
+
+                // 如果是 getter/is 方法，尝试映射为属性名：getCode -> code, isEnabled -> enabled
+                String propName = null;
+                if (raw.startsWith("get") && raw.length() > 3) {
+                    propName = StringUtils.uncapitalize(raw.substring(3));
+                } else if (raw.startsWith("is") && raw.length() > 2) {
+                    propName = StringUtils.uncapitalize(raw.substring(2));
+                }
+
                 boolean fieldExists = false;
+                String chosen = null;
                 for (PsiField f : psiClass.getFields()) {
-                    if (!(f instanceof PsiEnumConstant) && resolvedFieldName.equals(f.getName())) {
+                    if (f instanceof PsiEnumConstant) {
+                        continue;
+                    }
+                    String fname = f.getName();
+                    if (fname == null) {
+                        continue;
+                    }
+                    // 直接匹配引用的文本（raw）或映射后的属性名（propName）
+                    if (raw.equals(fname) || (propName != null && propName.equals(fname))) {
                         fieldExists = true;
+                        chosen = fname;
                         break;
                     }
                 }
                 if (!fieldExists) {
-                    resolvedFieldName = null;
+                    // 如果没找到，尝试再用原始传入的 fieldName（可能没有去掉括号）匹配一次
+                    boolean altFound = false;
+                    for (PsiField f : psiClass.getFields()) {
+                        if (f instanceof PsiEnumConstant) {
+                            continue;
+                        }
+                        String fname = f.getName();
+                        if (fname == null) {
+                            continue;
+                        }
+                        if (fieldName.equals(fname)) {
+                            altFound = true;
+                            chosen = fname;
+                            break;
+                        }
+                    }
+                    if (!altFound) {
+                        resolvedFieldName = null;
+                    } else {
+                        resolvedFieldName = chosen;
+                    }
+                } else {
+                    resolvedFieldName = chosen;
                 }
             }
 
@@ -521,11 +588,23 @@ public class CustomPsiCommentUtils {
             }
         }
 
-        // 兜底：某些 PSI 结构下，{@link ...} 可能未按独立元素暴露
-        Matcher matcher = Pattern.compile("\\{@link\\s+([^\\s}]+)", Pattern.CASE_INSENSITIVE)
-                .matcher(docComment.getText());
-        while (matcher.find()) {
-            addReference(references, extractFirstReferenceToken(matcher.group(1)));
+        // 兜底：
+        // 1) protoc 生成的 Java 注释会把 @ 转义为 HTML 实体 &#64;，IDEA 的 JavaDoc 解析器
+        //    不会把 &#64;see 识别为 PsiDocTag，引用文本会整体落在 DOC_COMMENT_DATA 中，
+        //    因此先把 &#64; 还原成 @ 再扫描原始文本。
+        // 2) 某些 PSI 结构下，{@link ...} 可能未按独立元素暴露。
+        String rawText = docComment.getText().replace("&#64;", "@");
+
+        Matcher seeMatcher = Pattern.compile("@see\\s+([\\w.#$()]+)", Pattern.CASE_INSENSITIVE)
+                .matcher(rawText);
+        while (seeMatcher.find()) {
+            addReference(references, extractFirstReferenceToken(seeMatcher.group(1)));
+        }
+
+        Matcher linkMatcher = Pattern.compile("\\{@link\\s+([^\\s}]+)", Pattern.CASE_INSENSITIVE)
+                .matcher(rawText);
+        while (linkMatcher.find()) {
+            addReference(references, extractFirstReferenceToken(linkMatcher.group(1)));
         }
         return references;
     }

@@ -90,8 +90,13 @@ public class ParamPsiUtils {
 //                去掉<code>int64next_cursor=9;</code>包含的内容
                 methodDesc = methodDesc
                         .replaceAll("<code>.*?</code>", "")
-//                        只保留<pre>部落名称</pre>中的内容
-                        .replaceAll(".*?<pre>(.*?)</pre>.*?", "$1");
+//                        去掉 <pre> </pre> 标签（@see 为真实 tag 时 </pre> 会被吸入 tag, 标签可能不成对, 故单独剥离）
+                        .replaceAll("</?pre>", "")
+//                        去掉残留在正文中的 @see / &#64;see 引用文本（escaped 情况下不会被解析为 tag, 会落到正文）
+                        .replaceAll("(?i)(&#64;|@)see\\s*[\\w.#$()]*", "")
+                        .trim();
+//                proto getter 注释中携带 @see/@link 指向枚举时, 沿引用拼接枚举约束信息
+                methodDesc = CustomPsiCommentUtils.appendEnumInfoFromSeeTag(method.getDocComment(), methodDesc);
                 body.setDesc(methodDesc);
                 parseProtoFieldDesc = true;
             }
