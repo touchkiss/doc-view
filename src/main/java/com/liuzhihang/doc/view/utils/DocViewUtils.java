@@ -201,9 +201,9 @@ public class DocViewUtils {
 
                 if (StringUtils.isNotBlank(comment)) {
 
-                    if (comment.length() > 15) {
-                        comment = comment.substring(0, 15);
-                    }
+//                    if (comment.length() > 15) {
+//                        comment = comment.substring(0, 15);
+//                    }
 
                     return comment;
                 }
