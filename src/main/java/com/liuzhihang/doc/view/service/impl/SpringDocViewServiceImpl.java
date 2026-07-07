@@ -11,6 +11,7 @@ import com.liuzhihang.doc.view.service.DocViewService;
 import com.liuzhihang.doc.view.utils.DocViewUtils;
 import com.liuzhihang.doc.view.utils.ParamPsiUtils;
 import com.liuzhihang.doc.view.utils.SpringPsiUtils;
+import com.liuzhihang.doc.view.utils.UrlRewriteUtils;
 import org.jetbrains.annotations.NotNull;
 
 import java.util.Collections;
@@ -59,7 +60,7 @@ public class SpringDocViewServiceImpl implements DocViewService {
         docView.setDocTitle(DocViewUtils.getTitle(psiClass));
         docView.setName(DocViewUtils.getName(psiMethod));
         docView.setDesc(DocViewUtils.getMethodDesc(psiMethod));
-        docView.setPath(SpringPsiUtils.path(psiClass, psiMethod));
+        docView.setPath(UrlRewriteUtils.rewrite(psiClass.getProject(), SpringPsiUtils.path(psiClass, psiMethod)));
         docView.setMethod(SpringPsiUtils.method(psiMethod));
         docView.setDomain(Collections.emptyList());
         docView.setType(FrameworkEnum.SPRING);

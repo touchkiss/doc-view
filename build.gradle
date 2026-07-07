@@ -3,52 +3,64 @@ import org.jetbrains.changelog.ChangelogSectionUrlBuilder
 import org.jetbrains.changelog.ExtensionsKt
 
 plugins {
-    id 'org.jetbrains.intellij' version '1.16.1'
+    id 'java'
+    id 'org.jetbrains.intellij.platform' version '2.17.0'
     id 'org.jetbrains.changelog' version '2.1.2'
 }
 
-apply plugin: 'org.jetbrains.changelog'
+group = project.pluginGroup
+version = project.pluginVersion
 
-group project.pluginGroup
-version project.pluginVersion
-
-sourceCompatibility = 17
-targetCompatibility = 17
+java {
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(21)
+    }
+}
 
 repositories {
     mavenLocal()
     maven { url "https://maven.aliyun.com/repository/public" }
     mavenCentral()
+
+    intellijPlatform {
+        defaultRepositories()
+    }
 }
 
 dependencies {
     compileOnly group: 'org.projectlombok', name: 'lombok', version: '1.18.36'
-    compileOnly group:'com.google.protobuf', name: 'protobuf-java', version: '3.21.12'
+    compileOnly group: 'com.google.protobuf', name: 'protobuf-java', version: '3.21.12'
+    compileOnly group: 'org.commonmark', name: 'commonmark', version: '0.29.0'
     annotationProcessor group: 'org.projectlombok', name: 'lombok', version: '1.18.36'
+
+    intellijPlatform {
+        local('/Applications/IntelliJ IDEA.app')
+
+        bundledPlugin('com.intellij.java')
+        bundledPlugin('org.intellij.plugins.markdown')
+    }
 }
 
-// See https://github.com/JetBrains/gradle-intellij-plugin/
-intellij {
-    plugins = ['com.intellij.java', 'markdown']
-    pluginName = project.pluginName
-    version = project.platformVersion
-    type = project.platformType
-    downloadSources = true
-    updateSinceUntilBuild = false
-    buildSearchableOptions.enabled = false
-}
+intellijPlatform {
+    pluginConfiguration {
+        name = project.pluginName
 
-patchPluginXml {
-    sinceBuild = project.pluginSinceBuild
-    untilBuild = project.pluginUntilBuild
+        ideaVersion {
+            sinceBuild = project.pluginSinceBuild
+            untilBuild = project.pluginUntilBuild
+        }
 
-    pluginDescription.set(file(project.pluginDescription).getText('UTF-8'))
-    changeNotes.set(provider {
-        changelog.renderItem(
-                changelog.getLatest(),
-                Changelog.OutputType.HTML
-        )
-    })
+        description = file(project.pluginDescription).getText('UTF-8')
+
+        changeNotes = provider {
+            changelog.renderItem(
+                    changelog.getLatest(),
+                    Changelog.OutputType.HTML
+            )
+        }
+    }
+
+    buildSearchableOptions = false
 }
 
 changelog {
@@ -62,6 +74,7 @@ changelog {
     sectionUrlBuilder = { repositoryUrl, currentVersion, previousVersion, isUnreleased -> "foo" } as ChangelogSectionUrlBuilder
 }
 
-tasks.withType(JavaCompile) {
+tasks.withType(JavaCompile).configureEach {
     options.encoding = "UTF-8"
+    options.release = 21
 }

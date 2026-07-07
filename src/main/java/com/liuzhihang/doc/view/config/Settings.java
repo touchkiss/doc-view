@@ -12,8 +12,10 @@ import lombok.Data;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Set;
 
 import static com.liuzhihang.doc.view.constant.JsonPropertyConstant.SNAKE_CASE;
@@ -198,6 +200,11 @@ public class Settings implements PersistentStateComponent<Settings> {
      * 实体独立
      */
     private Boolean separateParam = false;
+
+    /**
+     * URL 重写规则, 按顺序依次应用到 REST 接口路径上.
+     */
+    private List<UrlRewriteRule> urlRewriteRules = new ArrayList<>();
 
 
     public static Settings getInstance(@NotNull Project project) {

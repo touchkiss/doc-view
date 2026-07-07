@@ -3,16 +3,25 @@ package com.liuzhihang.doc.view.ui;
 import com.intellij.icons.AllIcons;
 import com.intellij.openapi.project.Project;
 import com.intellij.ui.IdeBorderFactory;
+import com.intellij.ui.ToolbarDecorator;
 import com.intellij.ui.components.JBTextField;
 import com.intellij.ui.components.labels.LinkLabel;
+import com.intellij.ui.table.TableView;
+import com.intellij.util.ui.ColumnInfo;
 import com.intellij.util.ui.JBUI;
+import com.intellij.util.ui.ListTableModel;
 import com.liuzhihang.doc.view.DocViewBundle;
 import com.liuzhihang.doc.view.config.Settings;
+import com.liuzhihang.doc.view.config.UrlRewriteRule;
 import lombok.Getter;
 import org.jetbrains.annotations.NotNull;
 
 import javax.swing.*;
 import javax.swing.border.TitledBorder;
+import java.awt.BorderLayout;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Objects;
 
 /**
  * @author liuzhihang
@@ -28,6 +37,7 @@ public class SettingsForm {
     private static final TitledBorder lineMarkerTitleBorder = IdeBorderFactory.createTitledBorder(DocViewBundle.message("settings.doc.setting"));
     private static final TitledBorder otherTitleBorder = IdeBorderFactory.createTitledBorder(DocViewBundle.message("settings.doc.other"));
     private static final TitledBorder previewTitleBorder = IdeBorderFactory.createTitledBorder(DocViewBundle.message("settings.preview"));
+    private static final TitledBorder urlRewriteTitleBorder = IdeBorderFactory.createTitledBorder("URL Rewrite");
 
     private final Project project;
 
@@ -77,6 +87,12 @@ public class SettingsForm {
     private JBTextField prefixSymbol2TextField;
     private JCheckBox separateParamCheckBox;
 
+    /**
+     * URL 重写规则表格容器, 由 Settings.form 绑定, 内容在代码中动态构建
+     */
+    private JPanel urlRewritePanel;
+    private ListTableModel<UrlRewriteRule> urlRewriteTableModel;
+
     public SettingsForm(@NotNull Project project) {
 
         this.project = project;
@@ -87,6 +103,7 @@ public class SettingsForm {
         supportLinkLabel.setListener((source, data) -> new SupportForm(project).show(), null);
 
         initTitleBorder();
+        initUrlRewriteTable();
     }
 
     private void initTitleBorder() {
@@ -98,6 +115,133 @@ public class SettingsForm {
         lineMarkerPanel.setBorder(lineMarkerTitleBorder);
         otherPanel.setBorder(otherTitleBorder);
         previewPane.setBorder(previewTitleBorder);
+        urlRewritePanel.setBorder(urlRewriteTitleBorder);
+    }
+
+    /**
+     * 构建 URL 重写规则表格 (启用 / 正则 / 替换), 支持增删行.
+     */
+    private void initUrlRewriteTable() {
+
+        ColumnInfo<UrlRewriteRule, Boolean> enabledColumn = new ColumnInfo<>("Enabled") {
+            @Override
+            public Boolean valueOf(UrlRewriteRule rule) {
+                return rule.enabled;
+            }
+
+            @Override
+            public Class<?> getColumnClass() {
+                return Boolean.class;
+            }
+
+            @Override
+            public boolean isCellEditable(UrlRewriteRule rule) {
+                return true;
+            }
+
+            @Override
+            public void setValue(UrlRewriteRule rule, Boolean value) {
+                rule.enabled = value != null && value;
+            }
+
+            @Override
+            public int getWidth(JTable table) {
+                return 60;
+            }
+        };
+
+        ColumnInfo<UrlRewriteRule, String> regexColumn = new ColumnInfo<>("Regex") {
+            @Override
+            public String valueOf(UrlRewriteRule rule) {
+                return rule.regex;
+            }
+
+            @Override
+            public boolean isCellEditable(UrlRewriteRule rule) {
+                return true;
+            }
+
+            @Override
+            public void setValue(UrlRewriteRule rule, String value) {
+                rule.regex = value == null ? "" : value;
+            }
+        };
+
+        ColumnInfo<UrlRewriteRule, String> replacementColumn = new ColumnInfo<>("Replacement") {
+            @Override
+            public String valueOf(UrlRewriteRule rule) {
+                return rule.replacement;
+            }
+
+            @Override
+            public boolean isCellEditable(UrlRewriteRule rule) {
+                return true;
+            }
+
+            @Override
+            public void setValue(UrlRewriteRule rule, String value) {
+                rule.replacement = value == null ? "" : value;
+            }
+        };
+
+        urlRewriteTableModel = new ListTableModel<>(enabledColumn, regexColumn, replacementColumn);
+        urlRewriteTableModel.setItems(copyRules(Settings.getInstance(project).getUrlRewriteRules()));
+
+        TableView<UrlRewriteRule> tableView = new TableView<>(urlRewriteTableModel);
+        tableView.getEmptyText().setText("No URL rewrite rules");
+
+        JPanel decorated = ToolbarDecorator.createDecorator(tableView)
+                .setAddAction(button -> {
+                    stopEditing(tableView);
+                    urlRewriteTableModel.addRow(new UrlRewriteRule());
+                    int last = urlRewriteTableModel.getRowCount() - 1;
+                    tableView.getSelectionModel().setSelectionInterval(last, last);
+                })
+                .setRemoveAction(button -> {
+                    int viewRow = tableView.getSelectedRow();
+                    if (viewRow >= 0) {
+                        stopEditing(tableView);
+                        urlRewriteTableModel.removeRow(tableView.convertRowIndexToModel(viewRow));
+                    }
+                })
+                .createPanel();
+
+        urlRewritePanel.setLayout(new BorderLayout());
+        urlRewritePanel.add(decorated, BorderLayout.CENTER);
+    }
+
+    private static void stopEditing(TableView<UrlRewriteRule> tableView) {
+        if (tableView.isEditing() && tableView.getCellEditor() != null) {
+            tableView.getCellEditor().stopCellEditing();
+        }
+    }
+
+    private static List<UrlRewriteRule> copyRules(List<UrlRewriteRule> source) {
+        List<UrlRewriteRule> copy = new ArrayList<>();
+        if (source != null) {
+            for (UrlRewriteRule rule : source) {
+                copy.add(rule.copy());
+            }
+        }
+        return copy;
+    }
+
+    private boolean urlRewriteRulesModified(Settings settings) {
+        List<UrlRewriteRule> current = urlRewriteTableModel.getItems();
+        List<UrlRewriteRule> saved = settings.getUrlRewriteRules();
+        if (current.size() != saved.size()) {
+            return true;
+        }
+        for (int i = 0; i < current.size(); i++) {
+            UrlRewriteRule a = current.get(i);
+            UrlRewriteRule b = saved.get(i);
+            if (a.enabled != b.enabled
+                    || !Objects.equals(a.regex, b.regex)
+                    || !Objects.equals(a.replacement, b.replacement)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     /**
@@ -128,6 +272,7 @@ public class SettingsForm {
                 || !prefixSymbol1TextField.getText().trim().equals(settings.getPrefixSymbol1())
                 || !prefixSymbol2TextField.getText().trim().equals(settings.getPrefixSymbol2())
                 || separateParamCheckBox.isSelected() != settings.getSeparateParam()
+                || urlRewriteRulesModified(settings)
                 ;
     }
 
@@ -156,6 +301,7 @@ public class SettingsForm {
         settings.setPrefixSymbol1(prefixSymbol1TextField.getText().trim());
         settings.setPrefixSymbol2(prefixSymbol2TextField.getText().trim());
         settings.setSeparateParam(separateParamCheckBox.isSelected());
+        settings.setUrlRewriteRules(copyRules(urlRewriteTableModel.getItems()));
 
 
         includeNormalInterfaceCheckBox.setEnabled(lineMarkerCheckBox.isSelected());
@@ -190,6 +336,7 @@ public class SettingsForm {
         prefixSymbol1TextField.setText(settings.getPrefixSymbol1());
         prefixSymbol2TextField.setText(settings.getPrefixSymbol2());
         separateParamCheckBox.setSelected(settings.getSeparateParam());
+        urlRewriteTableModel.setItems(copyRules(settings.getUrlRewriteRules()));
 
     }
 

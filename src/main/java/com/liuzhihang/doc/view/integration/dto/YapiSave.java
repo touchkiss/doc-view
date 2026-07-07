@@ -126,7 +126,7 @@ public class YapiSave implements Serializable {
     /**
      * 状态 undone,默认done
      */
-    private String status = "undone";
+    private String status = "done";
 
 
     /**

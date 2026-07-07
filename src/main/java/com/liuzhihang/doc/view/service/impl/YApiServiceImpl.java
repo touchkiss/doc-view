@@ -23,6 +23,9 @@ import com.liuzhihang.doc.view.service.DocViewUploadService;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.collections.CollectionUtils;
 import org.apache.commons.lang3.StringUtils;
+import org.commonmark.node.Node;
+import org.commonmark.parser.Parser;
+import org.commonmark.renderer.html.HtmlRenderer;
 import org.jetbrains.annotations.NotNull;
 
 import java.util.*;
@@ -89,8 +92,13 @@ public final class YApiServiceImpl implements DocViewUploadService {
             save.setReqQuery(buildReqQuery(docView.getReqParamList()));
             save.setResBodyType("json");
             save.setResBody(buildJsonSchema(docView.getRespBody().getChildList()));
-            save.setMarkdown(buildDesc(docView));
-            save.setTitle(docView.getName());
+            String markdown = buildDesc(docView);
+            save.setMarkdown(markdown);
+            save.setTitle(docView.getPath() + docView.getName());
+            Parser parser = Parser.builder().build();
+            Node document = parser.parse(markdown);
+            HtmlRenderer renderer = HtmlRenderer.builder().build();
+            save.setDesc(renderer.render(document));
 
             if (docView.getContentType().equals(ContentTypeEnum.JSON)) {
                 save.setReqBodyIsJsonSchema(true);
