@@ -20,6 +20,7 @@ import com.liuzhihang.doc.view.constant.SpringConstant;
 import com.liuzhihang.doc.view.constant.ValidationConstant;
 import com.liuzhihang.doc.view.dto.Body;
 import com.liuzhihang.doc.view.dto.Header;
+import com.liuzhihang.doc.view.dto.JsonWireType;
 import com.liuzhihang.doc.view.dto.Param;
 import com.liuzhihang.doc.view.enums.ContentTypeEnum;
 import org.apache.commons.lang3.StringUtils;
@@ -577,7 +578,9 @@ public class SpringPsiUtils extends ParamPsiUtils {
         param.setDesc(DocViewUtils.fieldDesc(field));
         String example = DocViewUtils.fieldExample(field);
         param.setExample(getExample(field, example));
-        param.setType(field.getType().getPresentableText());
+        PsiType fieldType = field.getType();
+        JsonWireType wireType = JacksonPsiUtils.resolveJsonWireType(field, fieldType);
+        param.setType(wireType.isOverridden() ? wireType.getJsonType() : fieldType.getPresentableText());
 
         return param;
     }
@@ -589,7 +592,9 @@ public class SpringPsiUtils extends ParamPsiUtils {
         param.setName(DocViewUtils.fieldName(component, false));
         param.setDesc(DocViewUtils.fieldDesc(component));
         param.setExample(getExample(component, ""));
-        param.setType(component.getType().getPresentableText());
+        PsiType componentType = component.getType();
+        JsonWireType wireType = JacksonPsiUtils.resolveJsonWireType(component, componentType);
+        param.setType(wireType.isOverridden() ? wireType.getJsonType() : componentType.getPresentableText());
         return param;
     }
 

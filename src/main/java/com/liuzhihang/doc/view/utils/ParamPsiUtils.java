@@ -7,6 +7,7 @@ import com.intellij.psi.util.PsiTypesUtil;
 import com.intellij.psi.util.PsiUtil;
 import com.liuzhihang.doc.view.constant.FieldTypeConstant;
 import com.liuzhihang.doc.view.dto.Body;
+import com.liuzhihang.doc.view.dto.JsonWireType;
 import org.apache.commons.lang3.StringUtils;
 import org.jetbrains.annotations.NotNull;
 
@@ -118,14 +119,25 @@ public class ParamPsiUtils {
             // 提前替换字段比如 T -> UserDTO   List<T> -> List<UserDTO>
             // 如果是泛型, 且泛型字段是当前字段, 将当前字段类型替换為泛型類型, 替換完之後重新設置 body 的 type
             type = replaceFieldType(genericsMap, type);
-            body.setType(type.getPresentableText());
-            qualifiedName = type.getPresentableText();
+            JsonWireType wireType = JacksonPsiUtils.resolveJsonWireType(field, type);
+            body.setType(wireType.isOverridden() ? wireType.getJsonType() : type.getPresentableText());
+            qualifiedName = wireType.isOverridden() ? wireType.getJsonType() : type.getPresentableText();
             body.setQualifiedNameForClassType(qualifiedName);
             fieldClass = PsiUtil.resolveClassInType(type);
+            if (wireType.isOverridden() && wireType.getExampleOverride() != null) {
+                body.setExample(wireType.getExampleOverride());
+            }
         }
         body.setParent(parent);
 
         parent.getChildList().add(body);
+        JsonWireType fieldWireType = JacksonPsiUtils.resolveJsonWireType(field, type);
+        if (fieldWireType.isOverridden() && isJsonSimpleType(fieldWireType.getJsonType())) {
+            if (fieldWireType.getExampleOverride() != null) {
+                body.setExample(fieldWireType.getExampleOverride());
+            }
+            return;
+        }
         if (type instanceof PsiPrimitiveType || FieldTypeConstant.FIELD_TYPE.containsKey(type.getPresentableText())) {
 
             // 没有注释 tag 时, 回退读取字段的默认初始化值
@@ -168,8 +180,22 @@ public class ParamPsiUtils {
             }
             // 基本类型或者包装类型：不要创建 name="" 的子节点，否则 JSON5 会生成 {"":"..."}
             // 这里保持字段本身是 collection，仅设置 example 为元素示例，渲染层会输出 [example]
+            JsonWireType contentWireType = JacksonPsiUtils.resolveContentUsing(field, iterableType);
             if (iterableType instanceof PsiPrimitiveType
                     || FieldTypeConstant.FIELD_TYPE.containsKey(iterableType.getPresentableText())) {
+                if (contentWireType.isOverridden()) {
+                    String elementExample = contentWireType.getExampleOverride() != null
+                            ? contentWireType.getExampleOverride() : "0";
+                    body.setExample(elementExample);
+                    Body elementBody = new Body();
+                    elementBody.setRequired(true);
+                    elementBody.setName("element");
+                    elementBody.setType(contentWireType.getJsonType());
+                    elementBody.setDesc("");
+                    elementBody.setParent(body);
+                    body.getChildList().add(elementBody);
+                    return;
+                }
                 Object defaultValue = iterableType instanceof PsiPrimitiveType
                         ? PsiTypesUtil.getDefaultValue(iterableType)
                         : FieldTypeConstant.FIELD_TYPE.get(iterableType.getPresentableText());
@@ -331,6 +357,11 @@ public class ParamPsiUtils {
         return listBody;
     }
 
+    private static boolean isJsonSimpleType(String jsonType) {
+        return FieldTypeConstant.FIELD_TYPE.containsKey(jsonType)
+                || FieldTypeConstant.BASE_TYPE_SET.contains(jsonType);
+    }
+
     private static boolean ignoreField(PsiType fieldType) {
 
         return fieldType instanceof PsiPrimitiveType
@@ -474,11 +505,6 @@ public class ParamPsiUtils {
                 }
             }
             Object defaultValue = SpringPsiUtils.getDefaultValue(field, type);
-            if (type instanceof PsiPrimitiveType) {
-                // 基本类型
-                fieldMap.put(fieldName, defaultValue == null ? PsiTypesUtil.getDefaultValue(type) : defaultValue);
-                continue;
-            }
             if (!parseProtoFieldType) {
                 // 如果是泛型, 且泛型字段是当前字段, 将当前字段类型替换为泛型类型
                 type = replaceFieldType(genericMap, type);
@@ -486,9 +512,26 @@ public class ParamPsiUtils {
                 // 引用类型
                 fieldTypeName = type.getPresentableText();
             }
+            JsonWireType wireType = JacksonPsiUtils.resolveJsonWireType(field, type);
+            if (wireType.isOverridden() && isJsonSimpleType(wireType.getJsonType())) {
+                fieldMap.put(fieldName, wireType.getDefaultValue() != null ? wireType.getDefaultValue() : "");
+                continue;
+            }
+            if (type instanceof PsiPrimitiveType) {
+                // 基本类型
+                fieldMap.put(fieldName, defaultValue == null ? PsiTypesUtil.getDefaultValue(type) : defaultValue);
+                continue;
+            }
+            if (wireType.isOverridden()) {
+                fieldTypeName = wireType.getJsonType();
+            }
             // 指定的类型
             if (FieldTypeConstant.FIELD_TYPE.containsKey(fieldTypeName)) {
-                fieldMap.put(fieldName, defaultValue == null ? FieldTypeConstant.FIELD_TYPE.get(fieldTypeName) : defaultValue);
+                Object value = defaultValue == null ? FieldTypeConstant.FIELD_TYPE.get(fieldTypeName) : defaultValue;
+                if (wireType.isOverridden() && wireType.getDefaultValue() != null) {
+                    value = wireType.getDefaultValue();
+                }
+                fieldMap.put(fieldName, value);
             } else if (type instanceof PsiArrayType) {
                 // 数组类型
                 List<Object> list = new ArrayList<>();
@@ -513,11 +556,16 @@ public class ParamPsiUtils {
                 // List Set or HashSet
                 List<Object> list = new ArrayList<>();
                 PsiType iterableType = PsiUtil.extractIterableTypeParameter(type, false);
+                JsonWireType contentWireType = JacksonPsiUtils.resolveContentUsing(field, iterableType);
                 PsiClass iterableClass = PsiUtil.resolveClassInClassTypeOnly(iterableType);
                 if (iterableClass != null) {
                     String classTypeName = iterableClass.getName();
                     if (FieldTypeConstant.FIELD_TYPE.containsKey(classTypeName)) {
-                        list.add(FieldTypeConstant.FIELD_TYPE.get(classTypeName));
+                        Object elementValue = FieldTypeConstant.FIELD_TYPE.get(classTypeName);
+                        if (contentWireType.isOverridden() && contentWireType.getDefaultValue() != null) {
+                            elementValue = contentWireType.getDefaultValue();
+                        }
+                        list.add(elementValue);
                     } else {
 
                         // 参数类型为对象 校验是否递归
@@ -589,6 +637,14 @@ public class ParamPsiUtils {
             String fieldName = DocViewUtils.fieldName(component, false);
             PsiType type = replaceFieldType(genericMap, component.getType());
             String fieldTypeName = type.getPresentableText();
+            JsonWireType wireType = JacksonPsiUtils.resolveJsonWireType(component, type);
+            if (wireType.isOverridden() && isJsonSimpleType(wireType.getJsonType())) {
+                fieldMap.put(fieldName, wireType.getDefaultValue() != null ? wireType.getDefaultValue() : "");
+                continue;
+            }
+            if (wireType.isOverridden()) {
+                fieldTypeName = wireType.getJsonType();
+            }
 
             if (type instanceof PsiPrimitiveType) {
                 fieldMap.put(fieldName, PsiTypesUtil.getDefaultValue(type));
@@ -596,7 +652,11 @@ public class ParamPsiUtils {
             }
 
             if (FieldTypeConstant.FIELD_TYPE.containsKey(fieldTypeName)) {
-                fieldMap.put(fieldName, FieldTypeConstant.FIELD_TYPE.get(fieldTypeName));
+                Object value = FieldTypeConstant.FIELD_TYPE.get(fieldTypeName);
+                if (wireType.isOverridden() && wireType.getDefaultValue() != null) {
+                    value = wireType.getDefaultValue();
+                }
+                fieldMap.put(fieldName, value);
             } else if (type instanceof PsiArrayType) {
                 List<Object> list = new ArrayList<>();
                 PsiType deepType = type.getDeepComponentType();
@@ -619,10 +679,15 @@ public class ParamPsiUtils {
             } else if (InheritanceUtil.isInheritor(type, CommonClassNames.JAVA_UTIL_COLLECTION)) {
                 List<Object> list = new ArrayList<>();
                 PsiType iterableType = PsiUtil.extractIterableTypeParameter(type, false);
+                JsonWireType contentWireType = JacksonPsiUtils.resolveContentUsing(component, iterableType);
                 PsiClass iterableClass = PsiUtil.resolveClassInClassTypeOnly(iterableType);
                 if (iterableClass != null) {
                     if (FieldTypeConstant.FIELD_TYPE.containsKey(iterableClass.getName())) {
-                        list.add(FieldTypeConstant.FIELD_TYPE.get(iterableClass.getName()));
+                        Object elementValue = FieldTypeConstant.FIELD_TYPE.get(iterableClass.getName());
+                        if (contentWireType.isOverridden() && contentWireType.getDefaultValue() != null) {
+                            elementValue = contentWireType.getDefaultValue();
+                        }
+                        list.add(elementValue);
                     } else {
                         LinkedList<String> temp = new LinkedList<>(qualifiedNameList);
                         if (hasContainQualifiedName(temp, iterableClass.getQualifiedName())) {
@@ -795,13 +860,25 @@ public class ParamPsiUtils {
             body.setDesc(DocViewUtils.fieldDesc(component));
 
             type = replaceFieldType(genericsMap, type);
-            body.setType(type.getPresentableText());
-            String qualifiedName = type.getPresentableText();
+            JsonWireType wireType = JacksonPsiUtils.resolveJsonWireType(component, type);
+            body.setType(wireType.isOverridden() ? wireType.getJsonType() : type.getPresentableText());
+            String qualifiedName = wireType.isOverridden() ? wireType.getJsonType() : type.getPresentableText();
             body.setQualifiedNameForClassType(qualifiedName);
             PsiClass fieldClass = PsiUtil.resolveClassInType(type);
+            if (wireType.isOverridden() && wireType.getExampleOverride() != null) {
+                body.setExample(wireType.getExampleOverride());
+            }
 
             body.setParent(parent);
             parent.getChildList().add(body);
+
+            JsonWireType componentWireType = JacksonPsiUtils.resolveJsonWireType(component, type);
+            if (componentWireType.isOverridden() && isJsonSimpleType(componentWireType.getJsonType())) {
+                if (componentWireType.getExampleOverride() != null) {
+                    body.setExample(componentWireType.getExampleOverride());
+                }
+                return;
+            }
 
             if (type instanceof PsiPrimitiveType || FieldTypeConstant.FIELD_TYPE.containsKey(type.getPresentableText())) {
                 return;
@@ -821,7 +898,21 @@ public class ParamPsiUtils {
                 if (iterableType == null) return;
                 childClass = PsiUtil.resolveClassInClassTypeOnly(iterableType);
                 if (childClass == null) return;
+                JsonWireType contentWireType = JacksonPsiUtils.resolveContentUsing(component, iterableType);
                 if (iterableType instanceof PsiPrimitiveType || FieldTypeConstant.FIELD_TYPE.containsKey(iterableType.getPresentableText())) {
+                    if (contentWireType.isOverridden()) {
+                        String elementExample = contentWireType.getExampleOverride() != null
+                                ? contentWireType.getExampleOverride() : "0";
+                        body.setExample(elementExample);
+                        Body elementBody = new Body();
+                        elementBody.setRequired(true);
+                        elementBody.setName("element");
+                        elementBody.setType(contentWireType.getJsonType());
+                        elementBody.setDesc("");
+                        elementBody.setParent(body);
+                        body.getChildList().add(elementBody);
+                        return;
+                    }
                     Object defaultValue = iterableType instanceof PsiPrimitiveType
                             ? PsiTypesUtil.getDefaultValue(iterableType)
                             : FieldTypeConstant.FIELD_TYPE.get(iterableType.getPresentableText());
