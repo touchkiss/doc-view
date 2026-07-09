@@ -4,6 +4,7 @@ import com.intellij.openapi.project.Project;
 import com.liuzhihang.doc.view.config.Settings;
 import com.liuzhihang.doc.view.config.TemplateSettings;
 import com.liuzhihang.doc.view.enums.FrameworkEnum;
+import com.liuzhihang.doc.view.utils.CurlUtils;
 import com.liuzhihang.doc.view.utils.VelocityUtils;
 import lombok.Data;
 import lombok.extern.slf4j.Slf4j;
@@ -101,6 +102,11 @@ public class DocViewData {
      */
     private final String responseExample;
 
+    /**
+     * curl 示例 (Markdown 代码块)
+     */
+    private final String curlExample;
+
     private final String type;
 
     public DocViewData(DocView docView) {
@@ -129,7 +135,16 @@ public class DocViewData {
         this.responseExample = respBodyExample(docView.getRespExample());
 
         this.responseJson5 = buildJson5(responseParamDataList);
+        this.curlExample = docView.getType() == FrameworkEnum.SPRING ? curlMarkdown(docView) : "";
         log.info("responseJson5:{}", responseJson5);
+    }
+
+    private static String curlMarkdown(DocView docView) {
+        String curl = CurlUtils.build(docView);
+        if (StringUtils.isBlank(curl)) {
+            return "";
+        }
+        return "```bash\n" + curl + "\n```\n\n";
     }
 
     /**
