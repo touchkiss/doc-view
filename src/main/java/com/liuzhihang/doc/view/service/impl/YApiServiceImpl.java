@@ -134,7 +134,9 @@ public final class YApiServiceImpl implements DocViewUploadService {
                 + "**返回示例:**\n\n"
                 + "```json\n" +
                 (StringUtils.isBlank(docViewData.getResponseJson5()) ? docView.getRespExample() : docViewData.getResponseJson5()) + "\n" +
-                "```\n\n";
+                "```\n\n" +
+                "**curl example:**\n\n" +
+                DocViewData.curlMarkdown(docView);
     }
 
     /**

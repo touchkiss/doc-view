@@ -139,7 +139,7 @@ public class DocViewData {
         log.info("responseJson5:{}", responseJson5);
     }
 
-    private static String curlMarkdown(DocView docView) {
+    public static String curlMarkdown(DocView docView) {
         String curl = CurlUtils.build(docView);
         if (StringUtils.isBlank(curl)) {
             return "";
