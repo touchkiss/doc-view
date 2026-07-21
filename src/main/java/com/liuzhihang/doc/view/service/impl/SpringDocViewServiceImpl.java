@@ -18,7 +18,7 @@ import java.util.Collections;
 import java.util.LinkedList;
 import java.util.List;
 
-import static com.intellij.psi.PsiKeyword.VOID;
+import static com.intellij.java.syntax.parser.JavaKeywords.VOID;
 
 /**
  * @author liuzhihang

@@ -4,6 +4,7 @@ import com.intellij.find.editorHeaderActions.Utils;
 import com.intellij.openapi.actionSystem.*;
 import com.intellij.openapi.actionSystem.impl.ActionToolbarImpl;
 import com.intellij.openapi.command.WriteCommandAction;
+import com.intellij.openapi.util.Disposer;
 import com.intellij.openapi.editor.Document;
 import com.intellij.openapi.editor.EditorFactory;
 import com.intellij.openapi.editor.EditorKind;
@@ -22,6 +23,7 @@ import com.intellij.ui.*;
 import com.intellij.ui.components.JBList;
 import com.intellij.ui.components.JBPanel;
 import com.intellij.ui.jcef.JBCefApp;
+import com.intellij.ui.jcef.JBCefBrowser;
 import com.intellij.util.ui.JBUI;
 import com.intellij.util.ui.UIUtil;
 import com.liuzhihang.doc.view.DocViewBundle;
@@ -35,9 +37,6 @@ import com.liuzhihang.doc.view.utils.EditorUtils;
 import com.liuzhihang.doc.view.utils.ExportUtils;
 import icons.DocViewIcons;
 import lombok.extern.slf4j.Slf4j;
-import org.intellij.plugins.markdown.settings.MarkdownSettings;
-import org.intellij.plugins.markdown.ui.preview.MarkdownHtmlPanel;
-import org.intellij.plugins.markdown.ui.preview.MarkdownHtmlPanelProvider;
 import org.intellij.plugins.markdown.ui.preview.html.MarkdownUtil;
 import org.jetbrains.annotations.Contract;
 import org.jetbrains.annotations.NonNls;
@@ -107,9 +106,10 @@ public class PreviewForm {
     private final JBPanel<?> previewToolbarPanel = new JBPanel<>(new BorderLayout());
 
     /**
-     * Markdown Html 面板
+     * JCEF 嵌入式浏览器，用于承载并渲染 HTML 预览。
+     * 仅当 {@link JBCefApp#isSupported()} 为 true 时创建，否则为 null（降级为源码视图）。
      */
-    private MarkdownHtmlPanel markdownHtmlPanel;
+    private JBCefBrowser jcefBrowser;
 
     /**
      * 根面板
@@ -230,6 +230,12 @@ public class PreviewForm {
                 .setCancelOnOtherWindowOpen(false)
                 .setCancelOnWindowDeactivation(false)
                 .createPopup();
+
+        // JCEF 浏览器持有本地资源，绑定到弹窗生命周期，弹窗关闭时释放，避免泄漏
+        if (jcefBrowser != null) {
+            Disposer.register(popup, jcefBrowser);
+        }
+
         popup.showCenteredInCurrentWindow(psiClass.getProject());
     }
 
@@ -280,8 +286,8 @@ public class PreviewForm {
 
         // 右侧 Markdown 源码面板
         markdownSourcePanel();
-        // markdownHtmlPanel
-        markdownHtmlPanel();
+        // HTML 预览浏览器
+        initHtmlBrowser();
         // 选择在预览面板上呈现的面板：源码/HTML
         choosePreviewPanel();
         // 预览面板操作栏
@@ -374,20 +380,24 @@ public class PreviewForm {
     }
 
     /**
-     * markdown 预览界面
+     * 初始化 HTML 预览浏览器。
+     * <p>
+     * 2026.2 起平台将 JCEF 拆分为独立捆绑插件（module intellij.platform.ui.jcef），
+     * 且 JetBrains 官方将 Markdown 插件面板类标注为不稳定的实现细节。这里改用平台稳定的
+     * {@link JBCefBrowser} 直接承载 HTML，HTML 由 {@link MarkdownUtil} 生成。
+     * <p>
+     * 当运行环境不支持 JCEF 时不创建浏览器，预览降级为 Markdown 源码视图。
      */
-    private void markdownHtmlPanel() {
-
-        MarkdownHtmlPanelProvider provider = MarkdownHtmlPanelProvider.createFromInfo(MarkdownSettings.getDefaultProviderInfo());
+    private void initHtmlBrowser() {
 
         if (!JBCefApp.isSupported()) {
-            // Fallback to an alternative browser-less solution
+            // Fallback to a browser-less solution (源码视图)
             // https://plugins.jetbrains.com/docs/intellij/jcef.html#jbcefapp
             log.info("当前不支持 JCEF");
             return;
         }
 
-        markdownHtmlPanel = provider.createHtmlPanel();
+        jcefBrowser = JBCefBrowser.createBuilder().build();
     }
 
     /**
@@ -395,8 +405,8 @@ public class PreviewForm {
      */
     private void choosePreviewPanel() {
 
-        if (previewIsHtml.get() && JBCefApp.isSupported()) {
-            previewContentPanel.add(markdownHtmlPanel.getComponent(), BorderLayout.CENTER);
+        if (previewIsHtml.get() && jcefBrowser != null) {
+            previewContentPanel.add(jcefBrowser.getComponent(), BorderLayout.CENTER);
         } else {
             // 展示源码
             previewContentPanel.add(ScrollPaneFactory.createScrollPane(markdownEditor.getComponent()), BorderLayout.CENTER);
@@ -426,7 +436,7 @@ public class PreviewForm {
             @Override
             public void setSelected(@NotNull AnActionEvent e, boolean state) {
 
-                if (!JBCefApp.isSupported()) {
+                if (jcefBrowser == null) {
                     // 不支持 JCEF 不允许预览
                     previewIsHtml.set(false);
                     DocViewNotification.notifyInfo(psiClass.getProject(), DocViewBundle.message("notify.not.support.jcef"));
@@ -435,7 +445,7 @@ public class PreviewForm {
                     if (state) {
                         previewContentPanel.removeAll();
                         previewContentPanel.repaint();
-                        previewContentPanel.add(markdownHtmlPanel.getComponent(), BorderLayout.CENTER);
+                        previewContentPanel.add(jcefBrowser.getComponent(), BorderLayout.CENTER);
                         previewContentPanel.revalidate();
                     } else {
                         // 展示源码
@@ -617,9 +627,10 @@ public class PreviewForm {
             // 将 docView 按照模版转换
             currentMarkdownText = DocViewData.markdownText(psiClass.getProject(), currentDocView);
 
-            if (JBCefApp.isSupported()) {
+            if (jcefBrowser != null) {
 
-                markdownHtmlPanel.setHtml(MarkdownUtil.INSTANCE.generateMarkdownHtml(psiClass.getContainingFile().getVirtualFile(), currentMarkdownText, psiClass.getProject()), 0);
+                String html = MarkdownUtil.INSTANCE.generateMarkdownHtml(psiClass.getContainingFile().getVirtualFile(), currentMarkdownText, psiClass.getProject());
+                jcefBrowser.loadHTML(html);
             }
 
             WriteCommandAction.runWriteCommandAction(psiClass.getProject(), () -> {

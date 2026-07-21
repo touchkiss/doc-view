@@ -11,6 +11,8 @@
     <depends>com.intellij.modules.java</depends>
     <!-- 暂时不打开预览 -->
     <depends>org.intellij.plugins.markdown</depends>
+    <!-- JCEF 嵌入式浏览器（2026.2 起为独立捆绑插件），用于 HTML 文档预览 -->
+    <depends>com.intellij.modules.jcef</depends>
 
     <extensions defaultExtensionNs="com.intellij">
         <!-- Add your extensions here -->
