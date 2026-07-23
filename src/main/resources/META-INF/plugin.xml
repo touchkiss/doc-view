@@ -113,6 +113,7 @@
             <add-to-group group-id="EditorPopupMenu" anchor="first"/>
             <action id="liuzhihang.doc.view" class="com.liuzhihang.doc.view.action.PreviewAction" text="Doc View"/>
             <action id="liuzhihang.doc.editor" class="com.liuzhihang.doc.view.action.EditorAction" text="Doc Editor"/>
+            <action id="liuzhihang.doc.copy.curl" class="com.liuzhihang.doc.view.action.CopyCurlAction" text="Copy cURL"/>
         </group>
 
         <group id="liuzhihang.doc.upload" text="Doc Upload" popup="true">
