@@ -114,6 +114,7 @@
             <action id="liuzhihang.doc.view" class="com.liuzhihang.doc.view.action.PreviewAction" text="Doc View"/>
             <action id="liuzhihang.doc.editor" class="com.liuzhihang.doc.view.action.EditorAction" text="Doc Editor"/>
             <action id="liuzhihang.doc.copy.curl" class="com.liuzhihang.doc.view.action.CopyCurlAction" text="Copy cURL"/>
+            <action id="liuzhihang.doc.grpc.copy.curl" class="com.liuzhihang.doc.view.action.ProtoGrpcCopyCurlAction" text="Copy gRPC cURL"/>
         </group>
 
         <group id="liuzhihang.doc.upload" text="Doc Upload" popup="true">
