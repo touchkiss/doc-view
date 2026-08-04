@@ -1,11 +1,50 @@
 package com.liuzhihang.doc.view.utils;
 
+import com.intellij.openapi.util.Key;
 import com.intellij.psi.PsiClass;
 import com.intellij.psi.PsiClassType;
+import com.intellij.psi.PsiFile;
 import com.intellij.psi.PsiType;
 import com.intellij.psi.util.PsiUtil;
+import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
 
 public class ProtoUtils {
+
+    /**
+     * 标记由 .proto message 合成出来的内存 Java 文件。
+     * <p>
+     * 该标记用于 {@link com.liuzhihang.doc.view.service.DocViewService#getInstance} 的路由判断:
+     * message 名称不一定符合 POJO 的名称约定（如 Order）, 不能依赖 PojoUtils.isPojoClass 的名称启发。
+     * <p>
+     * 有意放在本类（不引用 com.intellij.protobuf.*）而不是 ProtoToPsiClassConverter,
+     * 使未安装 Protocol Buffers 插件的 IDE 上读取标记时不会触发 protobuf 类加载。
+     */
+    public static final Key<Boolean> PROTO_SYNTHETIC = Key.create("docview.proto.synthetic");
+
+    /**
+     * 将内存 Java 文件标记为 proto message 合成类
+     *
+     * @param psiFile 合成出来的内存 Java 文件
+     */
+    public static void markSynthetic(@NotNull PsiFile psiFile) {
+        psiFile.putUserData(PROTO_SYNTHETIC, Boolean.TRUE);
+    }
+
+    /**
+     * 判断类是否是由 .proto message 合成出来的类
+     *
+     * @param psiClass 类
+     * @return true 表示是 proto message 合成类
+     */
+    public static boolean isSyntheticProtoClass(@Nullable PsiClass psiClass) {
+        if (psiClass == null) {
+            return false;
+        }
+        PsiFile containingFile = psiClass.getContainingFile();
+        return containingFile != null && Boolean.TRUE.equals(containingFile.getUserData(PROTO_SYNTHETIC));
+    }
+
     public static boolean isProto(PsiType psiType) {
         PsiClass returnClass = PsiUtil.resolveClassInType(psiType);
         return isProto(returnClass);

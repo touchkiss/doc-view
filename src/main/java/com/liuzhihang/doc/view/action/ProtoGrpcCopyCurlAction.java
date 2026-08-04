@@ -9,6 +9,7 @@ import com.intellij.openapi.editor.Editor;
 import com.intellij.openapi.project.Project;
 import com.intellij.psi.PsiFile;
 import com.liuzhihang.doc.view.notification.DocViewNotification;
+import com.liuzhihang.doc.view.utils.CurlHostUtils;
 import com.liuzhihang.doc.view.utils.GrpcCurlUtils;
 import com.liuzhihang.doc.view.utils.ProtoGrpcUtils;
 import org.jetbrains.annotations.NotNull;
@@ -54,8 +55,8 @@ public class ProtoGrpcCopyCurlAction extends AnAction {
         // Generate JSON body
         String jsonBody = ProtoGrpcUtils.generateJsonBody(fields);
 
-        // Build curl command
-        String curl = GrpcCurlUtils.build(serviceName, methodName, jsonBody);
+        // Build curl command, using the project-configured gRPC host
+        String curl = GrpcCurlUtils.build(CurlHostUtils.grpcHost(project), serviceName, methodName, jsonBody);
         if (curl == null || curl.isBlank()) {
             DocViewNotification.notifyError(project, "Failed to generate gRPC curl command");
             return;

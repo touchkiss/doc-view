@@ -206,6 +206,36 @@ public class Settings implements PersistentStateComponent<Settings> {
      */
     private List<UrlRewriteRule> urlRewriteRules = new ArrayList<>();
 
+    /**
+     * Copy cURL 动作复制到剪贴板时使用的域名, 默认 http://localhost:8080
+     */
+    public static final String DEFAULT_CURL_COPY_HOST = "http://localhost:8080";
+
+    /**
+     * 生成文档（预览 / 导出 / 上传）中 curl 示例使用的域名, 默认保持 {{host}} 占位符不变
+     */
+    public static final String DEFAULT_CURL_DOC_HOST = "{{host}}";
+
+    /**
+     * Copy gRPC cURL 动作使用的域名, 默认 http://localhost:9090
+     */
+    public static final String DEFAULT_GRPC_CURL_HOST = "http://localhost:9090";
+
+    /**
+     * Copy cURL 域名, 原样使用, 允许填 {{order-web}} 这类非 URL 的网关标识
+     */
+    private String curlCopyHost = DEFAULT_CURL_COPY_HOST;
+
+    /**
+     * 生成文档中 curl 示例的域名, 默认 {{host}} 即不做替换, 使上传到 YApi 等平台的文档与环境无关
+     */
+    private String curlDocHost = DEFAULT_CURL_DOC_HOST;
+
+    /**
+     * Copy gRPC cURL 域名, 原样使用, 不自动增删 scheme
+     */
+    private String grpcCurlHost = DEFAULT_GRPC_CURL_HOST;
+
 
     public static Settings getInstance(@NotNull Project project) {
         return project.getService(Settings.class);

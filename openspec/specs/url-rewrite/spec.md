@@ -1,4 +1,10 @@
-## ADDED Requirements
+# Capability: URL Rewrite
+
+## Purpose
+
+Apply user-configured, regex-based rewrite rules to REST controller paths before they are stored on `DocView`, so that generated documentation reflects gateway-facing URLs; rewrite failures must never break document generation.
+
+## Requirements
 
 ### Requirement: URL rewrite rules persisted in settings
 The system SHALL store an ordered list of URL rewrite rules in the project-scoped `Settings`, where each rule has an `enabled` flag, a `regex` pattern string, and a `replacement` string, persisted across IDE restarts.

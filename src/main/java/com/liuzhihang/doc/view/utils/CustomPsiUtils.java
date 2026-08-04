@@ -38,10 +38,9 @@ public class CustomPsiUtils {
     public static PsiClass getTargetClass(@NotNull Editor editor, @NotNull PsiFile file) {
         int offset = editor.getCaretModel().getOffset();
         PsiElement element = file.findElementAt(offset);
-        if ("protobuf".equalsIgnoreCase(file.getLanguage().getDisplayName())) {
-            // Parse the .proto file and generate Java code (this part is simplified)
-            PsiClass psiClass = ProtoToPsiClassConverter.convertProtoToPsiClass(file, editor.getProject());
-            return psiClass;
+        if (isProtoFile(file)) {
+            // .proto 文件: 解析光标所在的 message, 合成为内存 Java 类后复用 POJO 文档流水线
+            return getProtoTargetClass(editor, file);
         }
         if (element != null) {
             // 当前类
@@ -51,6 +50,31 @@ public class CustomPsiUtils {
         }
 
         return null;
+    }
+
+    /**
+     * 判断文件是否是 proto 文件。
+     * <p>
+     * 先判断 Protocol Buffers 插件是否可用, 保证未安装该插件的 IDE 上不会加载
+     * com.intellij.protobuf.* 相关类。
+     *
+     * @param file 文件
+     * @return true 表示是 proto 文件
+     */
+    public static boolean isProtoFile(@Nullable PsiFile file) {
+        return file != null && ProtoPluginSupport.isAvailable() && ProtoMessageResolver.isProtoFile(file);
+    }
+
+    /**
+     * 获取 .proto 文件中光标所在 message 合成出来的 Java 类
+     *
+     * @param editor 编辑器
+     * @param file   proto 文件
+     * @return 合成出来的 PsiClass; 光标不在 message 内时返回 null
+     */
+    @Nullable
+    private static PsiClass getProtoTargetClass(@NotNull Editor editor, @NotNull PsiFile file) {
+        return ProtoMessageResolver.findTargetPsiClass(editor, file);
     }
 
     /**

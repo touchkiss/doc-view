@@ -1,3 +1,11 @@
+# Capability: Markdown Preview
+
+## Purpose
+
+Render the generated document's HTML preview through the platform's stable JCEF API, detecting JCEF availability and degrading to a source view when it is unavailable, while managing browser lifecycle and declaring the required platform module dependency.
+
+## Requirements
+
 ### Requirement: HTML 预览基于平台稳定 JCEF API 渲染
 
 文档预览的 HTML 视图 SHALL 通过平台稳定的 `com.intellij.ui.jcef.JBCefBrowser` 承载与渲染，HTML 内容 SHALL 由 `MarkdownUtil.generateMarkdownHtml(...)` 生成后经 `JBCefBrowser` 加载。系统 MUST NOT 依赖 Markdown 插件的 `MarkdownHtmlPanel` 或 `MarkdownHtmlPanelProvider` 面板 API。

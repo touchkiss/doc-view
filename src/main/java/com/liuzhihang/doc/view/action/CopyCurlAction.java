@@ -14,6 +14,7 @@ import com.liuzhihang.doc.view.dto.DocView;
 import com.liuzhihang.doc.view.notification.DocViewNotification;
 import com.liuzhihang.doc.view.service.DocViewService;
 import com.liuzhihang.doc.view.utils.CustomPsiUtils;
+import com.liuzhihang.doc.view.utils.CurlHostUtils;
 import com.liuzhihang.doc.view.utils.CurlUtils;
 import com.liuzhihang.doc.view.utils.SpringPsiUtils;
 import org.jetbrains.annotations.NotNull;
@@ -56,8 +57,8 @@ public class CopyCurlAction extends AbstractAction {
             return;
         }
 
-//      替换为本地服务地址，否则{{host}}无法被IDEA识别，粘贴转换为http失败
-        curl = curl.replace("{{host}}", "http://localhost:8080");
+//      替换为配置的域名（默认 http://localhost:8080），否则{{host}}无法被IDEA识别，粘贴转换为http失败
+        curl = CurlHostUtils.applyCopyHost(project, curl);
         StringSelection selection = new StringSelection(curl);
         Clipboard clipboard = Toolkit.getDefaultToolkit().getSystemClipboard();
         clipboard.setContents(selection, selection);

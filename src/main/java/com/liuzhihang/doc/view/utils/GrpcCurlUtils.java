@@ -12,7 +12,7 @@ import org.jetbrains.annotations.Nullable;
  */
 public final class GrpcCurlUtils {
 
-    private static final String DEFAULT_GRPC_HOST = "localhost:9090";
+    private static final String DEFAULT_GRPC_HOST = "http://localhost:9090";
 
     private GrpcCurlUtils() {
     }

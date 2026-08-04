@@ -37,6 +37,12 @@ public class EditorAction extends AbstractAction {
             return;
         }
 
+        // .proto 文件不支持 Doc Editor: 编辑结果需要通过 WriterService 以 JavaDoc 形式写回源码,
+        // 而 proto 文档背后是合成出来的非物理类, 写回没有意义
+        if (CustomPsiUtils.isProtoFile(psiFile)) {
+            return;
+        }
+
         // 获取Java类或者接口
         PsiClass targetClass = CustomPsiUtils.getTargetClass(editor, psiFile);
 
@@ -63,6 +69,13 @@ public class EditorAction extends AbstractAction {
         Presentation presentation = e.getPresentation();
 
         if (editor == null || project == null || psiFile == null || DumbService.isDumb(project)) {
+            presentation.setEnabledAndVisible(false);
+            return;
+        }
+
+        // .proto 文件隐藏 Doc Editor。
+        // 必须在 getTargetClass 之前判断: 否则每次弹出右键菜单都会在 BGT 上合成一次 Java 类
+        if (CustomPsiUtils.isProtoFile(psiFile)) {
             presentation.setEnabledAndVisible(false);
             return;
         }

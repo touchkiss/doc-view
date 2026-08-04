@@ -4,6 +4,7 @@ import com.intellij.openapi.project.Project;
 import com.liuzhihang.doc.view.config.Settings;
 import com.liuzhihang.doc.view.config.TemplateSettings;
 import com.liuzhihang.doc.view.enums.FrameworkEnum;
+import com.liuzhihang.doc.view.utils.CurlHostUtils;
 import com.liuzhihang.doc.view.utils.CurlUtils;
 import com.liuzhihang.doc.view.utils.VelocityUtils;
 import lombok.Data;
@@ -144,6 +145,8 @@ public class DocViewData {
         if (StringUtils.isBlank(curl)) {
             return "";
         }
+        // 文档中的 curl 示例使用独立的域名配置, 默认为 {{host}} 即保持占位符不变
+        curl = CurlHostUtils.applyDocHost(docView.getPsiClass().getProject(), curl);
         return "```bash\n" + curl + "\n```\n\n";
     }
 

@@ -1,4 +1,10 @@
-## ADDED Requirements
+# Capability: Jackson JSON Type Resolution
+
+## Purpose
+
+Resolve the JSON wire type of a field from its Jackson annotations (`@JsonSerialize` / `@JsonDeserialize`, including `using` and `contentUsing`) rather than its declared Java type, so generated documentation and example values reflect what actually goes over the wire.
+
+## Requirements
 
 ### Requirement: JsonSerialize using attribute resolves JSON wire type
 The system SHALL inspect `@JsonSerialize(using = X.class)` on a `PsiField` or `PsiRecordComponent` and resolve the JSON wire type produced by serializer class `X`, overriding the Java-declared type on the corresponding `Body` or `Param` node.

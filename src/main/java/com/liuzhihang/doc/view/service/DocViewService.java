@@ -14,6 +14,7 @@ import com.liuzhihang.doc.view.service.impl.SpringDocViewServiceImpl;
 import com.liuzhihang.doc.view.utils.DubboPsiUtils;
 import com.liuzhihang.doc.view.utils.FeignPsiUtil;
 import com.liuzhihang.doc.view.utils.PojoUtils;
+import com.liuzhihang.doc.view.utils.ProtoUtils;
 import com.liuzhihang.doc.view.utils.SpringPsiUtils;
 import org.apache.commons.lang3.RandomStringUtils;
 import org.jetbrains.annotations.NotNull;
@@ -42,6 +43,12 @@ public interface DocViewService {
     @NotNull
     static DocViewService getInstance(@NotNull Project project, @NotNull PsiClass targetClass) {
         Settings settings = Settings.getInstance(project);
+
+        // .proto message 合成出来的类: message 名称不一定符合 POJO 名称约定（如 Order）,
+        // 不能依赖 PojoUtils.isPojoClass 的名称启发, 这里显式路由
+        if (ProtoUtils.isSyntheticProtoClass(targetClass)) {
+            return ApplicationManager.getApplication().getService(PojoDocViewServiceImpl.class);
+        }
 
         //spring cloud 的 feign client
         if (FeignPsiUtil.isFeignClass(targetClass)) {

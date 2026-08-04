@@ -13,6 +13,8 @@
     <depends>org.intellij.plugins.markdown</depends>
     <!-- JCEF 嵌入式浏览器（2026.2 起为独立捆绑插件），用于 HTML 文档预览 -->
     <depends>com.intellij.modules.jcef</depends>
+    <!-- Protocol Buffers 插件，用于解析 .proto message 结构；缺失时插件仍可正常加载 -->
+    <depends optional="true" config-file="doc-view-protobuf.xml">idea.plugin.protoeditor</depends>
 
     <extensions defaultExtensionNs="com.intellij">
         <!-- Add your extensions here -->

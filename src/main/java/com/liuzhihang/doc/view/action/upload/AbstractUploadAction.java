@@ -24,6 +24,11 @@ public abstract class AbstractUploadAction extends AbstractAction {
         // 先执行抽象类逻辑
         super.actionPerformed(e);
 
+        // 抽象类中的校验失败时已经给出通知, 这里不能继续往下走
+        if (project == null || targetClass == null) {
+            return;
+        }
+
         List<DocView> docViewList = DocViewService.getInstance(project, targetClass).buildDoc(targetClass, targetMethod);
 
         // 上传

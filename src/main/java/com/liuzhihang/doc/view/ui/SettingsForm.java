@@ -38,6 +38,7 @@ public class SettingsForm {
     private static final TitledBorder otherTitleBorder = IdeBorderFactory.createTitledBorder(DocViewBundle.message("settings.doc.other"));
     private static final TitledBorder previewTitleBorder = IdeBorderFactory.createTitledBorder(DocViewBundle.message("settings.preview"));
     private static final TitledBorder urlRewriteTitleBorder = IdeBorderFactory.createTitledBorder("URL Rewrite");
+    private static final TitledBorder curlHostTitleBorder = IdeBorderFactory.createTitledBorder(DocViewBundle.message("settings.curl.host"));
 
     private final Project project;
 
@@ -88,6 +89,14 @@ public class SettingsForm {
     private JCheckBox separateParamCheckBox;
 
     /**
+     * cURL 域名配置: Copy cURL 与生成文档各自独立
+     */
+    private JPanel curlHostPanel;
+    private JBTextField curlCopyHostTextField;
+    private JBTextField curlDocHostTextField;
+    private JBTextField grpcCurlHostTextField;
+
+    /**
      * URL 重写规则表格容器, 由 Settings.form 绑定, 内容在代码中动态构建
      */
     private JPanel urlRewritePanel;
@@ -116,6 +125,7 @@ public class SettingsForm {
         otherPanel.setBorder(otherTitleBorder);
         previewPane.setBorder(previewTitleBorder);
         urlRewritePanel.setBorder(urlRewriteTitleBorder);
+        curlHostPanel.setBorder(curlHostTitleBorder);
     }
 
     /**
@@ -272,6 +282,9 @@ public class SettingsForm {
                 || !prefixSymbol1TextField.getText().trim().equals(settings.getPrefixSymbol1())
                 || !prefixSymbol2TextField.getText().trim().equals(settings.getPrefixSymbol2())
                 || separateParamCheckBox.isSelected() != settings.getSeparateParam()
+                || !curlCopyHostTextField.getText().trim().equals(settings.getCurlCopyHost())
+                || !curlDocHostTextField.getText().trim().equals(settings.getCurlDocHost())
+                || !grpcCurlHostTextField.getText().trim().equals(settings.getGrpcCurlHost())
                 || urlRewriteRulesModified(settings)
                 ;
     }
@@ -301,6 +314,9 @@ public class SettingsForm {
         settings.setPrefixSymbol1(prefixSymbol1TextField.getText().trim());
         settings.setPrefixSymbol2(prefixSymbol2TextField.getText().trim());
         settings.setSeparateParam(separateParamCheckBox.isSelected());
+        settings.setCurlCopyHost(curlCopyHostTextField.getText().trim());
+        settings.setCurlDocHost(curlDocHostTextField.getText().trim());
+        settings.setGrpcCurlHost(grpcCurlHostTextField.getText().trim());
         settings.setUrlRewriteRules(copyRules(urlRewriteTableModel.getItems()));
 
 
@@ -336,6 +352,9 @@ public class SettingsForm {
         prefixSymbol1TextField.setText(settings.getPrefixSymbol1());
         prefixSymbol2TextField.setText(settings.getPrefixSymbol2());
         separateParamCheckBox.setSelected(settings.getSeparateParam());
+        curlCopyHostTextField.setText(settings.getCurlCopyHost());
+        curlDocHostTextField.setText(settings.getCurlDocHost());
+        grpcCurlHostTextField.setText(settings.getGrpcCurlHost());
         urlRewriteTableModel.setItems(copyRules(settings.getUrlRewriteRules()));
 
     }

@@ -44,8 +44,12 @@ public class PojoDocViewServiceImpl implements DocViewService {
         docView.setPsiClass(psiClass);
         String title = DocViewUtils.getTitle(psiClass);
         if (ProtoUtils.isProto(psiClass)) {
-//            proto只取<pre>标签中的内容
-            title = title.substring(title.indexOf("<pre>") + 5, title.indexOf("</pre>"));
+//            proto只取<pre>标签中的内容; 没有 <pre> 时保持原样, 否则 substring 会抛 StringIndexOutOfBoundsException
+            int start = title.indexOf("<pre>");
+            int end = title.indexOf("</pre>");
+            if (start >= 0 && end > start) {
+                title = title.substring(start + 5, end);
+            }
         }
         docView.setDocTitle(title);
         docView.setDesc(title);

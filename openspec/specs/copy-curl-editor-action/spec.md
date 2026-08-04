@@ -1,3 +1,9 @@
+# Capability: Copy cURL Editor Action
+
+## Purpose
+
+Provide a "Copy cURL" action in the editor right-click context menu for Spring/Feign REST methods, building a curl command from the endpoint's documentation data and placing it on the system clipboard with the project's configured host substituted.
+## Requirements
 ### Requirement: Copy cURL action in editor context menu
 The system SHALL provide a "Copy cURL" action in the editor right-click context menu that copies a curl command for the REST endpoint at the cursor position to the system clipboard.
 
@@ -30,8 +36,26 @@ When the "Copy cURL" action is invoked, the system SHALL build a curl command fr
 ---
 
 ### Requirement: Curl command uses `{{host}}` placeholder
-The copied curl command SHALL use the `{{host}}` placeholder for the base URL, matching the convention used by `.http` file export and the existing `rest-doc-curl` spec.
+The curl command SHALL be built with the `{{host}}` placeholder as its base URL, and the placeholder SHALL then be substituted with the project's configured **Copy cURL host** before the command is placed on the clipboard. The host previously substituted as a hardcoded `http://localhost:8080` is now the default value of that setting, so unconfigured projects behave as before.
 
 #### Scenario: Placeholder in URL
 - **WHEN** a curl command is generated for endpoint path `/api/users`
-- **THEN** the copied curl contains `{{host}}/api/users` as the URL
+- **THEN** `CurlUtils.build()` produces `{{host}}/api/users` as the URL
+
+#### Scenario: Configured host substituted on copy
+- **WHEN** the Copy cURL host is configured as `http://order-web` and the user invokes "Copy cURL" on endpoint path `/api/users`
+- **THEN** the clipboard contains a command targeting `http://order-web/api/users`
+- **AND** the clipboard content SHALL NOT contain the literal `{{host}}`
+
+#### Scenario: Default host when unconfigured
+- **WHEN** no Copy cURL host is configured and the user invokes "Copy cURL" on endpoint path `/api/users`
+- **THEN** the clipboard contains a command targeting `http://localhost:8080/api/users`
+
+#### Scenario: Verbatim non-URL host substituted
+- **WHEN** the Copy cURL host is configured as `{{order-web}}` and the user invokes "Copy cURL" on endpoint path `/api/users`
+- **THEN** the clipboard contains a command targeting `{{order-web}}/api/users`
+
+#### Scenario: Doc host does not affect copying
+- **WHEN** the Doc cURL host is configured as `http://doc-only` and the Copy cURL host is left at its default
+- **THEN** the clipboard contains a command targeting `http://localhost:8080/api/users`
+

@@ -22,6 +22,11 @@ public class PreviewAction extends AbstractAction {
         // 先执行抽象类逻辑
         super.actionPerformed(e);
 
+        // 抽象类中的校验失败时已经给出通知, 这里不能继续往下走
+        if (targetClass == null) {
+            return;
+        }
+
         // 预览文档
         PreviewForm.getInstance(targetClass, targetMethod).popup();
     }

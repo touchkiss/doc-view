@@ -71,8 +71,14 @@ public class AbstractAction extends AnAction {
             if (editor == null || project == null || psiFile == null || DumbService.isDumb(project)) {
                 throw new DocViewException("当前位置不合法");
             }
-            // 获取Java类或者接口
+            // 获取Java类或者接口; .proto 文件会将光标所在 message 合成为内存 Java 类
+            boolean protoFile = CustomPsiUtils.isProtoFile(psiFile);
             targetClass = CustomPsiUtils.getTargetClass(editor, psiFile);
+
+            if (targetClass == null && protoFile) {
+                // proto 文件中光标不在 message 内, 给出可操作的提示, 而不是"请在 Java 类文件中使用"
+                throw new DocViewException(DocViewBundle.message("notify.error.proto.no.message"));
+            }
 
             if (targetClass == null || targetClass.isAnnotationType() || targetClass.isEnum()) {
                 throw new DocViewException(DocViewBundle.message("notify.error.class"));

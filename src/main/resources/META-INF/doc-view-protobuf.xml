@@ -1,0 +1,13 @@
+<!--
+  Protocol Buffers 插件 (idea.plugin.protoeditor) 可用时才加载的配置。
+
+  Doc View 对 .proto message 的解析依赖 com.intellij.protobuf.lang.psi.*，
+  该 API 仅在安装了 Protocol Buffers 插件的 IDE 中存在（IntelliJ IDEA Ultimate 默认捆绑）。
+  通过 optional depends + 独立 config-file 的方式，保证插件在缺少 Protocol Buffers 时仍可正常加载，
+  此时 .proto 上的 Doc View 不可用，Java/Spring/Dubbo/POJO 功能不受影响。
+
+  目前无需注册额外的扩展点：proto 相关能力通过
+  ProtoPluginSupport.isAvailable() 在运行时判断后再触达 protobuf PSI。
+-->
+<idea-plugin>
+</idea-plugin>
