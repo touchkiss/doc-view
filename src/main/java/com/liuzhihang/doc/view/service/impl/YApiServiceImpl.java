@@ -107,7 +107,7 @@ public final class YApiServiceImpl implements DocViewUploadService {
 
             facadeService.save(save);
 
-            String yapiInterfaceUrl = settings.getUrl() + "/project/" + settings.getProjectId() + "/interface/api/cat_" + cat.getId();
+            String yapiInterfaceUrl = YApiInterfaceUrlResolver.resolve(facadeService, save);
 
             DocViewNotification.uploadSuccess(project, "YApi", yapiInterfaceUrl);
         } catch (Exception e) {
