@@ -5,6 +5,7 @@ import com.liuzhihang.doc.view.dto.JsonWireType;
 import org.junit.Test;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 
@@ -41,5 +42,15 @@ public class ParamPsiUtilsCollectionContentTest {
         assertEquals("List<Long>", body.getType());
         assertNull(body.getExample());
         assertTrue(body.getChildList().isEmpty());
+    }
+
+    @Test
+    public void recognizesJacksonNoneWithPsiAndBinaryNestedClassNames() {
+        assertTrue(JacksonPsiUtils.isNoneClassName(
+                "com.fasterxml.jackson.databind.JsonDeserializer.None"));
+        assertTrue(JacksonPsiUtils.isNoneClassName(
+                "com.fasterxml.jackson.databind.JsonSerializer$None"));
+        assertFalse(JacksonPsiUtils.isNoneClassName(
+                "com.example.StringToLongDeserializer"));
     }
 }

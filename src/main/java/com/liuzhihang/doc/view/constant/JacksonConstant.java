@@ -15,8 +15,8 @@ public final class JacksonConstant {
 
     public static final String JSON_SERIALIZER = "com.fasterxml.jackson.databind.JsonSerializer";
     public static final String JSON_DESERIALIZER = "com.fasterxml.jackson.databind.JsonDeserializer";
-    public static final String JSON_SERIALIZER_NONE = "com.fasterxml.jackson.databind.JsonSerializer$None";
-    public static final String JSON_DESERIALIZER_NONE = "com.fasterxml.jackson.databind.JsonDeserializer$None";
+    public static final String JSON_SERIALIZER_NONE = "com.fasterxml.jackson.databind.JsonSerializer.None";
+    public static final String JSON_DESERIALIZER_NONE = "com.fasterxml.jackson.databind.JsonDeserializer.None";
 
     public static final String TO_STRING_SERIALIZER = "com.fasterxml.jackson.databind.ser.std.ToStringSerializerBase";
     public static final String NUMBER_SERIALIZER = "com.fasterxml.jackson.databind.ser.std.NumberSerializer";

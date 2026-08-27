@@ -208,9 +208,16 @@ public final class JacksonPsiUtils {
     }
 
     private static boolean isNoneClass(@NotNull PsiClass psiClass) {
-        String qn = psiClass.getQualifiedName();
-        return JacksonConstant.JSON_SERIALIZER_NONE.equals(qn)
-                || JacksonConstant.JSON_DESERIALIZER_NONE.equals(qn);
+        return isNoneClassName(psiClass.getQualifiedName());
+    }
+
+    static boolean isNoneClassName(@Nullable String qualifiedName) {
+        if (qualifiedName == null) {
+            return false;
+        }
+        String canonicalName = qualifiedName.replace('$', '.');
+        return JacksonConstant.JSON_SERIALIZER_NONE.equals(canonicalName)
+                || JacksonConstant.JSON_DESERIALIZER_NONE.equals(canonicalName);
     }
 
     @NotNull
