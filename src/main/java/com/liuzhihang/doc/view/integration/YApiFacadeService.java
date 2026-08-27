@@ -4,6 +4,7 @@ import com.liuzhihang.doc.view.integration.dto.YApiCat;
 import com.liuzhihang.doc.view.integration.dto.YapiSave;
 
 import java.util.List;
+import java.util.Optional;
 
 /**
  * YApi 包装 service
@@ -32,6 +33,9 @@ public interface YApiFacadeService {
      * @throws Exception
      */
     List<YApiCat> getCatMenu(String yapiUrl, Long projectId, String token) throws Exception;
+
+    Optional<Long> findInterfaceId(String yapiUrl, Long projectId, String token,
+                                   Long catId, String method, String path) throws Exception;
 
     /**
      * 添加菜单

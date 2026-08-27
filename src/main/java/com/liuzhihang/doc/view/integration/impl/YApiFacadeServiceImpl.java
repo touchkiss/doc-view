@@ -6,6 +6,7 @@ import com.google.gson.JsonObject;
 import com.google.gson.reflect.TypeToken;
 import com.liuzhihang.doc.view.integration.YApiFacadeService;
 import com.liuzhihang.doc.view.integration.dto.YApiCat;
+import com.liuzhihang.doc.view.integration.dto.YApiInterfaceSummary;
 import com.liuzhihang.doc.view.integration.dto.YApiResponse;
 import com.liuzhihang.doc.view.integration.dto.YapiSave;
 import com.liuzhihang.doc.view.utils.HttpUtils;
@@ -14,6 +15,8 @@ import org.apache.commons.lang3.StringUtils;
 
 import java.lang.reflect.Type;
 import java.util.List;
+import java.util.Objects;
+import java.util.Optional;
 
 /**
  * @author liuzhihang
@@ -23,6 +26,21 @@ import java.util.List;
 public class YApiFacadeServiceImpl implements YApiFacadeService {
 
     private static final Gson gson = new GsonBuilder().serializeNulls().create();
+    private static final int INTERFACE_PAGE_SIZE = 100;
+    private final GetRequester getRequester;
+
+    @FunctionalInterface
+    interface GetRequester {
+        String get(String url) throws Exception;
+    }
+
+    public YApiFacadeServiceImpl() {
+        this(HttpUtils::get);
+    }
+
+    YApiFacadeServiceImpl(GetRequester getRequester) {
+        this.getRequester = getRequester;
+    }
 
     @Override
     public void save(YapiSave save) throws Exception {
@@ -47,7 +65,7 @@ public class YApiFacadeServiceImpl implements YApiFacadeService {
                 "?project_id=" + projectId +
                 "&token=" + token;
 
-        String resp = HttpUtils.get(url);
+        String resp = getRequester.get(url);
 
         Type jsonType = new TypeToken<YApiResponse<List<YApiCat>>>() {
         }.getType();
@@ -58,6 +76,45 @@ public class YApiFacadeServiceImpl implements YApiFacadeService {
             throw new Exception("YApi 接口返回失败:" + resp);
         }
         return response.getData();
+    }
+
+    @Override
+    public Optional<Long> findInterfaceId(String yapiUrl, Long projectId, String token,
+                                          Long catId, String method, String path) throws Exception {
+        for (int page = 1; ; page++) {
+            String url = yapiUrl + "/api/interface/list"
+                    + "?project_id=" + projectId
+                    + "&token=" + token
+                    + "&page=" + page
+                    + "&limit=" + INTERFACE_PAGE_SIZE;
+            List<YApiInterfaceSummary> interfaces = parseInterfaceList(getRequester.get(url));
+            Optional<Long> match = interfaces.stream()
+                    .filter(item -> catId.equals(item.getCatId()))
+                    .filter(item -> item.getMethod() != null && method.equalsIgnoreCase(item.getMethod()))
+                    .filter(item -> path.equals(item.getPath()))
+                    .map(YApiInterfaceSummary::getId)
+                    .filter(Objects::nonNull)
+                    .findFirst();
+            if (match.isPresent()) {
+                return match;
+            }
+            if (interfaces.size() < INTERFACE_PAGE_SIZE) {
+                return Optional.empty();
+            }
+        }
+    }
+
+    private List<YApiInterfaceSummary> parseInterfaceList(String resp) throws Exception {
+        if (StringUtils.isBlank(resp)) {
+            throw new Exception("YApi 接口返回为空");
+        }
+        Type type = new TypeToken<YApiResponse<List<YApiInterfaceSummary>>>() {
+        }.getType();
+        YApiResponse<List<YApiInterfaceSummary>> response = gson.fromJson(resp, type);
+        if (response == null || response.getErrcode() == null || response.getErrcode() != 0) {
+            throw new Exception("YApi 接口返回失败:" + resp);
+        }
+        return response.getData() == null ? List.of() : response.getData();
     }
 
     @Override
