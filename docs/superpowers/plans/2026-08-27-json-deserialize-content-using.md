@@ -6,7 +6,7 @@
 
 **Architecture:** Keep Jackson annotation/type inference centralized in `JacksonPsiUtils.resolveContentUsing`. Fix the two `ParamPsiUtils` collection consumers so a simple overridden element type is represented on the collection itself (`List<String>`) rather than as a synthetic object child; existing JSON and YApi renderers can then infer string array items correctly.
 
-**Tech Stack:** Java 25, IntelliJ Platform PSI, Gradle 9.6.1, JUnit 4.13.2.
+**Tech Stack:** Java 25, IntelliJ Platform PSI, Gradle 9.6.1, JUnit 4.13.2, dedicated `contentUsingTest` source set.
 
 ## Global Constraints
 
@@ -20,9 +20,9 @@
 
 ## File Structure
 
-- Modify `build.gradle`: add the JUnit 4 test dependency used by the new automated regression test.
+- Modify `build.gradle`: add JUnit 4 and an isolated `contentUsingTest` source set/task because the pre-existing default test source set does not compile.
 - Modify `src/main/java/com/liuzhihang/doc/view/utils/ParamPsiUtils.java`: centralize application of an overridden simple collection element type and use it for fields and record components.
-- Create `src/test/java/com/liuzhihang/doc/view/utils/ParamPsiUtilsCollectionContentTest.java`: verify collection type, example, child shape, and fallback behavior without requiring an IDE fixture.
+- Create `src/contentUsingTest/java/com/liuzhihang/doc/view/utils/ParamPsiUtilsCollectionContentTest.java`: verify collection type, example, child shape, and fallback behavior without compiling unrelated broken tests or requiring an IDE fixture.
 
 ### Task 1: Represent overridden simple collection elements on the collection node
 
@@ -30,7 +30,7 @@
 - Modify: `build.gradle`
 - Modify: `src/main/java/com/liuzhihang/doc/view/utils/ParamPsiUtils.java:181-200`
 - Modify: `src/main/java/com/liuzhihang/doc/view/utils/ParamPsiUtils.java:901-918`
-- Test: `src/test/java/com/liuzhihang/doc/view/utils/ParamPsiUtilsCollectionContentTest.java`
+- Test: `src/contentUsingTest/java/com/liuzhihang/doc/view/utils/ParamPsiUtilsCollectionContentTest.java`
 
 **Interfaces:**
 - Consumes: `JsonWireType.isOverridden()`, `JsonWireType.getJsonType()`, and `JsonWireType.getExampleOverride()`.
@@ -39,13 +39,34 @@
 
 - [ ] **Step 1: Add JUnit and write the failing regression test**
 
-Add this dependency next to the existing test/implementation dependencies in `build.gradle`:
+Add the dependency and isolated source set/task to `build.gradle`:
 
 ```groovy
 testImplementation group: 'junit', name: 'junit', version: '4.13.2'
+
+sourceSets {
+    contentUsingTest {
+        java.srcDir 'src/contentUsingTest/java'
+        compileClasspath += sourceSets.main.output + configurations.testRuntimeClasspath
+        runtimeClasspath += output + compileClasspath
+    }
+}
+
+configurations {
+    contentUsingTestImplementation.extendsFrom testImplementation
+    contentUsingTestRuntimeOnly.extendsFrom testRuntimeOnly
+}
+
+tasks.register('contentUsingTest', Test) {
+    description = 'Runs JsonDeserialize contentUsing regression tests.'
+    group = 'verification'
+    testClassesDirs = sourceSets.contentUsingTest.output.classesDirs
+    classpath = sourceSets.contentUsingTest.runtimeClasspath
+    useJUnit()
+}
 ```
 
-Create `src/test/java/com/liuzhihang/doc/view/utils/ParamPsiUtilsCollectionContentTest.java`:
+Create `src/contentUsingTest/java/com/liuzhihang/doc/view/utils/ParamPsiUtilsCollectionContentTest.java`:
 
 ```java
 package com.liuzhihang.doc.view.utils;
@@ -100,7 +121,7 @@ public class ParamPsiUtilsCollectionContentTest {
 Run:
 
 ```bash
-./gradlew test --tests com.liuzhihang.doc.view.utils.ParamPsiUtilsCollectionContentTest
+./gradlew contentUsingTest --tests com.liuzhihang.doc.view.utils.ParamPsiUtilsCollectionContentTest
 ```
 
 Expected: compilation fails because `ParamPsiUtils.applyCollectionContentOverride(Body, JsonWireType)` does not exist.
@@ -161,7 +182,7 @@ This makes ordinary fields and record components share the same representation.
 Run:
 
 ```bash
-./gradlew test --tests com.liuzhihang.doc.view.utils.ParamPsiUtilsCollectionContentTest
+./gradlew contentUsingTest --tests com.liuzhihang.doc.view.utils.ParamPsiUtilsCollectionContentTest
 ```
 
 Expected: two tests pass with zero failures.
@@ -169,11 +190,11 @@ Expected: two tests pass with zero failures.
 - [ ] **Step 7: Commit the behavior change**
 
 ```bash
-git add build.gradle src/main/java/com/liuzhihang/doc/view/utils/ParamPsiUtils.java src/test/java/com/liuzhihang/doc/view/utils/ParamPsiUtilsCollectionContentTest.java
+git add build.gradle src/main/java/com/liuzhihang/doc/view/utils/ParamPsiUtils.java src/contentUsingTest/java/com/liuzhihang/doc/view/utils/ParamPsiUtilsCollectionContentTest.java
 git commit -m "fix: support JsonDeserialize contentUsing collections"
 ```
 
-### Task 2: Verify rendering assumptions and project integrity
+### Task 2: Verify rendering assumptions and project build
 
 **Files:**
 - Verify: `src/main/java/com/liuzhihang/doc/view/dto/DocViewData.java:184-221`
@@ -193,15 +214,15 @@ DocViewData: collection + empty childList -> extractCollectionItemType("List<Str
 YApiServiceImpl: collection + empty childList -> extractCollectionItemType("List<String>") -> schema item type "string"
 ```
 
-- [ ] **Step 2: Run all tests**
+- [ ] **Step 2: Run the isolated regression tests**
 
 Run:
 
 ```bash
-./gradlew test
+./gradlew contentUsingTest
 ```
 
-Expected: `BUILD SUCCESSFUL` and zero failed tests.
+Expected: `BUILD SUCCESSFUL` and two passing tests. The default `test` task remains a known pre-existing baseline failure and is not changed by this feature.
 
 - [ ] **Step 3: Run the plugin build**
 
