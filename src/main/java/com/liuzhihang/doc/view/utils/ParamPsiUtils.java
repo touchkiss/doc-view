@@ -184,16 +184,7 @@ public class ParamPsiUtils {
             if (iterableType instanceof PsiPrimitiveType
                     || FieldTypeConstant.FIELD_TYPE.containsKey(iterableType.getPresentableText())) {
                 if (contentWireType.isOverridden()) {
-                    String elementExample = contentWireType.getExampleOverride() != null
-                            ? contentWireType.getExampleOverride() : "0";
-                    body.setExample(elementExample);
-                    Body elementBody = new Body();
-                    elementBody.setRequired(true);
-                    elementBody.setName("element");
-                    elementBody.setType(contentWireType.getJsonType());
-                    elementBody.setDesc("");
-                    elementBody.setParent(body);
-                    body.getChildList().add(elementBody);
+                    applyCollectionContentOverride(body, contentWireType);
                     return;
                 }
                 Object defaultValue = iterableType instanceof PsiPrimitiveType
@@ -360,6 +351,25 @@ public class ParamPsiUtils {
     private static boolean isJsonSimpleType(String jsonType) {
         return FieldTypeConstant.FIELD_TYPE.containsKey(jsonType)
                 || FieldTypeConstant.BASE_TYPE_SET.contains(jsonType);
+    }
+
+    static void applyCollectionContentOverride(@NotNull Body body, @NotNull JsonWireType contentWireType) {
+        if (!contentWireType.isOverridden()) {
+            return;
+        }
+
+        String collectionType = body.getType();
+        int genericStart = collectionType == null ? -1 : collectionType.indexOf('<');
+        int genericEnd = collectionType == null ? -1 : collectionType.lastIndexOf('>');
+        if (genericStart >= 0 && genericEnd > genericStart) {
+            body.setType(collectionType.substring(0, genericStart + 1)
+                    + contentWireType.getJsonType()
+                    + collectionType.substring(genericEnd));
+        }
+
+        String example = contentWireType.getExampleOverride() != null
+                ? contentWireType.getExampleOverride() : "0";
+        body.setExample(example);
     }
 
     private static boolean ignoreField(PsiType fieldType) {
@@ -901,16 +911,7 @@ public class ParamPsiUtils {
                 JsonWireType contentWireType = JacksonPsiUtils.resolveContentUsing(component, iterableType);
                 if (iterableType instanceof PsiPrimitiveType || FieldTypeConstant.FIELD_TYPE.containsKey(iterableType.getPresentableText())) {
                     if (contentWireType.isOverridden()) {
-                        String elementExample = contentWireType.getExampleOverride() != null
-                                ? contentWireType.getExampleOverride() : "0";
-                        body.setExample(elementExample);
-                        Body elementBody = new Body();
-                        elementBody.setRequired(true);
-                        elementBody.setName("element");
-                        elementBody.setType(contentWireType.getJsonType());
-                        elementBody.setDesc("");
-                        elementBody.setParent(body);
-                        body.getChildList().add(elementBody);
+                        applyCollectionContentOverride(body, contentWireType);
                         return;
                     }
                     Object defaultValue = iterableType instanceof PsiPrimitiveType
