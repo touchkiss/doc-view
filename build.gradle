@@ -11,6 +11,8 @@ plugins {
 group = project.pluginGroup
 version = project.pluginVersion
 
+def localIde = file('/Applications/IntelliJ IDEA.app')
+
 java {
     toolchain {
         languageVersion = JavaLanguageVersion.of(25)
@@ -36,7 +38,7 @@ dependencies {
     annotationProcessor group: 'org.projectlombok', name: 'lombok', version: '1.18.42'
 
     intellijPlatform {
-        local('/Applications/IntelliJ IDEA.app')
+        local(localIde)
 
         bundledPlugin('com.intellij.java')
         bundledPlugin('org.intellij.plugins.markdown')
@@ -50,6 +52,11 @@ dependencies {
 }
 
 sourceSets {
+    constantValueTest {
+        java.srcDir 'src/constantValueTest/java'
+        compileClasspath += sourceSets.main.output + configurations.testRuntimeClasspath + tasks.compileJava.classpath
+        runtimeClasspath += output + compileClasspath
+    }
     contentUsingTest {
         java.srcDir 'src/contentUsingTest/java'
         compileClasspath += sourceSets.main.output + configurations.testRuntimeClasspath + tasks.compileJava.classpath
@@ -58,8 +65,22 @@ sourceSets {
 }
 
 configurations {
+    constantValueTestImplementation.extendsFrom testImplementation
+    constantValueTestRuntimeOnly.extendsFrom testRuntimeOnly
     contentUsingTestImplementation.extendsFrom testImplementation
     contentUsingTestRuntimeOnly.extendsFrom testRuntimeOnly
+}
+
+tasks.register('constantValueTest', Test) {
+    description = 'Runs Java constant resolution regression tests with real PSI.'
+    group = 'verification'
+    testClassesDirs = sourceSets.constantValueTest.output.classesDirs
+    classpath = sourceSets.constantValueTest.runtimeClasspath
+    // Core PSI reads compiled class files through the IDE's NIO filesystem.
+    classpath += files(new File(localIde, 'Contents/lib/nio-fs.jar'))
+    useJUnit()
+    jvmArgs '--add-opens=java.base/java.lang=ALL-UNNAMED'
+    jvmArgs '--add-exports=java.base/sun.nio.fs=ALL-UNNAMED'
 }
 
 tasks.register('contentUsingTest', Test) {

@@ -459,8 +459,9 @@ public class DocViewUtils {
             PsiAnnotation jsonPropertyAnnotation = field.getAnnotation(JsonPropertyConstant.JSON_PROPERTY);
             if (jsonPropertyAnnotation != null) {
                 PsiAnnotationMemberValue value = jsonPropertyAnnotation.findAttributeValue("value");
-                if (value != null && StringUtils.isNotBlank(value.getText())) {
-                    return value.getText().replace("\"", "");
+                Object resolved = PsiConstantUtils.constantValue(value);
+                if (resolved instanceof String name && !name.isEmpty()) {
+                    return name;
                 }
             }
             if (Boolean.TRUE.equals(fieldNameUseSnakeCase)) {
@@ -578,13 +579,9 @@ public class DocViewUtils {
             // 没有注释 tag 时, 回退读取字段的默认初始化值
             // 例如: int age = 15;  ->  "15"
             //       String name = "hello";  ->  "hello"
-            PsiExpression initializer = psiField.getInitializer();
-            if (initializer != null) {
-                String initText = initializer.getText();
-                if (StringUtils.isNotBlank(initText)) {
-                    // 去掉字符串字面量两侧的双引号
-                    return initText.replaceAll("^\"|\"$", "");
-                }
+            String example = PsiConstantUtils.expressionText(psiField.getInitializer());
+            if (example != null) {
+                return example;
             }
 
             return "";
@@ -671,8 +668,9 @@ public class DocViewUtils {
             PsiAnnotation jsonPropertyAnnotation = component.getAnnotation(JsonPropertyConstant.JSON_PROPERTY);
             if (jsonPropertyAnnotation != null) {
                 PsiAnnotationMemberValue value = jsonPropertyAnnotation.findAttributeValue("value");
-                if (value != null && StringUtils.isNotBlank(value.getText())) {
-                    return value.getText().replace("\"", "");
+                Object resolved = PsiConstantUtils.constantValue(value);
+                if (resolved instanceof String name && !name.isEmpty()) {
+                    return name;
                 }
             }
             return Boolean.TRUE.equals(fieldNameUseSnakeCase) ? camelToSnake(component.getName()) : component.getName();

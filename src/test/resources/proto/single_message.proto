@@ -1,0 +1,16 @@
+// 单 message 文件, 用于验证光标不在 message 内时的回退行为。
+//
+// 用法: 将光标放在文件末尾的空行（不在 message 内）右键 Doc View,
+// 应直接文档化 Ping; 而在 shipment.proto 中做同样操作应给出
+// "请将光标放在 proto message 定义内" 的提示。
+syntax = "proto3";
+
+package docview.fixture.single;
+
+// 心跳请求
+message Ping {
+  // 客户端 id
+  string client_id = 1;
+  // 发送时间戳
+  int64 timestamp_millis = 2;
+}

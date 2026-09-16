@@ -1,0 +1,40 @@
+// 跨文件 import 的手工验证样例。
+//
+// 用法: 将光标放在 Shipment 内右键 Doc View,
+// order_detail / receiver 字段应展开为 order.proto 中 Order / Address 的字段。
+syntax = "proto3";
+
+package docview.fixture.shipment;
+
+import "proto/order.proto";
+
+// 物流单
+message Shipment {
+
+  // 物流单号
+  string shipment_no = 1;
+
+  // 关联订单（跨文件引用）
+  docview.fixture.Order order_detail = 2;
+
+  // 收货地址（跨文件引用）
+  docview.fixture.Address receiver = 3;
+
+  // 订单状态（跨文件枚举）
+  docview.fixture.OrderStatus order_status = 4;
+
+  // 物流轨迹
+  repeated Track tracks = 5;
+
+  // 轨迹节点
+  message Track {
+    // 描述
+    string description = 1;
+    // 发生时间
+    int64 happened_at = 2;
+  }
+}
+
+// 单 message 文件的对照可参考 single_message.proto:
+// 光标不在任何 message 内时, 单 message 文件应回退到该 message,
+// 而本文件（含多个 message: Shipment / Shipment.Track）应给出提示。

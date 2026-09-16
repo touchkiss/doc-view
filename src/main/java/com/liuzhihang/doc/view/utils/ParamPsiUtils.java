@@ -140,17 +140,9 @@ public class ParamPsiUtils {
         }
         if (type instanceof PsiPrimitiveType || FieldTypeConstant.FIELD_TYPE.containsKey(type.getPresentableText())) {
 
-            // 没有注释 tag 时, 回退读取字段的默认初始化值
-            // 例如: int age = 15;  ->  "15"
-            //       String name = "hello";  ->  "hello"
-            PsiExpression initializer = field.getInitializer();
-            if (initializer != null) {
-                String initText = initializer.getText();
-                if (StringUtils.isNotBlank(initText)) {
-                    // 去掉字符串字面量两侧的双引号
-                    String defaultValueStr = initText.replaceAll("^\"|\"$", "");
-                    body.setExample(defaultValueStr);
-                }
+            String example = PsiConstantUtils.expressionText(field.getInitializer());
+            if (example != null) {
+                body.setExample(example);
             }
             return;
         }

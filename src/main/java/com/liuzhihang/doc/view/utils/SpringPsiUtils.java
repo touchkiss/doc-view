@@ -421,6 +421,18 @@ public class SpringPsiUtils extends ParamPsiUtils {
             //       String name = "hello";  ->  "hello"
             PsiExpression initializer = parameter.getInitializer();
             if (initializer != null) {
+                Object constantValue = PsiConstantUtils.constantValue(initializer);
+                if (constantValue != null) {
+                    Object value = type instanceof PsiPrimitiveType
+                            ? com.intellij.psi.util.TypeConversionUtil.computeCastTo(constantValue, type)
+                            : constantValue;
+                    // JSON does not support NaN or Infinity; preserve the expression as an example.
+                    if ((value instanceof Double doubleValue && !Double.isFinite(doubleValue))
+                            || (value instanceof Float floatValue && !Float.isFinite(floatValue))) {
+                        return initializer.getText();
+                    }
+                    return value;
+                }
                 String initText = initializer.getText();
                 if (StringUtils.isNotBlank(initText)) {
                     // 去掉字符串字面量两侧的双引号
@@ -609,16 +621,9 @@ public class SpringPsiUtils extends ParamPsiUtils {
             }
         }
         if (psiField instanceof PsiField psiField1) {
-            // 没有注释 tag 时, 回退读取字段的默认初始化值
-            // 例如: int age = 15;  ->  "15"
-            //       String name = "hello";  ->  "hello"
-            PsiExpression initializer = psiField1.getInitializer();
-            if (initializer != null) {
-                String initText = initializer.getText();
-                if (StringUtils.isNotBlank(initText)) {
-                    // 去掉字符串字面量两侧的双引号
-                    return initText.replaceAll("^\"|\"$", "");
-                }
+            String example = PsiConstantUtils.expressionText(psiField1.getInitializer());
+            if (example != null) {
+                return example;
             }
         }
         PsiAnnotation minAnnotation = AnnotationUtil.findAnnotation(psiField, ValidationConstant.MIN);

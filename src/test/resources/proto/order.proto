@@ -1,0 +1,152 @@
+// Doc View proto message 支持的手工验证样例。
+//
+// 用法: ./gradlew runIde, 在沙箱 IDE 中打开本文件,
+// 将光标放在某个 message 内, 右键选择 Doc View。
+syntax = "proto3";
+
+package docview.fixture;
+
+import "google/protobuf/timestamp.proto";
+import "google/protobuf/duration.proto";
+import "google/protobuf/wrappers.proto";
+import "google/protobuf/struct.proto";
+
+// 订单状态
+enum OrderStatus {
+  // 未知
+  ORDER_STATUS_UNKNOWN = 0;
+  // 已支付
+  ORDER_STATUS_PAID = 1;
+  // 已取消
+  ORDER_STATUS_CANCELLED = 2;
+}
+
+// 收货地址
+message Address {
+  // 省
+  string province = 1;
+  // 市
+  string city = 2;
+  // 详细地址
+  string detail = 3;
+}
+
+// 订单信息
+// 覆盖: 标量、嵌套 message、repeated、map、oneof、enum、well-known types
+message Order {
+
+  // 订单号
+  string order_no = 1;
+
+  // 商品数量
+  int32 amount = 2;
+
+  // 用户 id
+  int64 uid = 3;
+
+  // 无符号数量
+  uint32 unsigned_amount = 4;
+
+  // 定长 id
+  fixed64 fixed_id = 5;
+
+  // zigzag 编码数值
+  sint32 signed_value = 6;
+
+  // 折扣率
+  double discount = 7;
+
+  // 权重
+  float weight = 8;
+
+  // 是否可见
+  bool is_visible = 9;
+
+  // 附加二进制数据
+  bytes payload = 10;
+
+  // 订单状态
+  OrderStatus status = 11;
+
+  // 收货地址
+  Address address = 12;
+
+  // 标签列表
+  repeated string tags = 13;
+
+  // 订单项列表
+  repeated Item items = 14;
+
+  // 计数器
+  map<string, int32> counters = 15;
+
+  // 子对象映射
+  map<string, Item> item_by_sku = 16;
+
+  // 创建时间
+  google.protobuf.Timestamp created_at = 17;
+
+  // 有效时长
+  google.protobuf.Duration valid_for = 18;
+
+  // 可空数量
+  google.protobuf.Int32Value nullable_amount = 19;
+
+  // 可空备注
+  google.protobuf.StringValue nullable_remark = 20;
+
+  // 扩展信息
+  google.protobuf.Struct extra = 21;
+
+  // 备注载荷, 二者其一
+  oneof note {
+    // 文本备注
+    string text_note = 22;
+    // 结构化备注
+    Item item_note = 23;
+  }
+
+  // 订单项
+  message Item {
+    // 商品编码
+    string sku = 1;
+    // 商品名称
+    string name = 2;
+    // 单价
+    int64 price = 3;
+  }
+}
+
+// 自引用结构, 用于验证递归类型图能够终止
+message Node {
+  // 节点 id
+  string id = 1;
+  // 子节点
+  repeated Node children = 2;
+}
+
+// 相互递归 A, 用于验证互相引用的类型图能够终止
+message TreeA {
+  // 名称
+  string name = 1;
+  // 指向 B
+  TreeB b = 2;
+}
+
+// 相互递归 B
+message TreeB {
+  // 名称
+  string name = 1;
+  // 指向 A
+  TreeA a = 2;
+}
+
+// 空 message, 用于验证没有字段时不报错
+message EmptyMessage {
+}
+
+// 服务定义: 光标放在 rpc 行上时, Doc View 应提示"请将光标放在 proto message 定义内"
+service OrderService {
+  // 查询订单
+  rpc GetOrder (Order) returns (Order);
+}
