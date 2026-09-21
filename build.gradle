@@ -35,6 +35,10 @@ dependencies {
     compileOnly group: 'org.projectlombok', name: 'lombok', version: '1.18.42'
     compileOnly group: 'org.commonmark', name: 'commonmark', version: '0.29.0'
     implementation group: 'org.apache.commons', name: 'commons-collections4', version: '4.5.0'
+    implementation('io.modelcontextprotocol.sdk:mcp-core:2.0.0') {
+        exclude group: 'jakarta.servlet', module: 'jakarta.servlet-api'
+    }
+    implementation 'io.modelcontextprotocol.sdk:mcp-json-jackson3:2.0.0'
     annotationProcessor group: 'org.projectlombok', name: 'lombok', version: '1.18.42'
     testCompileOnly group: 'io.swagger.core.v3', name: 'swagger-annotations', version: '2.2.54'
 
