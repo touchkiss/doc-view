@@ -19,6 +19,7 @@ import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.net.URI;
 import java.nio.charset.StandardCharsets;
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.ExecutorService;
@@ -116,6 +117,7 @@ public final class McpServerService implements Disposable {
 
         private static final String MCP_PATH = "/mcp";
         private static final String APPLICATION_JSON = "application/json";
+        private static final String TEXT_EVENT_STREAM = "text/event-stream";
 
         private final McpJsonMapper jsonMapper = new JacksonMcpJsonMapperSupplier().get();
         private HttpServer httpServer;
@@ -191,15 +193,34 @@ public final class McpServerService implements Disposable {
                     send(exchange, 405, "Only POST is supported.");
                     return;
                 }
+                int headerError = validateRequestHeaders(exchange);
+                if (headerError != 0) {
+                    send(exchange, headerError, "Invalid MCP HTTP headers.");
+                    return;
+                }
                 if (handler == null) {
                     send(exchange, 503, "MCP server is starting.");
                     return;
                 }
 
-                Map<?, ?> message = jsonMapper.readValue(exchange.getRequestBody().readAllBytes(), Map.class);
-                if (message.containsKey("id")) {
-                    McpSchema.JSONRPCRequest request = jsonMapper.convertValue(message,
-                            McpSchema.JSONRPCRequest.class);
+                Map<?, ?> message;
+                JsonRpcMessageType messageType;
+                try {
+                    message = jsonMapper.readValue(exchange.getRequestBody().readAllBytes(), Map.class);
+                    messageType = classifyMessage(message);
+                } catch (Exception exception) {
+                    send(exchange, 400, "Invalid JSON-RPC message.");
+                    return;
+                }
+
+                if (messageType == JsonRpcMessageType.REQUEST) {
+                    McpSchema.JSONRPCRequest request;
+                    try {
+                        request = jsonMapper.convertValue(message, McpSchema.JSONRPCRequest.class);
+                    } catch (Exception exception) {
+                        send(exchange, 400, "Invalid JSON-RPC message.");
+                        return;
+                    }
                     McpSchema.JSONRPCResponse response = handler
                             .handleRequest(McpTransportContext.EMPTY, request)
                             .block();
@@ -207,16 +228,146 @@ public final class McpServerService implements Disposable {
                     return;
                 }
 
-                McpSchema.JSONRPCNotification notification = jsonMapper.convertValue(message,
-                        McpSchema.JSONRPCNotification.class);
+                if (messageType != JsonRpcMessageType.NOTIFICATION) {
+                    send(exchange, 400, "Invalid JSON-RPC message.");
+                    return;
+                }
+
+                McpSchema.JSONRPCNotification notification;
+                try {
+                    notification = jsonMapper.convertValue(message, McpSchema.JSONRPCNotification.class);
+                } catch (Exception exception) {
+                    send(exchange, 400, "Invalid JSON-RPC message.");
+                    return;
+                }
                 handler.handleNotification(McpTransportContext.EMPTY, notification).block();
                 exchange.sendResponseHeaders(202, -1);
-            } catch (IllegalArgumentException exception) {
-                send(exchange, 400, "Invalid JSON-RPC message.");
             } catch (Exception exception) {
                 LOG.warn("Unable to process MCP request", exception);
                 send(exchange, 500, "Unable to process MCP request.");
             }
+        }
+
+        private int validateRequestHeaders(HttpExchange exchange) {
+            if (!isApplicationJson(exchange.getRequestHeaders().getFirst("Content-Type"))) {
+                return 415;
+            }
+            if (!acceptsMcpResponse(exchange.getRequestHeaders().getFirst("Accept"))) {
+                return 406;
+            }
+
+            int port = httpServer.getAddress().getPort();
+            List<String> hostHeaders = exchange.getRequestHeaders().get("Host");
+            if (hostHeaders == null || hostHeaders.size() != 1 || !isLoopbackAuthority(hostHeaders.get(0), port)) {
+                return 400;
+            }
+
+            String origin = exchange.getRequestHeaders().getFirst("Origin");
+            return origin == null || isLoopbackOrigin(origin, port) ? 0 : 403;
+        }
+
+        private static boolean isApplicationJson(String contentType) {
+            return contentType != null && APPLICATION_JSON.equalsIgnoreCase(mediaType(contentType));
+        }
+
+        private static boolean acceptsMcpResponse(String accept) {
+            if (accept == null) {
+                return false;
+            }
+            for (String acceptedType : accept.split(",")) {
+                String[] parts = acceptedType.split(";");
+                String type = parts[0].trim();
+                if ((APPLICATION_JSON.equalsIgnoreCase(type) || TEXT_EVENT_STREAM.equalsIgnoreCase(type))
+                        && hasPositiveQuality(parts)) {
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        private static boolean hasPositiveQuality(String[] parts) {
+            for (int index = 1; index < parts.length; index++) {
+                String parameter = parts[index].trim();
+                if (parameter.regionMatches(true, 0, "q=", 0, 2)) {
+                    try {
+                        return Double.parseDouble(parameter.substring(2).trim()) > 0;
+                    } catch (NumberFormatException exception) {
+                        return false;
+                    }
+                }
+            }
+            return true;
+        }
+
+        private static String mediaType(String value) {
+            int separator = value.indexOf(';');
+            return (separator < 0 ? value : value.substring(0, separator)).trim();
+        }
+
+        private static boolean isLoopbackAuthority(String authority, int port) {
+            try {
+                URI uri = URI.create("http://" + authority);
+                return uri.getUserInfo() == null
+                        && uri.getPath().isEmpty()
+                        && uri.getQuery() == null
+                        && uri.getFragment() == null
+                        && uri.getPort() == port
+                        && isLoopbackHost(uri.getHost());
+            } catch (IllegalArgumentException exception) {
+                return false;
+            }
+        }
+
+        private static boolean isLoopbackOrigin(String origin, int port) {
+            try {
+                URI uri = URI.create(origin);
+                return "http".equalsIgnoreCase(uri.getScheme())
+                        && uri.getRawAuthority() != null
+                        && uri.getUserInfo() == null
+                        && (uri.getPath().isEmpty() || "/".equals(uri.getPath()))
+                        && uri.getQuery() == null
+                        && uri.getFragment() == null
+                        && uri.getPort() == port
+                        && isLoopbackHost(uri.getHost());
+            } catch (IllegalArgumentException exception) {
+                return false;
+            }
+        }
+
+        private static boolean isLoopbackHost(String host) {
+            return "127.0.0.1".equals(host) || "localhost".equalsIgnoreCase(host) || "[::1]".equals(host);
+        }
+
+        private static JsonRpcMessageType classifyMessage(Map<?, ?> message) {
+            if (!"2.0".equals(message.get("jsonrpc"))) {
+                return JsonRpcMessageType.INVALID;
+            }
+            boolean hasResult = message.containsKey("result");
+            boolean hasError = message.containsKey("error");
+            Object method = message.get("method");
+            if (method == null && (hasResult || hasError)) {
+                return JsonRpcMessageType.RESPONSE;
+            }
+            if (hasResult || hasError) {
+                return JsonRpcMessageType.INVALID;
+            }
+            if (!(method instanceof String) || ((String) method).trim().isEmpty()) {
+                return JsonRpcMessageType.INVALID;
+            }
+            if (!message.containsKey("id")) {
+                return JsonRpcMessageType.NOTIFICATION;
+            }
+            Object id = message.get("id");
+            return id == null || id instanceof String || id instanceof Number
+                    ? JsonRpcMessageType.REQUEST
+                    : JsonRpcMessageType.INVALID;
+        }
+
+        private enum JsonRpcMessageType {
+            REQUEST,
+            NOTIFICATION,
+            RESPONSE,
+            INVALID
         }
 
         private void send(HttpExchange exchange, int status, String body) throws IOException {
