@@ -48,7 +48,6 @@ public class CurlUtilsTest {
         // 5. Dubbo 类型在 DocViewData 中跳过 curl; CurlUtils 本身不区分框架
         DocView dubbo = baseDoc("POST", "/rpc");
         dubbo.setType(FrameworkEnum.DUBBO);
-        check("Dubbo 框架枚举", FrameworkEnum.DUBBO != FrameworkEnum.SPRING);
 
         // 6. 空 method/path
         check("空路径", "", CurlUtils.build(new DocView()));

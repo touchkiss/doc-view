@@ -6,6 +6,7 @@ import com.intellij.openapi.Disposable;
 import com.intellij.openapi.util.Disposer;
 import com.intellij.psi.*;
 import com.liuzhihang.doc.view.config.Settings;
+import com.liuzhihang.doc.view.dto.Param;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
@@ -17,6 +18,8 @@ import java.nio.file.Path;
 import javax.tools.ToolProvider;
 
 import static org.junit.Assert.*;
+
+import java.util.List;
 
 /** Exercises documentation output with real Java PSI, not mocked constant values. */
 public class ConstantValueTest {
@@ -185,5 +188,64 @@ public class ConstantValueTest {
         java.util.Map<String, Object> json = ParamPsiUtils.getFieldsAndDefaultValue(cls, null);
         assertEquals("1.0 / 0.0", json.get("code"));
         assertTrue(GsonFormatUtil.gsonFormat(json).contains("1.0 / 0.0"));
+    }
+
+    @Test
+    public void expandsGetBeanParametersUsingConfiguredFieldNames() {
+        Settings.getInstance(environment.getProject()).setFieldNameCaseType(true);
+        PsiClass controller = javaClassNamed(springSource(
+                "class Request { String userId; int pageSize; } "
+                        + "class Controller { void list(Request request) {} }"), "Controller");
+
+        List<Param> params = SpringPsiUtils.buildFormParam(controller.findMethodsByName("list", false)[0]);
+
+        assertEquals(2, params.size());
+        assertEquals("user_id", params.get(0).getName());
+        assertEquals("page_size", params.get(1).getName());
+    }
+
+    @Test
+    public void expandsRecordParametersUsingCamelCaseWhenConfigured() {
+        Settings.getInstance(environment.getProject()).setFieldNameCaseType(false);
+        PsiClass controller = javaClassNamed(springSource(
+                "record Request(String userId, int pageSize) {} "
+                        + "class Controller { void list(Request request) {} }"), "Controller");
+
+        List<Param> params = SpringPsiUtils.buildFormParam(controller.findMethodsByName("list", false)[0]);
+
+        assertEquals(2, params.size());
+        assertEquals("userId", params.get(0).getName());
+        assertEquals("pageSize", params.get(1).getName());
+    }
+
+    @Test
+    public void keepsExplicitRequestParamNameForBeanField() {
+        PsiClass controller = javaClassNamed(springSource(
+                "class Request { @RequestParam(name = \"user_id\") String userId; } "
+                        + "class Controller { void list(Request request) {} }"), "Controller");
+
+        List<Param> params = SpringPsiUtils.buildFormParam(controller.findMethodsByName("list", false)[0]);
+
+        assertEquals(1, params.size());
+        assertEquals("user_id", params.get(0).getName());
+    }
+
+    private PsiClass javaClassNamed(String source, String name) {
+        PsiJavaFile file = (PsiJavaFile) PsiFileFactory.getInstance(environment.getProject())
+                .createFileFromText(name + ".java", com.intellij.ide.highlighter.JavaFileType.INSTANCE, source);
+        for (PsiClass psiClass : file.getClasses()) {
+            if (name.equals(psiClass.getName())) {
+                return psiClass;
+            }
+        }
+        fail("Missing class " + name);
+        return null;
+    }
+
+    private String springSource(String declaration) {
+        return "package org.springframework.web.bind.annotation; "
+                + "@interface RequestParam { String name() default \"\"; String value() default \"\"; "
+                + "boolean required() default true; String defaultValue() default \"\"; } "
+                + declaration;
     }
 }

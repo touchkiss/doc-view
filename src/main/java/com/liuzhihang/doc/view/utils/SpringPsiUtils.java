@@ -547,6 +547,9 @@ public class SpringPsiUtils extends ParamPsiUtils {
             } else if (InheritanceUtil.isInheritor(type, CommonClassNames.JAVA_UTIL_MAP)) {
                 list.add(buildPramFromParameter(psiMethod, parameter, parameterName));
             } else {
+                if (!GET.equals(method(psiMethod))) {
+                    continue;
+                }
                 PsiClass fieldClass = PsiUtil.resolveClassInClassTypeOnly(type);
                 if (fieldClass == null) {
                     continue;
@@ -554,7 +557,8 @@ public class SpringPsiUtils extends ParamPsiUtils {
                 // 参数是类, get 请求只有一层
                 if (fieldClass.isRecord()) {
                     for (PsiRecordComponent component : fieldClass.getRecordComponents()) {
-                        if (!paramNameSet.add(component.getName())) {
+                        String componentName = requestParamName(component, DocViewUtils.fieldName(component, false));
+                        if (!paramNameSet.add(componentName)) {
                             continue;
                         }
                         if (component.getType() instanceof PsiPrimitiveType || FieldTypeConstant.FIELD_TYPE.containsKey(component.getType().getPresentableText())) {
@@ -564,12 +568,16 @@ public class SpringPsiUtils extends ParamPsiUtils {
                 } else {
                     PsiField[] psiFields = fieldClass.getAllFields();
                     for (PsiField field : psiFields) {
+                        if (DocViewUtils.isExcludeField(field, false)) {
+                            continue;
+                        }
                         // 已经包含该字段
-                        if (!paramNameSet.add(parameterName)) {
+                        String fieldName = requestParamName(field, DocViewUtils.fieldName(field, false));
+                        if (!paramNameSet.add(fieldName)) {
                             continue;
                         }
                         if (field.getType() instanceof PsiPrimitiveType || FieldTypeConstant.FIELD_TYPE.containsKey(field.getType().getPresentableText())) {
-                            list.add(buildPramFromField(field));
+                            list.add(buildPramFromField(field, fieldName));
                         }
                     }
                 }
@@ -581,12 +589,12 @@ public class SpringPsiUtils extends ParamPsiUtils {
     }
 
     @NotNull
-    private static Param buildPramFromField(PsiField field) {
+    private static Param buildPramFromField(PsiField field, String parameterName) {
 
         Param param = new Param();
         param.setPsiElement(field);
         param.setRequired(DocViewUtils.isRequired(field));
-        param.setName(field.getName());
+        param.setName(parameterName);
         param.setDesc(DocViewUtils.fieldDesc(field));
         String example = DocViewUtils.fieldExample(field);
         param.setExample(getExample(field, example));
@@ -601,13 +609,29 @@ public class SpringPsiUtils extends ParamPsiUtils {
         Param param = new Param();
         param.setPsiElement(component);
         param.setRequired(DocViewUtils.isRequired(component));
-        param.setName(DocViewUtils.fieldName(component, false));
+        param.setName(requestParamName(component, DocViewUtils.fieldName(component, false)));
         param.setDesc(DocViewUtils.fieldDesc(component));
         param.setExample(getExample(component, ""));
         PsiType componentType = component.getType();
         JsonWireType wireType = JacksonPsiUtils.resolveJsonWireType(component, componentType);
         param.setType(wireType.isOverridden() ? wireType.getJsonType() : componentType.getPresentableText());
         return param;
+    }
+
+    private static String requestParamName(PsiModifierListOwner owner, String defaultName) {
+        PsiAnnotation requestParam = AnnotationUtil.findAnnotation(owner, SpringConstant.REQUEST_PARAM);
+        if (requestParam == null) {
+            return defaultName;
+        }
+        for (JvmAnnotationAttribute attribute : requestParam.getAttributes()) {
+            if ("name".equals(attribute.getAttributeName()) || "value".equals(attribute.getAttributeName())) {
+                Object value = ((JvmAnnotationConstantValue) attribute.getAttributeValue()).getConstantValue();
+                if (value instanceof String name && StringUtils.isNotBlank(name)) {
+                    return name;
+                }
+            }
+        }
+        return defaultName;
     }
 
     private static String getExample(PsiModifierListOwner psiField, String exampleFromComment) {

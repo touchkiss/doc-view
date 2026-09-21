@@ -168,7 +168,7 @@ public final class CurlUtils {
         return builder.toString();
     }
 
-    static String escapeSingleQuoted(String value) {
+    public static String escapeSingleQuoted(String value) {
         if (value == null) {
             return "";
         }

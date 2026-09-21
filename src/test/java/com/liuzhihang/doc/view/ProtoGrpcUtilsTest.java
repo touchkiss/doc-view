@@ -2,6 +2,7 @@ package com.liuzhihang.doc.view;
 
 import com.liuzhihang.doc.view.utils.ProtoGrpcUtils;
 
+import java.util.Collections;
 import java.util.List;
 
 /**
@@ -23,14 +24,14 @@ public class ProtoGrpcUtilsTest {
         checkContains("Int fields 3", json, "\"next_since_id\": 0");
 
         // 2. Test JSON generation with bool field
-        List<String[]> boolFields = List.of(
+        List<String[]> boolFields = Collections.singletonList(
                 new String[]{"is_visible", "bool"}
         );
         json = ProtoGrpcUtils.generateJsonBody(boolFields);
         checkContains("Bool field", json, "\"is_visible\": false");
 
         // 3. Test JSON generation with string field
-        List<String[]> stringFields = List.of(
+        List<String[]> stringFields = Collections.singletonList(
                 new String[]{"name", "string"}
         );
         json = ProtoGrpcUtils.generateJsonBody(stringFields);
@@ -53,28 +54,28 @@ public class ProtoGrpcUtilsTest {
         check("Empty fields", "{}", json);
 
         // 6. Test message field
-        List<String[]> messageFields = List.of(
+        List<String[]> messageFields = Collections.singletonList(
                 new String[]{"request", "SomeMessage"}
         );
         json = ProtoGrpcUtils.generateJsonBody(messageFields);
         checkContains("Message field", json, "\"request\": {}");
 
         // 7. Test float field
-        List<String[]> floatFields = List.of(
+        List<String[]> floatFields = Collections.singletonList(
                 new String[]{"score", "float"}
         );
         json = ProtoGrpcUtils.generateJsonBody(floatFields);
         checkContains("Float field", json, "\"score\": 0");
 
         // 8. Test double field
-        List<String[]> doubleFields = List.of(
+        List<String[]> doubleFields = Collections.singletonList(
                 new String[]{"price", "double"}
         );
         json = ProtoGrpcUtils.generateJsonBody(doubleFields);
         checkContains("Double field", json, "\"price\": 0");
 
         // 9. Test bytes field
-        List<String[]> bytesFields = List.of(
+        List<String[]> bytesFields = Collections.singletonList(
                 new String[]{"data", "bytes"}
         );
         json = ProtoGrpcUtils.generateJsonBody(bytesFields);
