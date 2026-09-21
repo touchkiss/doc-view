@@ -185,21 +185,21 @@ public final class McpServerService implements Disposable {
         private void handleExchange(HttpExchange exchange) throws IOException {
             try (exchange) {
                 if (!MCP_PATH.equals(exchange.getRequestURI().getPath())) {
-                    send(exchange, 404, "Not found.");
+                    sendText(exchange, 404, "Not found.");
                     return;
                 }
                 if (!"POST".equals(exchange.getRequestMethod())) {
                     exchange.getResponseHeaders().set("Allow", "POST");
-                    send(exchange, 405, "Only POST is supported.");
+                    sendText(exchange, 405, "Only POST is supported.");
                     return;
                 }
                 int headerError = validateRequestHeaders(exchange);
                 if (headerError != 0) {
-                    send(exchange, headerError, "Invalid MCP HTTP headers.");
+                    sendText(exchange, headerError, "Invalid MCP HTTP headers.");
                     return;
                 }
                 if (handler == null) {
-                    send(exchange, 503, "MCP server is starting.");
+                    sendText(exchange, 503, "MCP server is starting.");
                     return;
                 }
 
@@ -209,7 +209,7 @@ public final class McpServerService implements Disposable {
                     message = jsonMapper.readValue(exchange.getRequestBody().readAllBytes(), Map.class);
                     messageType = classifyMessage(message);
                 } catch (Exception exception) {
-                    send(exchange, 400, "Invalid JSON-RPC message.");
+                    sendText(exchange, 400, "Invalid JSON-RPC message.");
                     return;
                 }
 
@@ -218,18 +218,18 @@ public final class McpServerService implements Disposable {
                     try {
                         request = jsonMapper.convertValue(message, McpSchema.JSONRPCRequest.class);
                     } catch (Exception exception) {
-                        send(exchange, 400, "Invalid JSON-RPC message.");
+                        sendText(exchange, 400, "Invalid JSON-RPC message.");
                         return;
                     }
                     McpSchema.JSONRPCResponse response = handler
                             .handleRequest(McpTransportContext.EMPTY, request)
                             .block();
-                    send(exchange, 200, jsonMapper.writeValueAsBytes(response));
+                    sendJson(exchange, 200, jsonMapper.writeValueAsBytes(response));
                     return;
                 }
 
                 if (messageType != JsonRpcMessageType.NOTIFICATION) {
-                    send(exchange, 400, "Invalid JSON-RPC message.");
+                    sendText(exchange, 400, "Invalid JSON-RPC message.");
                     return;
                 }
 
@@ -237,14 +237,14 @@ public final class McpServerService implements Disposable {
                 try {
                     notification = jsonMapper.convertValue(message, McpSchema.JSONRPCNotification.class);
                 } catch (Exception exception) {
-                    send(exchange, 400, "Invalid JSON-RPC message.");
+                    sendText(exchange, 400, "Invalid JSON-RPC message.");
                     return;
                 }
                 handler.handleNotification(McpTransportContext.EMPTY, notification).block();
                 exchange.sendResponseHeaders(202, -1);
             } catch (Exception exception) {
                 LOG.warn("Unable to process MCP request", exception);
-                send(exchange, 500, "Unable to process MCP request.");
+                sendText(exchange, 500, "Unable to process MCP request.");
             }
         }
 
@@ -252,7 +252,7 @@ public final class McpServerService implements Disposable {
             if (!isApplicationJson(exchange.getRequestHeaders().getFirst("Content-Type"))) {
                 return 415;
             }
-            if (!acceptsMcpResponse(exchange.getRequestHeaders().getFirst("Accept"))) {
+            if (!acceptsMcpResponses(exchange.getRequestHeaders().get("Accept"))) {
                 return 406;
             }
 
@@ -270,33 +270,71 @@ public final class McpServerService implements Disposable {
             return contentType != null && APPLICATION_JSON.equalsIgnoreCase(mediaType(contentType));
         }
 
-        private static boolean acceptsMcpResponse(String accept) {
-            if (accept == null) {
+        private static boolean acceptsMcpResponses(List<String> acceptHeaders) {
+            if (acceptHeaders == null || acceptHeaders.isEmpty()) {
                 return false;
             }
-            for (String acceptedType : accept.split(",")) {
-                String[] parts = acceptedType.split(";");
-                String type = parts[0].trim();
-                if ((APPLICATION_JSON.equalsIgnoreCase(type) || TEXT_EVENT_STREAM.equalsIgnoreCase(type))
-                        && hasPositiveQuality(parts)) {
-                    return true;
-                }
-            }
-            return false;
-        }
 
-        private static boolean hasPositiveQuality(String[] parts) {
-            for (int index = 1; index < parts.length; index++) {
-                String parameter = parts[index].trim();
-                if (parameter.regionMatches(true, 0, "q=", 0, 2)) {
-                    try {
-                        return Double.parseDouble(parameter.substring(2).trim()) > 0;
-                    } catch (NumberFormatException exception) {
+            boolean acceptsJson = false;
+            boolean acceptsEventStream = false;
+            for (String acceptHeader : acceptHeaders) {
+                if (acceptHeader == null || acceptHeader.isBlank()) {
+                    return false;
+                }
+                for (String acceptedType : acceptHeader.split(",", -1)) {
+                    AcceptMediaRange mediaRange = parseAcceptMediaRange(acceptedType);
+                    if (mediaRange == null) {
                         return false;
+                    }
+                    if (APPLICATION_JSON.equalsIgnoreCase(mediaRange.type)) {
+                        acceptsJson |= mediaRange.hasPositiveQuality;
+                    } else if (TEXT_EVENT_STREAM.equalsIgnoreCase(mediaRange.type)) {
+                        acceptsEventStream |= mediaRange.hasPositiveQuality;
                     }
                 }
             }
-            return true;
+            return acceptsJson && acceptsEventStream;
+        }
+
+        private static AcceptMediaRange parseAcceptMediaRange(String value) {
+            String[] parts = value.split(";", -1);
+            String type = parts[0].trim();
+            if (!isMediaRange(type)) {
+                return null;
+            }
+
+            boolean hasQuality = false;
+            boolean positiveQuality = true;
+            for (int index = 1; index < parts.length; index++) {
+                String parameter = parts[index].trim();
+                int separator = parameter.indexOf('=');
+                if (separator < 1) {
+                    return null;
+                }
+                String name = parameter.substring(0, separator).trim();
+                String parameterValue = parameter.substring(separator + 1).trim();
+                if ("q".equalsIgnoreCase(name)) {
+                    if (hasQuality || !isQualityValue(parameterValue)) {
+                        return null;
+                    }
+                    hasQuality = true;
+                    positiveQuality = !isZeroQualityValue(parameterValue);
+                }
+            }
+            return new AcceptMediaRange(type, positiveQuality);
+        }
+
+        private static boolean isMediaRange(String type) {
+            int separator = type.indexOf('/');
+            return separator > 0 && separator < type.length() - 1 && type.indexOf(' ') < 0;
+        }
+
+        private static boolean isQualityValue(String value) {
+            return value.matches("(?:0(?:\\.\\d{0,3})?|1(?:\\.0{0,3})?)");
+        }
+
+        private static boolean isZeroQualityValue(String value) {
+            return value.matches("0(?:\\.0{0,3})?");
         }
 
         private static String mediaType(String value) {
@@ -370,14 +408,29 @@ public final class McpServerService implements Disposable {
             INVALID
         }
 
-        private void send(HttpExchange exchange, int status, String body) throws IOException {
-            send(exchange, status, body.getBytes(StandardCharsets.UTF_8));
+        private void sendText(HttpExchange exchange, int status, String body) throws IOException {
+            exchange.getResponseHeaders().set("Content-Type", "text/plain; charset=utf-8");
+            sendBody(exchange, status, body.getBytes(StandardCharsets.UTF_8));
         }
 
-        private void send(HttpExchange exchange, int status, byte[] body) throws IOException {
+        private void sendJson(HttpExchange exchange, int status, byte[] body) throws IOException {
             exchange.getResponseHeaders().set("Content-Type", APPLICATION_JSON);
+            sendBody(exchange, status, body);
+        }
+
+        private void sendBody(HttpExchange exchange, int status, byte[] body) throws IOException {
             exchange.sendResponseHeaders(status, body.length);
             exchange.getResponseBody().write(body);
+        }
+
+        private static final class AcceptMediaRange {
+            private final String type;
+            private final boolean hasPositiveQuality;
+
+            private AcceptMediaRange(String type, boolean hasPositiveQuality) {
+                this.type = type;
+                this.hasPositiveQuality = hasPositiveQuality;
+            }
         }
     }
 }

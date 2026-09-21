@@ -94,18 +94,34 @@ public class McpServerServiceTest {
                     "application/json", null, initializeRequest()).status);
             assertEquals(406, request(endpoint, "POST", endpoint.getAuthority(), "application/json",
                     null, null, initializeRequest()).status);
-            assertEquals(400, request(endpoint, "POST", "example.test:" + endpoint.getPort(), "application/json",
+            assertEquals(406, request(endpoint, "POST", endpoint.getAuthority(), "application/json",
                     "application/json", null, initializeRequest()).status);
-            assertEquals(403, request(endpoint, "POST", endpoint.getAuthority(), "application/json",
-                    "application/json", "http://example.test:" + endpoint.getPort(), initializeRequest()).status);
-            assertEquals(400, request(endpoint, "POST", endpoint.getAuthority(), "application/json",
-                    "text/event-stream", null, "not json").status);
-            assertEquals(400, request(endpoint, "POST", endpoint.getAuthority(), "application/json",
-                    "application/json", null, "{\"jsonrpc\":\"2.0\",\"id\":1,\"result\":{}}").status);
+            assertEquals(406, request(endpoint, "POST", endpoint.getAuthority(), "application/json",
+                    "text/event-stream", null, initializeRequest()).status);
+            assertEquals(406, request(endpoint, "POST", endpoint.getAuthority(), "application/json",
+                    "application/json;q=0, text/event-stream", null, initializeRequest()).status);
+            assertEquals(406, request(endpoint, "POST", endpoint.getAuthority(), "application/json",
+                    "application/json, text/event-stream;q=0", null, initializeRequest()).status);
+            assertEquals(406, request(endpoint, "POST", endpoint.getAuthority(), "application/json",
+                    "application/json;q=invalid, text/event-stream", null, initializeRequest()).status);
             assertEquals(200, request(endpoint, "POST", endpoint.getAuthority(), "application/json",
-                    "application/json", "http://127.0.0.1:" + endpoint.getPort(), initializeRequest()).status);
+                    "application/json;q=0.5, text/event-stream;q=1", null, initializeRequest()).status);
+            assertEquals(200, requestWithAcceptHeaders(endpoint, "POST", endpoint.getAuthority(), "application/json",
+                    List.of("application/json", "text/event-stream"), null, initializeRequest()).status);
+            assertEquals(400, request(endpoint, "POST", "example.test:" + endpoint.getPort(), "application/json",
+                    "application/json, text/event-stream", null, initializeRequest()).status);
+            assertEquals(403, request(endpoint, "POST", endpoint.getAuthority(), "application/json",
+                    "application/json, text/event-stream", "http://example.test:" + endpoint.getPort(), initializeRequest()).status);
+            assertEquals(400, request(endpoint, "POST", endpoint.getAuthority(), "application/json",
+                    "application/json, text/event-stream", null, "not json").status);
+            assertEquals(400, request(endpoint, "POST", endpoint.getAuthority(), "application/json",
+                    "application/json, text/event-stream", null, "{\"jsonrpc\":\"2.0\",\"id\":1,\"result\":{}}").status);
+            assertEquals(200, request(endpoint, "POST", endpoint.getAuthority(), "application/json",
+                    "application/json, text/event-stream", "http://127.0.0.1:" + endpoint.getPort(), initializeRequest()).status);
             assertEquals(202, request(endpoint, "POST", endpoint.getAuthority(), "application/json",
-                    "application/json", null, "{\"jsonrpc\":\"2.0\",\"method\":\"notifications/initialized\"}").status);
+                    "application/json, text/event-stream", null, "{\"jsonrpc\":\"2.0\",\"method\":\"notifications/initialized\"}").status);
+            assertEquals("text/plain; charset=utf-8", request(endpoint, "POST", endpoint.getAuthority(), "application/json",
+                    "application/json", null, initializeRequest()).contentType);
         } finally {
             service.stop();
         }
@@ -124,13 +140,19 @@ public class McpServerServiceTest {
 
     private static HttpResponse request(URI endpoint, String method, String host, String contentType,
                                         String accept, String origin, String body) throws IOException {
+        return requestWithAcceptHeaders(endpoint, method, host, contentType,
+                accept == null ? List.of() : List.of(accept), origin, body);
+    }
+
+    private static HttpResponse requestWithAcceptHeaders(URI endpoint, String method, String host, String contentType,
+                                                         List<String> acceptHeaders, String origin, String body) throws IOException {
         List<String> headers = new ArrayList<>();
         headers.add("Host: " + host);
         headers.add("Connection: close");
         if (contentType != null) {
             headers.add("Content-Type: " + contentType);
         }
-        if (accept != null) {
+        for (String accept : acceptHeaders) {
             headers.add("Accept: " + accept);
         }
         if (origin != null) {
@@ -151,15 +173,24 @@ public class McpServerServiceTest {
             writer.flush();
 
             String statusLine = reader.readLine();
-            return new HttpResponse(Integer.parseInt(statusLine.split(" ")[1]));
+            String responseContentType = null;
+            String header;
+            while (!(header = reader.readLine()).isEmpty()) {
+                if (header.regionMatches(true, 0, "Content-Type:", 0, "Content-Type:".length())) {
+                    responseContentType = header.substring("Content-Type:".length()).trim();
+                }
+            }
+            return new HttpResponse(Integer.parseInt(statusLine.split(" ")[1]), responseContentType);
         }
     }
 
     private static final class HttpResponse {
         private final int status;
+        private final String contentType;
 
-        private HttpResponse(int status) {
+        private HttpResponse(int status, String contentType) {
             this.status = status;
+            this.contentType = contentType;
         }
     }
 }
