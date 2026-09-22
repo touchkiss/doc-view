@@ -35,7 +35,7 @@ public final class McpServerService implements Disposable {
     private URI endpoint;
 
     public McpServerService() {
-        this(SdkMcpTransport::new);
+        this(() -> new SdkMcpTransport(new McpToolHandler()));
     }
 
     McpServerService(McpTransportFactory transportFactory) {
@@ -120,24 +120,24 @@ public final class McpServerService implements Disposable {
         private static final String TEXT_EVENT_STREAM = "text/event-stream";
 
         private final McpJsonMapper jsonMapper = new JacksonMcpJsonMapperSupplier().get();
+        private final McpToolHandler toolHandler;
         private HttpServer httpServer;
         private ExecutorService executor;
         private McpStatelessServerHandler handler;
         private McpStatelessSyncServer mcpServer;
+
+        private SdkMcpTransport(McpToolHandler toolHandler) {
+            this.toolHandler = toolHandler;
+        }
 
         @Override
         public URI start() throws IOException {
             mcpServer = McpServer.sync(this)
                     .serverInfo("doc-view", "1.4.99")
                     .jsonMapper(jsonMapper)
-                    .toolCall(McpSchema.Tool.builder()
-                                    .name("doc_view_status")
-                                    .description("Reports that the Doc View MCP server is available.")
-                                    .inputSchema(Map.of("type", "object"))
-                                    .build(),
-                            (context, request) -> McpSchema.CallToolResult.builder()
-                                    .addTextContent("Doc View MCP server is running.")
-                                    .build())
+                    // The schema remains discoverable; the handler returns structured business input errors.
+                    .validateToolInputs(false)
+                    .toolCall(McpToolHandler.tool(), (context, request) -> toolHandler.handle(request))
                     .build();
 
             httpServer = HttpServer.create(new InetSocketAddress(InetAddress.getByName("127.0.0.1"), 0), 0);
