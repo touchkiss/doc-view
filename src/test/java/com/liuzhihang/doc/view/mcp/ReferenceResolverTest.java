@@ -117,18 +117,65 @@ public class ReferenceResolverTest {
     }
 
     @Test
-    public void runsClassLookupAndSupportFilteringInsideTheReadActionSeam() {
+    public void runsResolveSupportFilteringInsideTheReadActionSeam() {
         AtomicBoolean inReadAction = new AtomicBoolean();
+        AtomicInteger checkMethodCalls = new AtomicInteger();
         PsiMethod list = methodNamed("list");
         PsiClass controller = controllerWith(list);
-        ReferenceResolver resolver = new ReferenceResolver(
+        ReferenceResolver resolver = resolverThatAssertsReadActionBoundaries(
+                inReadAction, checkMethodCalls, controller);
+
+        ReferenceResolver.ResolvedReference reference = resolver.resolve(project(), "com.example.OrderController");
+
+        assertSame(controller, reference.getPsiClass());
+        assertFalse(reference.getPsiMethod().isPresent());
+        assertEquals(1, checkMethodCalls.get());
+        assertFalse(inReadAction.get());
+    }
+
+    @Test
+    public void runsResolveForUploadSupportFilteringInsideTheReadActionSeam() {
+        AtomicBoolean inReadAction = new AtomicBoolean();
+        AtomicInteger checkMethodCalls = new AtomicInteger();
+        PsiMethod list = methodNamed("list");
+        PsiClass controller = controllerWith(list);
+        ReferenceResolver resolver = resolverThatAssertsReadActionBoundaries(
+                inReadAction, checkMethodCalls, controller);
+
+        List<ReferenceResolver.ResolvedReference> references = resolver.resolveForUpload(
+                project(), "com.example.OrderController");
+
+        assertEquals(1, references.size());
+        assertSame(list, references.get(0).getPsiMethod().orElseThrow());
+        assertEquals(1, checkMethodCalls.get());
+        assertFalse(inReadAction.get());
+    }
+
+    private static ReferenceResolver resolverThatAssertsReadActionBoundaries(AtomicBoolean inReadAction,
+                                                                               AtomicInteger checkMethodCalls,
+                                                                               PsiClass controller) {
+        return new ReferenceResolver(
                 (project, fqcn) -> {
                     assertTrue("class lookup must execute under the read action", inReadAction.get());
                     return controller;
                 },
-                (project, psiClass) -> {
-                    assertTrue("method filtering must execute under the read action", inReadAction.get());
-                    return docViewServiceFor(Set.of("list"));
+                (project, psiClass) -> new DocViewService() {
+                    @Override
+                    public boolean checkMethod(@NotNull PsiMethod targetMethod) {
+                        assertTrue("checkMethod must execute under the read action", inReadAction.get());
+                        checkMethodCalls.incrementAndGet();
+                        return true;
+                    }
+
+                    @Override
+                    public List<DocView> buildClassDoc(@NotNull PsiClass psiClass) {
+                        throw new UnsupportedOperationException();
+                    }
+
+                    @Override
+                    public @NotNull DocView buildClassMethodDoc(PsiClass psiClass, @NotNull PsiMethod psiMethod) {
+                        throw new UnsupportedOperationException();
+                    }
                 },
                 new ReferenceResolver.ReadActionComputer() {
                     @Override
@@ -142,13 +189,6 @@ public class ReferenceResolverTest {
                         }
                     }
                 });
-
-        List<ReferenceResolver.ResolvedReference> references = resolver.resolveForUpload(
-                project(), "com.example.OrderController");
-
-        assertEquals(1, references.size());
-        assertSame(list, references.get(0).getPsiMethod().orElseThrow());
-        assertFalse(inReadAction.get());
     }
 
     private static ReferenceResolver resolverFor(PsiClass controller, Set<String> supportedMethodNames,
