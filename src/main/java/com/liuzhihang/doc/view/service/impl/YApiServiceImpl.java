@@ -18,6 +18,7 @@ import com.liuzhihang.doc.view.integration.dto.YApiHeader;
 import com.liuzhihang.doc.view.integration.dto.YApiQuery;
 import com.liuzhihang.doc.view.integration.dto.YapiSave;
 import com.liuzhihang.doc.view.integration.impl.YApiFacadeServiceImpl;
+import com.liuzhihang.doc.view.mcp.YApiUploadOrchestrator;
 import com.liuzhihang.doc.view.notification.DocViewNotification;
 import com.liuzhihang.doc.view.service.DocViewUploadService;
 import lombok.extern.slf4j.Slf4j;
@@ -64,57 +65,60 @@ public final class YApiServiceImpl implements DocViewUploadService {
     public void doUpload(@NotNull Project project, @NotNull DocView docView) {
 
         try {
-            YApiSettings settings = YApiSettings.getInstance(project);
-
             YApiFacadeService facadeService = ApplicationManager.getApplication().getService(YApiFacadeServiceImpl.class);
-
-            YApiCat cat = getOrAddCat(settings, docView.getDocTitle());
-
-            YapiSave save = new YapiSave();
-            save.setYapiUrl(settings.getUrl());
-            save.setToken(settings.getToken());
-            save.setProjectId(settings.getProjectId());
-            save.setCatId(cat.getId());
-
-            if ("Dubbo".equals(docView.getMethod())) {
-                // dubbo 接口处理
-                save.setPath("/Dubbo/" + docView.getPsiMethod().getName());
-                save.setMethod("POST");
-            } else {
-                save.setMethod(docView.getMethod());
-                save.setPath(docView.getPath());
+            YApiUploadOrchestrator.UploadItemResult result = new YApiUploadOrchestrator(facadeService)
+                    .upload(project, List.of(docView)).get(0);
+            if ("failed".equals(result.getStatus())) {
+                throw new Exception(result.getMessage());
             }
-            // 枚举: raw,form,json
-            save.setReqBodyType(docView.getContentType().toString().toLowerCase());
-            save.setReqBodyForm(new ArrayList<>());
-            save.setReqParams(new ArrayList<>());
-            save.setReqHeaders(buildReqHeaders(docView.getHeaderList()));
-            save.setReqQuery(buildReqQuery(docView.getReqParamList()));
-            save.setResBodyType("json");
-            save.setResBody(buildJsonSchema(docView.getRespBody().getChildList()));
-            String markdown = buildDesc(docView);
-            save.setMarkdown(markdown);
-            save.setTitle(docView.getPath() + docView.getName());
-            Parser parser = Parser.builder().build();
-            Node document = parser.parse(markdown);
-            HtmlRenderer renderer = HtmlRenderer.builder().build();
-            save.setDesc(renderer.render(document));
-
-            if (docView.getContentType().equals(ContentTypeEnum.JSON)) {
-                save.setReqBodyIsJsonSchema(true);
-                save.setReqBodyOther(buildJsonSchema(docView.getReqBody().getChildList()));
-            }
-
-            facadeService.save(save);
-
-            String yapiInterfaceUrl = YApiInterfaceUrlResolver.resolve(facadeService, save);
-
-            DocViewNotification.uploadSuccess(project, "YApi", yapiInterfaceUrl);
+            DocViewNotification.uploadSuccess(project, "YApi", result.getYapiUrl());
         } catch (Exception e) {
             DocViewNotification.notifyError(project, DocViewBundle.message("notify.yapi.upload.error", e.getMessage()));
             log.error("上传单个文档失败:{}", docView, e);
         }
 
+    }
+
+    /** Converts a generated document to the YApi save payload without UI side effects. */
+    public static YapiSave toYapiSave(@NotNull YApiSettings settings, @NotNull YApiCat cat,
+                                      @NotNull DocView docView) {
+        return new YApiServiceImpl().buildYapiSave(settings, cat, docView);
+    }
+
+    private YapiSave buildYapiSave(YApiSettings settings, YApiCat cat, DocView docView) {
+        YapiSave save = new YapiSave();
+        save.setYapiUrl(settings.getUrl());
+        save.setToken(settings.getToken());
+        save.setProjectId(settings.getProjectId());
+        save.setCatId(cat.getId());
+
+        if ("Dubbo".equals(docView.getMethod())) {
+            save.setPath("/Dubbo/" + docView.getPsiMethod().getName());
+            save.setMethod("POST");
+        } else {
+            save.setMethod(docView.getMethod());
+            save.setPath(docView.getPath());
+        }
+        save.setReqBodyType(docView.getContentType().toString().toLowerCase());
+        save.setReqBodyForm(new ArrayList<>());
+        save.setReqParams(new ArrayList<>());
+        save.setReqHeaders(buildReqHeaders(docView.getHeaderList()));
+        save.setReqQuery(buildReqQuery(docView.getReqParamList()));
+        save.setResBodyType("json");
+        save.setResBody(buildJsonSchema(docView.getRespBody().getChildList()));
+        String markdown = buildDesc(docView);
+        save.setMarkdown(markdown);
+        save.setTitle(docView.getPath() + docView.getName());
+        Parser parser = Parser.builder().build();
+        Node document = parser.parse(markdown);
+        HtmlRenderer renderer = HtmlRenderer.builder().build();
+        save.setDesc(renderer.render(document));
+
+        if (docView.getContentType().equals(ContentTypeEnum.JSON)) {
+            save.setReqBodyIsJsonSchema(true);
+            save.setReqBodyOther(buildJsonSchema(docView.getReqBody().getChildList()));
+        }
+        return save;
     }
 
     /**
@@ -361,31 +365,6 @@ public final class YApiServiceImpl implements DocViewUploadService {
             return apiHeader;
         }).collect(Collectors.toList());
 
-
-    }
-
-    @NotNull
-    private YApiCat getOrAddCat(@NotNull YApiSettings settings, @NotNull String name) throws Exception {
-
-        YApiFacadeService facadeService = ApplicationManager.getApplication().getService(YApiFacadeServiceImpl.class);
-
-        // 检查 catId (菜单是否存在)
-        List<YApiCat> catMenu = facadeService.getCatMenu(settings.getUrl(), settings.getProjectId(), settings.getToken());
-
-        Optional<YApiCat> catOptional = catMenu.stream()
-                .filter(yApiCat -> yApiCat.getName().equals(name))
-                .findAny();
-
-        if (catOptional.isPresent()) {
-            return catOptional.get();
-        }
-        YApiCat cat = new YApiCat();
-        cat.setYapiUrl(settings.getUrl());
-        cat.setProjectId(settings.getProjectId());
-        cat.setName(name);
-        cat.setToken(settings.getToken());
-
-        return facadeService.addCat(cat);
 
     }
 

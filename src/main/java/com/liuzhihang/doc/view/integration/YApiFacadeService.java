@@ -17,7 +17,7 @@ import java.util.Optional;
 public interface YApiFacadeService {
 
     /**
-     * 新增接口
+     * 新增接口，或在 DTO 包含接口 ID 时更新接口
      *
      * @param dto
      */

@@ -33,7 +33,7 @@ public class YapiSave implements Serializable {
     private Long projectId;
 
     /**
-     * 接口 id
+     * 接口 id；空值新建，非空值更新已有接口
      */
     private String id;
 

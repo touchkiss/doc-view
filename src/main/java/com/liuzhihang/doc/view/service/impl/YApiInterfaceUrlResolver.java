@@ -3,18 +3,22 @@ package com.liuzhihang.doc.view.service.impl;
 import com.liuzhihang.doc.view.integration.YApiFacadeService;
 import com.liuzhihang.doc.view.integration.dto.YapiSave;
 import lombok.extern.slf4j.Slf4j;
+import org.apache.commons.lang3.StringUtils;
 
 import java.util.Optional;
 
 @Slf4j
-final class YApiInterfaceUrlResolver {
+public final class YApiInterfaceUrlResolver {
 
     private YApiInterfaceUrlResolver() {
     }
 
-    static String resolve(YApiFacadeService facadeService, YapiSave save) {
+    public static String resolve(YApiFacadeService facadeService, YapiSave save) {
         String baseUrl = save.getYapiUrl() + "/project/" + save.getProjectId() + "/interface/api/";
         String categoryUrl = baseUrl + "cat_" + save.getCatId();
+        if (StringUtils.isNotBlank(save.getId())) {
+            return baseUrl + save.getId();
+        }
         try {
             Optional<Long> interfaceId = facadeService.findInterfaceId(
                     save.getYapiUrl(), save.getProjectId(), save.getToken(),

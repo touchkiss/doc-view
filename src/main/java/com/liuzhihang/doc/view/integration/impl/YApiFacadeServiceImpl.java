@@ -28,24 +28,38 @@ public class YApiFacadeServiceImpl implements YApiFacadeService {
     private static final Gson gson = new GsonBuilder().serializeNulls().create();
     private static final int INTERFACE_PAGE_SIZE = 100;
     private final GetRequester getRequester;
+    private final PostRequester postRequester;
 
     @FunctionalInterface
     interface GetRequester {
         String get(String url) throws Exception;
     }
 
+    @FunctionalInterface
+    interface PostRequester {
+        String post(String url, String body) throws Exception;
+    }
+
     public YApiFacadeServiceImpl() {
-        this(HttpUtils::get);
+        this(HttpUtils::get, HttpUtils::post);
     }
 
     YApiFacadeServiceImpl(GetRequester getRequester) {
+        this(getRequester, HttpUtils::post);
+    }
+
+    YApiFacadeServiceImpl(GetRequester getRequester, PostRequester postRequester) {
         this.getRequester = getRequester;
+        this.postRequester = postRequester;
     }
 
     @Override
     public void save(YapiSave save) throws Exception {
 
-        String resp = HttpUtils.post(save.getYapiUrl() + "/api/interface/save", gson.toJson(save));
+        if (StringUtils.isBlank(save.getId())) {
+            save.setId(null);
+        }
+        String resp = postRequester.post(save.getYapiUrl() + "/api/interface/save", gson.toJson(save));
 
         if (StringUtils.isBlank(resp)) {
             throw new Exception("YApi 接口返回为空");
