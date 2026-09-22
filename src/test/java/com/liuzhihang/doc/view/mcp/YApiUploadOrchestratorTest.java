@@ -94,6 +94,20 @@ public class YApiUploadOrchestratorTest {
     }
 
     @Test
+    public void returnsCreatedResultWhenDetailUrlLookupFailsAfterSave() {
+        FakeFacade facade = new FakeFacade();
+        facade.detailLookupFailures.put("GET /orders", new Exception("network token-value unavailable"));
+
+        YApiUploadOrchestrator.UploadItemResult result = upload(facade, document("GET", "/orders")).get(0);
+
+        assertEquals("created", result.getStatus());
+        assertEquals("http://yapi.example/project/299/interface/api/cat_1376", result.getYapiUrl());
+        assertNull(result.getErrorCode());
+        assertNull(result.getMessage());
+        assertEquals(1, facade.saved.size());
+    }
+
+    @Test
     public void continuesAfterDocumentPreparationFails() {
         FakeFacade facade = new FakeFacade();
 
@@ -167,9 +181,11 @@ public class YApiUploadOrchestratorTest {
     private static final class FakeFacade implements YApiFacadeService {
         private final Map<String, Long> interfaceIds = new HashMap<>();
         private final Map<String, Exception> lookupFailures = new HashMap<>();
+        private final Map<String, Exception> detailLookupFailures = new HashMap<>();
         private final Map<String, Exception> saveFailures = new HashMap<>();
         private final List<YapiSave> saved = new ArrayList<>();
         private final List<String> savedPaths = new ArrayList<>();
+        private final Map<String, Integer> lookupCounts = new HashMap<>();
 
         @Override
         public void save(YapiSave save) throws Exception {
@@ -190,9 +206,16 @@ public class YApiUploadOrchestratorTest {
         public Optional<Long> findInterfaceId(String yapiUrl, Long projectId, String token,
                                               Long catId, String method, String path) throws Exception {
             String key = method + " " + path;
+            int lookupCount = lookupCounts.merge(key, 1, Integer::sum);
             Exception failure = lookupFailures.get(key);
             if (failure != null) {
                 throw failure;
+            }
+            if (lookupCount > 1) {
+                Exception detailFailure = detailLookupFailures.get(key);
+                if (detailFailure != null) {
+                    throw detailFailure;
+                }
             }
             return Optional.ofNullable(interfaceIds.get(key));
         }

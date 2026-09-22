@@ -82,7 +82,7 @@ public final class YApiUploadOrchestrator {
             facadeService.save(save);
             String status = existingId.isPresent() ? "updated" : "created";
             return UploadItemResult.success(reference, status,
-                    YApiInterfaceUrlResolver.resolveStrict(facadeService, save));
+                    YApiInterfaceUrlResolver.resolve(facadeService, save));
         } catch (Exception exception) {
             return remoteFailure(reference, settings, exception);
         }

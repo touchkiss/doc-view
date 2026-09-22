@@ -99,8 +99,9 @@ public class YApiFacadeServiceImpl implements YApiFacadeService {
         YApiResponse<YApiCat> response = parseResponse(
                 post(cat.getYapiUrl() + "/api/interface/add_cat", GSON.toJson(cat)), type, "创建分类");
         requireSuccess(response, "创建分类");
-        if (response.getData() == null) {
-            throw YApiRemoteException.responseInvalid("创建分类响应缺少 data");
+        if (response.getData() == null || response.getData().getId() == null
+                || response.getData().getId() <= 0) {
+            throw YApiRemoteException.responseInvalid("创建分类响应缺少有效 id");
         }
         return response.getData();
     }

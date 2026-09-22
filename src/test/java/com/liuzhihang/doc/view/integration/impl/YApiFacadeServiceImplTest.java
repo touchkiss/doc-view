@@ -175,6 +175,23 @@ public class YApiFacadeServiceImplTest {
         throw new AssertionError("expected YApiRemoteException");
     }
 
+    @Test
+    public void rejectsCategoryResponseWithoutValidId() throws Exception {
+        YApiFacadeServiceImpl service = new YApiFacadeServiceImpl(url -> "{\"errcode\":0,\"data\":[]}",
+                (url, body) -> "{\"errcode\":0,\"data\":{\"name\":\"Orders\"}}");
+        YApiCat category = new YApiCat();
+        category.setYapiUrl("http://yapi.example");
+
+        try {
+            service.addCat(category);
+        } catch (YApiRemoteException exception) {
+            assertEquals(YApiRemoteException.Kind.RESPONSE_INVALID, exception.getKind());
+            assertTrue(exception.getMessage().contains("id"));
+            return;
+        }
+        throw new AssertionError("expected YApiRemoteException");
+    }
+
     private static com.liuzhihang.doc.view.integration.dto.YapiSave save(String id) {
         com.liuzhihang.doc.view.integration.dto.YapiSave save = new com.liuzhihang.doc.view.integration.dto.YapiSave();
         save.setYapiUrl("http://yapi.example");

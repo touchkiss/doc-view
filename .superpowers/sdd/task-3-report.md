@@ -35,3 +35,17 @@ Result: `BUILD SUCCESSFUL`; 14 targeted tests completed.
 ```
 
 Result: `BUILD SUCCESSFUL` (2026-09-22).
+
+## Final review fixes (2026-09-22)
+
+- After `save` succeeds, a best-effort detail URL lookup failure now preserves the `created` or `updated` result and returns the category URL. The resolver records a diagnostic warning after masking configured, query-string, and JSON token values.
+- `addCat` now rejects a response whose `data` is absent or whose category `_id` is null, zero, or negative as `YAPI_RESPONSE_INVALID` instead of allowing a later null-related failure.
+- Added regression coverage for successful save followed by failed detail lookup, and for a category response without an ID.
+
+## Final verification
+
+```text
+./gradlew test --rerun-tasks --tests 'com.liuzhihang.doc.view.mcp.YApiUploadOrchestratorTest' --tests 'com.liuzhihang.doc.view.integration.impl.YApiFacadeServiceImplTest' --tests 'com.liuzhihang.doc.view.service.impl.YApiInterfaceUrlResolverTest'
+```
+
+Result: `BUILD SUCCESSFUL`; 25 targeted tests completed (2026-09-22).

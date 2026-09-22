@@ -18,8 +18,9 @@ public final class YApiInterfaceUrlResolver {
             return resolveStrict(facadeService, save);
         } catch (Exception e) {
             String categoryUrl = baseUrl(save) + "cat_" + save.getCatId();
-            log.warn("查询已上传的 YApi 接口 ID 失败，回退到分类地址: method={}, path={}",
-                    save.getMethod(), save.getPath(), e);
+            log.warn("查询已上传的 YApi 接口 ID 失败，回退到分类地址: method={}, path={}, reason={}",
+                    redact(save.getMethod(), save.getToken()), redact(save.getPath(), save.getToken()),
+                    redact(StringUtils.defaultIfBlank(e.getMessage(), e.getClass().getSimpleName()), save.getToken()));
             return categoryUrl;
         }
     }
@@ -38,5 +39,14 @@ public final class YApiInterfaceUrlResolver {
 
     private static String baseUrl(YapiSave save) {
         return save.getYapiUrl() + "/project/" + save.getProjectId() + "/interface/api/";
+    }
+
+    private static String redact(String value, String token) {
+        String redacted = StringUtils.defaultString(value);
+        if (StringUtils.isNotBlank(token)) {
+            redacted = redacted.replace(token, "***");
+        }
+        return redacted.replaceAll("(?i)(token=)[^&\\s]+", "$1***")
+                .replaceAll("(?i)(\\\"token\\\"\\s*:\\s*\\\")[^\\\"]*(\\\")", "$1***$2");
     }
 }
