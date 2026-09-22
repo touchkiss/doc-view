@@ -13,6 +13,11 @@ import java.net.Socket;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.junit.Assert.assertEquals;
@@ -56,6 +61,47 @@ public class McpServerServiceTest {
         assertFalse(service.isRunning());
         assertEquals(1, stops.get());
         assertNull(service.getEndpoint());
+    }
+
+    @Test
+    public void concurrentStartsCreateAndCloseOnlyOneTransport() throws Exception {
+        AtomicInteger starts = new AtomicInteger();
+        AtomicInteger stops = new AtomicInteger();
+        CountDownLatch enteredStart = new CountDownLatch(1);
+        CountDownLatch releaseStart = new CountDownLatch(1);
+        McpServerService service = new McpServerService(() -> new McpServerService.McpTransport() {
+            @Override
+            public URI start() throws InterruptedException {
+                starts.incrementAndGet();
+                enteredStart.countDown();
+                releaseStart.await();
+                return URI.create("http://127.0.0.1:43124/mcp");
+            }
+
+            @Override
+            public void close() {
+                stops.incrementAndGet();
+            }
+        });
+        ExecutorService callers = Executors.newFixedThreadPool(2);
+        try {
+            Future<?> first = callers.submit(service::start);
+            assertTrue(enteredStart.await(5, TimeUnit.SECONDS));
+            Future<?> second = callers.submit(service::start);
+            releaseStart.countDown();
+            first.get();
+            second.get();
+        } finally {
+            callers.shutdownNow();
+        }
+
+        assertEquals(1, starts.get());
+        assertTrue(service.isRunning());
+
+        service.stop();
+
+        assertEquals(1, stops.get());
+        assertFalse(service.isRunning());
     }
 
     @Test

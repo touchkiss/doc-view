@@ -2,6 +2,8 @@
 
 ### Added
 
+- 新增本地 MCP 工具 `upload_yapi_api_doc`：按已打开项目中的 Java Controller 类或方法引用上传 API 文档到
+  YApi，按 HTTP 方法和路径更新已有接口或创建缺失接口；该工具仅支持 YApi，不支持 ShowDoc 或其他文档平台。
 - 新增项目级 cURL 域名配置（Settings → Doc View → cURL 域名），Copy cURL 与生成文档相互独立：
   - **Copy cURL 域名**：右键 Copy cURL 复制到剪贴板时替换 `{{host}}`，默认 `http://localhost:8080`（原为硬编码）
   - **文档 cURL 域名**：预览 / 导出 / 上传的文档中 curl 示例使用的域名，默认 `{{host}}` 即保持占位符不变，输出与之前完全一致

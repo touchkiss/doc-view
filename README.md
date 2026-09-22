@@ -42,6 +42,25 @@ Doc View
 
 - 右键菜单选择 `Doc View`
 
+本地 MCP Agent 接入
+-----------------
+
+插件启动后会在本机回环地址启动 MCP Streamable HTTP 服务。打开 IDE 日志并搜索
+`Local MCP endpoint:`，将日志中的完整地址（形如 `http://127.0.0.1:<port>/mcp`）填入 Agent 的
+MCP server URL；端口由每次启动时动态选择。若 Agent 或插件状态页已显示该 endpoint，以显示的完整地址为准。
+
+服务只提供一个 YApi 工具：`upload_yapi_api_doc`。调用时必须提供：
+
+- `projectPath`：已经在当前 IDE 中打开的项目根目录绝对路径；工具不会打开任意目录。
+- `reference`：Java Controller 的全限定类名（如 `com.example.OrderController`），或带方法的
+  `Class#method` 引用（如 `com.example.OrderController#list`）。类级引用会展开上传该类全部受支持的 API 方法；
+  方法级引用只处理指定方法。
+
+上传按 HTTP 方法和路径匹配已有 YApi 接口：匹配时更新，不匹配时创建。批量处理中的单个方法失败不会中止其他方法，
+调用结果会分别返回创建、更新、跳过和失败项目。该 MCP 工具仅上传到目标项目已配置的 YApi，不支持 ShowDoc 或其他文档平台。
+
+该服务没有 MCP token，也不接受远程访问：它只绑定 `127.0.0.1`，不应通过端口转发、反向代理或共享网络暴露给其他机器。
+
 更新
 ----
 

@@ -53,6 +53,7 @@ public final class McpServerService implements Disposable {
             URI candidateEndpoint = validateEndpoint(candidate.start());
             transport = candidate;
             endpoint = candidateEndpoint;
+            LOG.info("Local MCP endpoint: " + endpoint);
         } catch (Exception exception) {
             closeQuietly(candidate);
             LOG.warn("Unable to start the local MCP server", exception);
