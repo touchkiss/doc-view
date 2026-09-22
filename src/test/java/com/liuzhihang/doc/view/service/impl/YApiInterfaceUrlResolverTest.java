@@ -38,6 +38,19 @@ public class YApiInterfaceUrlResolverTest {
         assertEquals("http://yapi.example/project/299/interface/api/cat_1376", url);
     }
 
+    @Test
+    public void buildsDetailUrlFromExistingSaveIdWithoutAnotherLookup() {
+        YapiSave save = save("PUT", "/orders/1");
+        save.setId("4396");
+        StubFacade facade = new StubFacade(Optional.empty(), new Exception("must not be called"));
+
+        String url = YApiInterfaceUrlResolver.resolve(facade, save);
+
+        assertEquals("http://yapi.example/project/299/interface/api/4396", url);
+        assertEquals(null, facade.method);
+        assertEquals(null, facade.path);
+    }
+
     private static YapiSave save(String method, String path) {
         YapiSave save = new YapiSave();
         save.setYapiUrl("http://yapi.example");

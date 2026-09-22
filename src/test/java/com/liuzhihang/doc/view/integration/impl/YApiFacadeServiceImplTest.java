@@ -1,5 +1,7 @@
 package com.liuzhihang.doc.view.integration.impl;
 
+import com.liuzhihang.doc.view.integration.YApiRemoteException;
+import com.liuzhihang.doc.view.integration.dto.YApiCat;
 import org.junit.Test;
 
 import java.util.ArrayList;
@@ -137,6 +139,40 @@ public class YApiFacadeServiceImplTest {
                 (url, body) -> "{\"errcode\":400,\"errmsg\":\"failed\"}");
 
         service.save(save(null));
+    }
+
+    @Test
+    public void classifiesMalformedSaveResponseAsInvalidResponse() throws Exception {
+        YApiFacadeServiceImpl service = new YApiFacadeServiceImpl(url -> "{\"errcode\":0,\"data\":[]}",
+                (url, body) -> "not-json");
+
+        try {
+            service.save(save(null));
+        } catch (YApiRemoteException exception) {
+            assertEquals(YApiRemoteException.Kind.RESPONSE_INVALID, exception.getKind());
+            return;
+        }
+        throw new AssertionError("expected YApiRemoteException");
+    }
+
+    @Test
+    public void classifiesCategoryTransportFailureAndUsesInjectedRequester() throws Exception {
+        YApiFacadeServiceImpl service = new YApiFacadeServiceImpl(url -> "{\"errcode\":0,\"data\":[]}",
+                (url, body) -> {
+                    assertTrue(url.endsWith("/api/interface/add_cat"));
+                    throw new Exception("connection refused");
+                });
+        YApiCat category = new YApiCat();
+        category.setYapiUrl("http://yapi.example");
+
+        try {
+            service.addCat(category);
+        } catch (YApiRemoteException exception) {
+            assertEquals(YApiRemoteException.Kind.REQUEST_FAILED, exception.getKind());
+            assertTrue(exception.getMessage().contains("connection refused"));
+            return;
+        }
+        throw new AssertionError("expected YApiRemoteException");
     }
 
     private static com.liuzhihang.doc.view.integration.dto.YapiSave save(String id) {

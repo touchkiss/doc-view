@@ -16,7 +16,9 @@ import java.util.Map;
 import java.util.Optional;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertTrue;
 
 public class YApiUploadOrchestratorTest {
 
@@ -80,12 +82,14 @@ public class YApiUploadOrchestratorTest {
     @Test
     public void doesNotSaveWhenExistingInterfaceLookupFails() {
         FakeFacade facade = new FakeFacade();
-        facade.lookupFailures.put("GET /unavailable", new Exception("network"));
+        facade.lookupFailures.put("GET /unavailable", new Exception("network token-value unavailable"));
 
         YApiUploadOrchestrator.UploadItemResult result = upload(facade, document("GET", "/unavailable")).get(0);
 
         assertEquals("failed", result.getStatus());
         assertEquals("YAPI_REQUEST_FAILED", result.getErrorCode());
+        assertTrue(result.getMessage().contains("network"));
+        assertFalse(result.getMessage().contains("token-value"));
         assertEquals(0, facade.saved.size());
     }
 
@@ -97,8 +101,24 @@ public class YApiUploadOrchestratorTest {
                 document("Dubbo", "/ignored"), document("GET", "/healthy"));
 
         assertEquals("failed", results.get(0).getStatus());
+        assertEquals("DOC_GENERATION_FAILED", results.get(0).getErrorCode());
+        assertTrue(results.get(0).getMessage().contains("missing method"));
         assertEquals("created", results.get(1).getStatus());
         assertEquals(List.of("/healthy"), facade.savedPaths);
+    }
+
+    @Test
+    public void preservesInvalidYApiResponseClassification() {
+        FakeFacade facade = new FakeFacade();
+        facade.saveFailures.put("/invalid-response",
+                new McpException(McpException.Code.YAPI_RESPONSE_INVALID, "响应 JSON 无效"));
+
+        YApiUploadOrchestrator.UploadItemResult result = upload(facade,
+                document("GET", "/invalid-response")).get(0);
+
+        assertEquals("failed", result.getStatus());
+        assertEquals("YAPI_RESPONSE_INVALID", result.getErrorCode());
+        assertEquals("响应 JSON 无效", result.getMessage());
     }
 
     private static List<YApiUploadOrchestrator.UploadItemResult> upload(FakeFacade facade, DocView... documents) {
