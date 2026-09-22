@@ -14,6 +14,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.function.Supplier;
 
 /** Handles the MCP tool that uploads generated API documentation to YApi. */
 public final class McpToolHandler {
@@ -27,10 +28,7 @@ public final class McpToolHandler {
 
     public McpToolHandler() {
         this(new McpProjectResolver()::resolve,
-                (project, reference) -> new ReferenceResolver().resolveForUpload(project, reference).stream()
-                        .map(resolved -> new UploadTarget(reference(resolved), resolved.getPsiClass(),
-                                resolved.getPsiMethod().orElse(null)))
-                        .toList(),
+                McpToolHandler::resolveDefaultTargets,
                 McpToolHandler::generateDocuments,
                 McpToolHandler::uploadDocuments);
     }
@@ -71,19 +69,43 @@ public final class McpToolHandler {
                     "projectPath and reference must be non-blank strings");
         }
 
+        final Project project;
         try {
-            Project project = projectResolver.resolve(projectPath);
-            List<UploadTarget> targets = referenceResolver.resolve(project, reference);
-            GeneratedDocs generated = documentGenerator.generate(project, targets);
-            List<McpResult.Item> uploaded = generated.documents().isEmpty()
-                    ? List.of() : uploadExecutor.upload(project, generated.documents());
-            return batch(projectPath, reference, generated, uploaded);
-        } catch (McpException exception) {
-            return McpResult.UploadBatch.failure(projectPath, reference, exception.getCode(), exception.getMessage());
+            project = projectResolver.resolve(projectPath);
         } catch (Exception exception) {
-            return McpResult.UploadBatch.failure(projectPath, reference, McpException.Code.YAPI_REQUEST_FAILED,
-                    exception.getMessage() == null ? exception.getClass().getSimpleName() : exception.getMessage());
+            return failure(projectPath, reference, exception, McpException.Code.PROJECT_NOT_OPEN);
         }
+
+        final List<UploadTarget> targets;
+        try {
+            targets = referenceResolver.resolve(project, reference);
+        } catch (Exception exception) {
+            return failure(projectPath, reference, exception, McpException.Code.REFERENCE_NOT_FOUND);
+        }
+
+        final GeneratedDocs generated;
+        try {
+            generated = documentGenerator.generate(project, targets);
+        } catch (Exception exception) {
+            return failure(projectPath, reference, exception, McpException.Code.DOC_GENERATION_FAILED);
+        }
+
+        final List<McpResult.Item> uploaded;
+        try {
+            uploaded = generated.documents().isEmpty()
+                    ? List.of() : uploadExecutor.upload(project, generated.documents());
+        } catch (Exception exception) {
+            return failure(projectPath, reference, exception, McpException.Code.YAPI_REQUEST_FAILED);
+        }
+        return batch(projectPath, reference, generated, uploaded);
+    }
+
+    private static McpResult.UploadBatch failure(String projectPath, String reference, Exception exception,
+                                                 McpException.Code defaultCode) {
+        McpException.Code code = exception instanceof McpException mcpException
+                ? mcpException.getCode() : defaultCode;
+        String message = exception.getMessage() == null ? exception.getClass().getSimpleName() : exception.getMessage();
+        return McpResult.UploadBatch.failure(projectPath, reference, code, message);
     }
 
     private static McpResult.UploadBatch batch(String projectPath, String reference, GeneratedDocs generated,
@@ -109,9 +131,9 @@ public final class McpToolHandler {
         List<McpResult.Item> failed = new ArrayList<>();
         for (UploadTarget target : targets) {
             try {
-                List<DocView> generated = ReadAction.compute(() -> DocViewService
+                List<DocView> generated = ReadAction.compute(() -> freezeForUpload(DocViewService
                         .getInstance(project, target.psiClass())
-                        .buildDoc(target.psiClass(), target.psiMethod()));
+                        .buildDoc(target.psiClass(), target.psiMethod())));
                 if (generated.isEmpty()) {
                     skipped.add(McpResult.Item.skipped(target.reference(), "No documentation was generated."));
                 } else {
@@ -123,6 +145,34 @@ public final class McpToolHandler {
             }
         }
         return new GeneratedDocs(documents, skipped, failed);
+    }
+
+    private static List<UploadTarget> resolveDefaultTargets(Project project, String reference) {
+        return new ReferenceResolver().resolveForUpload(project, reference).stream()
+                .map(resolved -> materializeUploadTarget(resolved.getPsiClass(),
+                        resolved.getPsiMethod().orElse(null), computation -> ReadAction.compute(computation::get)))
+                .toList();
+    }
+
+    static UploadTarget materializeUploadTarget(PsiClass psiClass, PsiMethod psiMethod,
+                                                 UploadTargetReadAction readAction) {
+        return readAction.compute(() -> {
+            String className = psiClass.getQualifiedName();
+            String reference = psiMethod == null ? className : className + "#" + psiMethod.getName();
+            return new UploadTarget(reference, psiClass, psiMethod);
+        });
+    }
+
+    private static List<DocView> freezeForUpload(List<DocView> documents) {
+        for (DocView document : documents) {
+            if (!"Dubbo".equals(document.getMethod()) || document.getPsiMethod() == null) {
+                continue;
+            }
+            document.setPath("/Dubbo/" + document.getPsiMethod().getName());
+            document.setMethod("POST");
+            document.setPsiMethod(null);
+        }
+        return documents;
     }
 
     private static List<McpResult.Item> uploadDocuments(Project project, List<DocView> documents) {
@@ -139,11 +189,6 @@ public final class McpToolHandler {
             return McpResult.Item.created(result.getReference(), result.getYapiUrl());
         }
         return McpResult.Item.failed(result.getReference(), result.getErrorCode(), result.getMessage());
-    }
-
-    private static String reference(ReferenceResolver.ResolvedReference resolved) {
-        String className = resolved.getPsiClass().getQualifiedName();
-        return resolved.getPsiMethod().map(method -> className + "#" + method.getName()).orElse(className);
     }
 
     private static String stringArgument(Map<String, Object> arguments, String name) {
@@ -171,6 +216,11 @@ public final class McpToolHandler {
     @FunctionalInterface
     interface UploadExecutor {
         List<McpResult.Item> upload(Project project, List<DocView> documents);
+    }
+
+    @FunctionalInterface
+    interface UploadTargetReadAction {
+        UploadTarget compute(Supplier<UploadTarget> computation);
     }
 
     record UploadTarget(String reference, PsiClass psiClass, PsiMethod psiMethod) {

@@ -34,8 +34,9 @@ public final class McpResult {
             return new Item(Status.SKIPPED, reference, null, null, message);
         }
 
-        public static Item failed(String reference, String errorCode, String message) {
-            return new Item(Status.FAILED, reference, null, errorCode, message);
+        public static Item failed(String reference, String errorCode, String message, String... knownSecrets) {
+            return new Item(Status.FAILED, safe(reference, knownSecrets), null, safe(errorCode, knownSecrets),
+                    safe(message, knownSecrets));
         }
 
         private Map<String, Object> structuredContent() {
@@ -80,8 +81,13 @@ public final class McpResult {
         }
 
         public static UploadBatch failure(String projectPath, String reference, McpException.Code code, String message) {
+            return failure(projectPath, reference, code, message, new String[0]);
+        }
+
+        public static UploadBatch failure(String projectPath, String reference, McpException.Code code, String message,
+                                          String... knownSecrets) {
             return new UploadBatch(projectPath, reference, List.of(), List.of(), List.of(),
-                    List.of(Item.failed(reference, code.name(), message)));
+                    List.of(Item.failed(reference, code.name(), message, knownSecrets)));
         }
 
         public boolean isError() {
@@ -100,11 +106,21 @@ public final class McpResult {
         }
     }
 
-    static String safe(String value) {
+    static String safe(String value, String... knownSecrets) {
         if (value == null) {
             return null;
         }
-        return value.replaceAll("(?i)(token\\s*[=:]\\s*)[^&\\s,}\\]\\\"]+", "$1***")
-                .replaceAll("(?i)(\\\"token\\\"\\s*:\\s*\\\")[^\\\"]*(\\\")", "$1***$2");
+        String sanitized = value;
+        for (String secret : knownSecrets) {
+            if (secret != null && !secret.isEmpty()) {
+                sanitized = sanitized.replace(secret, "***");
+            }
+        }
+        return sanitized
+                .replaceAll("(?i)(\\b(?:token|access[_-]?token)\\b\\s*[=:]\\s*)(?:\\\"[^\\\"]*\\\"|'[^']*'|[^&\\s,}\\]\\\"]+)", "$1***")
+                .replaceAll("(?i)(\\\"(?:token|access[_-]?token)\\\"\\s*:\\s*\\\")[^\\\"]*(\\\")", "$1***$2")
+                .replaceAll("(?i)(\\bAuthorization\\s*:\\s*Bearer\\s+)[^\\s,;}\\]]+", "$1***")
+                .replaceAll("(?i)(\\b(?:X-Api-Key|Api-Key)\\s*:\\s*)(?:\\\"[^\\\"]*\\\"|'[^']*'|[^\\s,;}\\]]+)", "$1***")
+                .replaceAll("(?i)(\\\"(?:X-Api-Key|Api-Key)\\\"\\s*:\\s*\\\")[^\\\"]*(\\\")", "$1***$2");
     }
 }
