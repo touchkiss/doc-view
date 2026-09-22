@@ -12,6 +12,7 @@ import org.junit.Test;
 import java.lang.reflect.Proxy;
 import java.util.List;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.junit.Assert.assertEquals;
@@ -84,6 +85,30 @@ public class ReferenceResolverTest {
     }
 
     @Test
+    public void keepsEverythingAfterTheFirstSeparatorInTheMethodName() {
+        ReferenceResolver resolver = resolverFor(controllerWith(methodNamed("list")), Set.of("list"), new AtomicInteger());
+
+        assertFailure(McpException.Code.REFERENCE_NOT_FOUND,
+                () -> resolver.resolve(project(), "com.example.OrderController#list#ignored"));
+    }
+
+    @Test
+    public void rejectsAReferenceWithoutAClassSegment() {
+        ReferenceResolver resolver = resolverFor(controllerWith(methodNamed("list")), Set.of("list"), new AtomicInteger());
+
+        assertFailure(McpException.Code.INVALID_ARGUMENT,
+                () -> resolver.resolve(project(), "#list"));
+    }
+
+    @Test
+    public void rejectsAReferenceWithoutAMethodSegment() {
+        ReferenceResolver resolver = resolverFor(controllerWith(methodNamed("list")), Set.of("list"), new AtomicInteger());
+
+        assertFailure(McpException.Code.INVALID_ARGUMENT,
+                () -> resolver.resolve(project(), "com.example.OrderController#"));
+    }
+
+    @Test
     public void rejectsAClassThatHasNoSupportedMethods() {
         ReferenceResolver resolver = resolverFor(controllerWith(methodNamed("helper")), Set.of(), new AtomicInteger());
 
@@ -91,9 +116,58 @@ public class ReferenceResolverTest {
                 () -> resolver.resolveForUpload(project(), "com.example.OrderController"));
     }
 
+    @Test
+    public void runsClassLookupAndSupportFilteringInsideTheReadActionSeam() {
+        AtomicBoolean inReadAction = new AtomicBoolean();
+        PsiMethod list = methodNamed("list");
+        PsiClass controller = controllerWith(list);
+        ReferenceResolver resolver = new ReferenceResolver(
+                (project, fqcn) -> {
+                    assertTrue("class lookup must execute under the read action", inReadAction.get());
+                    return controller;
+                },
+                (project, psiClass) -> {
+                    assertTrue("method filtering must execute under the read action", inReadAction.get());
+                    return docViewServiceFor(Set.of("list"));
+                },
+                new ReferenceResolver.ReadActionComputer() {
+                    @Override
+                    public <T> T compute(ThrowableComputable<T, RuntimeException> computation) {
+                        assertFalse("read actions must not be nested for one resolution", inReadAction.get());
+                        inReadAction.set(true);
+                        try {
+                            return computation.compute();
+                        } finally {
+                            inReadAction.set(false);
+                        }
+                    }
+                });
+
+        List<ReferenceResolver.ResolvedReference> references = resolver.resolveForUpload(
+                project(), "com.example.OrderController");
+
+        assertEquals(1, references.size());
+        assertSame(list, references.get(0).getPsiMethod().orElseThrow());
+        assertFalse(inReadAction.get());
+    }
+
     private static ReferenceResolver resolverFor(PsiClass controller, Set<String> supportedMethodNames,
                                                  AtomicInteger readActions) {
-        DocViewService docViewService = new DocViewService() {
+        DocViewService docViewService = docViewServiceFor(supportedMethodNames);
+        return new ReferenceResolver(
+                (project, fqcn) -> "com.example.OrderController".equals(fqcn) ? controller : null,
+                (project, psiClass) -> docViewService,
+                new ReferenceResolver.ReadActionComputer() {
+                    @Override
+                    public <T> T compute(ThrowableComputable<T, RuntimeException> computation) {
+                        readActions.incrementAndGet();
+                        return computation.compute();
+                    }
+                });
+    }
+
+    private static DocViewService docViewServiceFor(Set<String> supportedMethodNames) {
+        return new DocViewService() {
             @Override
             public boolean checkMethod(@NotNull PsiMethod targetMethod) {
                 return supportedMethodNames.contains(targetMethod.getName());
@@ -109,16 +183,6 @@ public class ReferenceResolverTest {
                 throw new UnsupportedOperationException();
             }
         };
-        return new ReferenceResolver(
-                (project, fqcn) -> "com.example.OrderController".equals(fqcn) ? controller : null,
-                (project, psiClass) -> docViewService,
-                new ReferenceResolver.ReadActionComputer() {
-                    @Override
-                    public <T> T compute(ThrowableComputable<T, RuntimeException> computation) {
-                        readActions.incrementAndGet();
-                        return computation.compute();
-                    }
-                });
     }
 
     private static Project project() {

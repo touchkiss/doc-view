@@ -6,12 +6,10 @@ import org.junit.Test;
 import java.io.File;
 import java.lang.reflect.Proxy;
 import java.nio.file.Path;
-import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Supplier;
 
 import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertSame;
 import static org.junit.Assert.fail;
 
@@ -57,8 +55,7 @@ public class McpProjectResolverTest {
     }
 
     @Test
-    public void onlyReadsTheOpenProjectListAndNeverOpensADirectory() {
-        AtomicBoolean directoryOpened = new AtomicBoolean();
+    public void readsTheOpenProjectSupplierOnceWhenResolvingAnOpenProject() {
         AtomicInteger openProjectLookups = new AtomicInteger();
         Path basePath = Path.of("build", "open-project").toAbsolutePath().normalize();
         Supplier<Project[]> openProjects = () -> {
@@ -70,7 +67,6 @@ public class McpProjectResolverTest {
 
         assertEquals(basePath.toString(), resolved.getBasePath());
         assertEquals(1, openProjectLookups.get());
-        assertFalse(directoryOpened.get());
     }
 
     private static Project projectAt(String basePath) {
