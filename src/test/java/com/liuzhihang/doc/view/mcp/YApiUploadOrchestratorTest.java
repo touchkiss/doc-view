@@ -14,6 +14,8 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.function.Consumer;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
@@ -135,9 +137,39 @@ public class YApiUploadOrchestratorTest {
         assertEquals("响应 JSON 无效", result.getMessage());
     }
 
+    @Test
+    public void createsSaveDtoInsideReadActionBeforeFacadeCalls() {
+        AtomicBoolean inReadAction = new AtomicBoolean();
+        List<String> calls = new ArrayList<>();
+        FakeFacade facade = new FakeFacade();
+        facade.onFacadeCall = call -> {
+            assertFalse("YApi facade call must not run in a read action", inReadAction.get());
+            calls.add(call);
+        };
+
+        YApiUploadOrchestrator.UploadItemResult result = new YApiUploadOrchestrator(facade, project -> settings(),
+                (settings, category, document) -> {
+                    assertTrue("SaveMapper must run in a read action", inReadAction.get());
+                    calls.add("mapper");
+                    return save(settings, category, document);
+                }, computation -> {
+                    inReadAction.set(true);
+                    try {
+                        return computation.get();
+                    } finally {
+                        inReadAction.set(false);
+                    }
+                }).upload(null, List.of(document("GET", "/orders"))).get(0);
+
+        assertEquals("created", result.getStatus());
+        assertEquals("mapper", calls.get(0));
+        assertEquals(List.of("mapper", "getCatMenu", "addCat", "findInterfaceId", "save", "findInterfaceId"), calls);
+    }
+
     private static List<YApiUploadOrchestrator.UploadItemResult> upload(FakeFacade facade, DocView... documents) {
         return new YApiUploadOrchestrator(facade, project -> settings(),
-                (settings, category, document) -> save(settings, category, document))
+                (settings, category, document) -> save(settings, category, document),
+                computation -> computation.get())
                 .upload(null, List.of(documents));
     }
 
@@ -186,9 +218,11 @@ public class YApiUploadOrchestratorTest {
         private final List<YapiSave> saved = new ArrayList<>();
         private final List<String> savedPaths = new ArrayList<>();
         private final Map<String, Integer> lookupCounts = new HashMap<>();
+        private Consumer<String> onFacadeCall = call -> { };
 
         @Override
         public void save(YapiSave save) throws Exception {
+            onFacadeCall.accept("save");
             saved.add(save);
             savedPaths.add(save.getPath());
             Exception failure = saveFailures.get(save.getPath());
@@ -199,12 +233,14 @@ public class YApiUploadOrchestratorTest {
 
         @Override
         public List<YApiCat> getCatMenu(String yapiUrl, Long projectId, String token) {
+            onFacadeCall.accept("getCatMenu");
             return List.of();
         }
 
         @Override
         public Optional<Long> findInterfaceId(String yapiUrl, Long projectId, String token,
                                               Long catId, String method, String path) throws Exception {
+            onFacadeCall.accept("findInterfaceId");
             String key = method + " " + path;
             int lookupCount = lookupCounts.merge(key, 1, Integer::sum);
             Exception failure = lookupFailures.get(key);
@@ -222,6 +258,7 @@ public class YApiUploadOrchestratorTest {
 
         @Override
         public YApiCat addCat(YApiCat cat) {
+            onFacadeCall.accept("addCat");
             cat.setId(1376L);
             return cat;
         }

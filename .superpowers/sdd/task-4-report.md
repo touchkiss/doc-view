@@ -31,3 +31,17 @@ No task-blocking concerns. Gradle continues to print pre-existing IntelliJ form-
 
 - 新增 ReadAction 内引用元数据固化、阶段错误映射、Bearer/API key/已知 token 脱敏断言；均使用注入的执行器，不发起真实网络请求。
 - `./gradlew test --rerun-tasks --tests 'com.liuzhihang.doc.view.mcp.McpToolHandlerTest' --tests 'com.liuzhihang.doc.view.mcp.McpServerServiceTest'` — passed.
+
+## Final PSI boundary follow-up
+
+### 修复内容
+
+- `YApiUploadOrchestrator` 现在通过默认的 IntelliJ `ReadAction` 创建 `YapiSave`；该临界区包含 `SaveMapper.create` / `YapiSaveFactory.create` 及其读取 `DocView` PSI 的描述生成。
+- 保存 DTO 在首次 YApi facade 调用前生成。分类查询/创建、接口查询、保存及 URL 回查均在 ReadAction 外执行；分类 ID 在网络调用返回后写回已生成的 DTO。
+- 注入 `SaveMapperReadAction` seam，便于在无 IntelliJ application 的单元测试中验证线程边界，不改变默认生产路径。
+- 未修改已有的 PSI reference 固化、阶段错误码或 token 脱敏逻辑。
+
+### 回归测试
+
+- 新增 `createsSaveDtoInsideReadActionBeforeFacadeCalls`：断言 mapper 位于 read action，且成功链路中的全部 YApi facade 调用位于 read action 外，并验证 mapper 先于首次 facade 调用。
+- `./gradlew test --rerun-tasks --tests 'com.liuzhihang.doc.view.mcp.McpToolHandlerTest' --tests 'com.liuzhihang.doc.view.mcp.McpServerServiceTest' --tests 'com.liuzhihang.doc.view.mcp.YApiUploadOrchestratorTest'` — passed.

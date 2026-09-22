@@ -1,5 +1,6 @@
 package com.liuzhihang.doc.view.mcp;
 
+import com.intellij.openapi.application.ReadAction;
 import com.intellij.openapi.project.Project;
 import com.liuzhihang.doc.view.config.YApiSettings;
 import com.liuzhihang.doc.view.dto.DocView;
@@ -15,6 +16,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.function.Function;
+import java.util.function.Supplier;
 
 /** Performs the YApi upload workflow without coupling it to IDE notifications. */
 public final class YApiUploadOrchestrator {
@@ -22,6 +24,7 @@ public final class YApiUploadOrchestrator {
     private final YApiFacadeService facadeService;
     private final Function<Project, YApiSettings> settingsProvider;
     private final SaveMapper saveMapper;
+    private final SaveMapperReadAction readAction;
 
     public YApiUploadOrchestrator(YApiFacadeService facadeService) {
         this(facadeService, new YapiSaveFactory());
@@ -39,9 +42,18 @@ public final class YApiUploadOrchestrator {
     YApiUploadOrchestrator(YApiFacadeService facadeService,
                            Function<Project, YApiSettings> settingsProvider,
                            SaveMapper saveMapper) {
+        this(facadeService, settingsProvider, saveMapper,
+                computation -> ReadAction.compute(computation::get));
+    }
+
+    YApiUploadOrchestrator(YApiFacadeService facadeService,
+                           Function<Project, YApiSettings> settingsProvider,
+                           SaveMapper saveMapper,
+                           SaveMapperReadAction readAction) {
         this.facadeService = facadeService;
         this.settingsProvider = settingsProvider;
         this.saveMapper = saveMapper;
+        this.readAction = readAction;
     }
 
     public List<UploadItemResult> upload(Project project, List<DocView> docViews) {
@@ -55,23 +67,27 @@ public final class YApiUploadOrchestrator {
 
     private UploadItemResult uploadOne(YApiSettings settings, DocView docView) {
         String reference = reference(docView);
+        final YapiSave save;
+        try {
+            save = createSaveInReadAction(settings, docView);
+        } catch (Exception exception) {
+            return UploadItemResult.failure(reference, McpException.Code.DOC_GENERATION_FAILED,
+                    safeSummary(exception, settings.getToken()));
+        }
         try {
             YApiCat category = getOrAddCategory(settings, docView.getDocTitle());
-            return uploadPreparedDocument(settings, category, docView, reference);
+            save.setCatId(category.getId());
+            return uploadPreparedDocument(settings, save, reference);
         } catch (Exception exception) {
             return remoteFailure(reference, settings, exception);
         }
     }
 
-    private UploadItemResult uploadPreparedDocument(YApiSettings settings, YApiCat category, DocView docView,
-                                                     String reference) {
-        final YapiSave save;
-        try {
-            save = saveMapper.create(settings, category, docView);
-        } catch (Exception exception) {
-            return UploadItemResult.failure(reference, McpException.Code.DOC_GENERATION_FAILED,
-                    safeSummary(exception, settings.getToken()));
-        }
+    private YapiSave createSaveInReadAction(YApiSettings settings, DocView docView) {
+        return readAction.compute(() -> saveMapper.create(settings, new YApiCat(), docView));
+    }
+
+    private UploadItemResult uploadPreparedDocument(YApiSettings settings, YapiSave save, String reference) {
         try {
             Optional<Long> existingId = facadeService.findInterfaceId(
                     save.getYapiUrl(), save.getProjectId(), save.getToken(),
@@ -154,6 +170,11 @@ public final class YApiUploadOrchestrator {
     @FunctionalInterface
     interface SaveMapper {
         YapiSave create(YApiSettings settings, YApiCat category, DocView docView);
+    }
+
+    @FunctionalInterface
+    interface SaveMapperReadAction {
+        YapiSave compute(Supplier<YapiSave> computation);
     }
 
     public static final class UploadItemResult {
