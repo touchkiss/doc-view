@@ -3,6 +3,7 @@ package com.liuzhihang.doc.view.config;
 import com.intellij.openapi.components.PersistentStateComponent;
 import com.intellij.openapi.components.State;
 import com.intellij.openapi.components.Storage;
+import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.project.Project;
 import com.intellij.util.xmlb.XmlSerializerUtil;
 import lombok.Data;
@@ -22,8 +23,19 @@ import org.jetbrains.annotations.Nullable;
 @State(name = "DocViewApplicationSettingsComponent", storages = {@Storage("DocViewApplicationSettings.xml")})
 public class ApplicationSettings implements PersistentStateComponent<ApplicationSettings> {
 
-    private String pluginVersion = "0.0.1";
+    public static final int DEFAULT_MCP_SERVER_PORT = 12333;
 
+    private String pluginVersion = "0.0.1";
+    private Boolean mcpServerEnabled = true;
+    private int mcpServerPort = DEFAULT_MCP_SERVER_PORT;
+
+
+    public static ApplicationSettings getInstance() {
+        if (ApplicationManager.getApplication() == null) {
+            return null;
+        }
+        return ApplicationManager.getApplication().getService(ApplicationSettings.class);
+    }
 
     public static ApplicationSettings getInstance(@NotNull Project project) {
         return project.getService(ApplicationSettings.class);

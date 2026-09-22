@@ -2,11 +2,13 @@ package com.liuzhihang.doc.view.mcp;
 
 import com.intellij.openapi.Disposable;
 import com.intellij.openapi.diagnostic.Logger;
+import com.liuzhihang.doc.view.config.ApplicationSettings;
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpServer;
 import io.modelcontextprotocol.common.McpTransportContext;
 import io.modelcontextprotocol.json.McpJsonMapper;
 import io.modelcontextprotocol.json.jackson3.JacksonMcpJsonMapperSupplier;
+import io.modelcontextprotocol.json.schema.JsonSchemaValidator;
 import io.modelcontextprotocol.server.McpServer;
 import io.modelcontextprotocol.server.McpStatelessServerHandler;
 import io.modelcontextprotocol.server.McpStatelessSyncServer;
@@ -22,6 +24,7 @@ import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.function.Supplier;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
@@ -31,20 +34,39 @@ public final class McpServerService implements Disposable {
     private static final Logger LOG = Logger.getInstance(McpServerService.class);
 
     private final McpTransportFactory transportFactory;
+    private final Supplier<ApplicationSettings> settingsSupplier;
     private McpTransport transport;
     private URI endpoint;
 
     public McpServerService() {
-        this(() -> new SdkMcpTransport(new McpToolHandler()));
+        this(() -> new SdkMcpTransport(new McpToolHandler(), configuredPort()),
+                ApplicationSettings::getInstance);
     }
 
     McpServerService(McpTransportFactory transportFactory) {
+        this(transportFactory, null);
+    }
+
+    private McpServerService(McpTransportFactory transportFactory, Supplier<ApplicationSettings> settingsSupplier) {
         this.transportFactory = transportFactory;
+        this.settingsSupplier = settingsSupplier;
     }
 
     public synchronized void start() {
         if (transport != null) {
             return;
+        }
+
+        if (settingsSupplier != null) {
+            ApplicationSettings settings = settingsSupplier.get();
+            if (settings != null && !Boolean.TRUE.equals(settings.getMcpServerEnabled())) {
+                LOG.info("Local MCP server is disabled by settings");
+                return;
+            }
+            if (settings != null && !isValidPort(settings.getMcpServerPort())) {
+                LOG.warn("Unable to start the local MCP server: invalid port " + settings.getMcpServerPort());
+                return;
+            }
         }
 
         McpTransport candidate = null;
@@ -67,6 +89,11 @@ public final class McpServerService implements Disposable {
         closeQuietly(current);
     }
 
+    public synchronized void restart() {
+        stop();
+        start();
+    }
+
     public synchronized URI getEndpoint() {
         return endpoint;
     }
@@ -78,6 +105,29 @@ public final class McpServerService implements Disposable {
     @Override
     public void dispose() {
         stop();
+    }
+
+    static JsonSchemaValidator jsonSchemaValidator() {
+        // The NetworkNT validator bundled by the SDK loads the JSON Schema 2020-12
+        // meta-schema from its jar at construction time. That resource is not available
+        // through IntelliJ's plugin class loader. Tool input validation is intentionally
+        // disabled below and McpToolHandler validates the business input, so keep startup
+        // fully local and offline here.
+        return new JsonSchemaValidator() {
+            @Override
+            public ValidationResponse validate(Map<String, Object> schema, Object structuredContent) {
+                return ValidationResponse.asValid(null);
+            }
+        };
+    }
+
+    public static boolean isValidPort(int port) {
+        return port >= 1 && port <= 65535;
+    }
+
+    private static int configuredPort() {
+        ApplicationSettings settings = ApplicationSettings.getInstance();
+        return settings == null ? ApplicationSettings.DEFAULT_MCP_SERVER_PORT : settings.getMcpServerPort();
     }
 
     private static void closeQuietly(McpTransport candidate) {
@@ -127,8 +177,15 @@ public final class McpServerService implements Disposable {
         private McpStatelessServerHandler handler;
         private McpStatelessSyncServer mcpServer;
 
-        private SdkMcpTransport(McpToolHandler toolHandler) {
+        private final int port;
+
+        private SdkMcpTransport(McpToolHandler toolHandler, int port) {
             this.toolHandler = toolHandler;
+            this.port = port;
+        }
+
+        private SdkMcpTransport(McpToolHandler toolHandler) {
+            this(toolHandler, 0);
         }
 
         @Override
@@ -136,12 +193,13 @@ public final class McpServerService implements Disposable {
             mcpServer = McpServer.sync(this)
                     .serverInfo("doc-view", "1.4.99")
                     .jsonMapper(jsonMapper)
+                    .jsonSchemaValidator(jsonSchemaValidator())
                     // The schema remains discoverable; the handler returns structured business input errors.
                     .validateToolInputs(false)
                     .toolCall(McpToolHandler.tool(), (context, request) -> toolHandler.handle(request))
                     .build();
 
-            httpServer = HttpServer.create(new InetSocketAddress(InetAddress.getByName("127.0.0.1"), 0), 0);
+            httpServer = HttpServer.create(new InetSocketAddress(InetAddress.getByName("127.0.0.1"), port), 0);
             executor = Executors.newSingleThreadExecutor(runnable -> {
                 Thread thread = new Thread(runnable, "doc-view-mcp-server");
                 thread.setDaemon(true);

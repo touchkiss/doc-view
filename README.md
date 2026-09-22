@@ -45,9 +45,24 @@ Doc View
 本地 MCP Agent 接入
 -----------------
 
-插件启动后会在本机回环地址启动 MCP Streamable HTTP 服务。打开 IDE 日志并搜索
-`Local MCP endpoint:`，将日志中的完整地址（形如 `http://127.0.0.1:<port>/mcp`）填入 Agent 的
-MCP server URL；端口由每次启动时动态选择。若 Agent 或插件状态页已显示该 endpoint，以显示的完整地址为准。
+在 Settings → MCP Server 中启用服务并配置端口，默认端口为 `12333`。插件启动后会在本机回环地址
+启动 MCP Streamable HTTP 服务，地址固定为 `http://127.0.0.1:<port>/mcp`。
+
+Agent MCP 配置示例：
+
+```json
+{
+  "mcpServers": {
+    "doc-view": {
+      "url": "http://127.0.0.1:12333/mcp"
+    }
+  }
+}
+```
+
+如果在设置中修改了端口，同步修改配置中的 URL。默认配置无需修改即可使用
+`http://127.0.0.1:12333/mcp`。该配置使用 Streamable HTTP，不需要填写 token。
+修改设置并保存后，MCP Server 会立即重启并使用新配置。
 
 服务只提供一个 YApi 工具：`upload_yapi_api_doc`。调用时必须提供：
 

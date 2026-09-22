@@ -1,6 +1,7 @@
 package com.liuzhihang.doc.view.mcp;
 
 import org.junit.Test;
+import io.modelcontextprotocol.json.schema.JsonSchemaValidator;
 
 import java.io.BufferedReader;
 import java.io.IOException;
@@ -26,6 +27,13 @@ import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 
 public class McpServerServiceTest {
+
+    @Test
+    public void providesJsonSchemaValidatorWithoutServiceLoaderDiscovery() {
+        JsonSchemaValidator validator = McpServerService.jsonSchemaValidator();
+
+        assertTrue(validator != null);
+    }
 
     @Test
     public void startsOnceAndReleasesTheInjectedLoopbackTransport() throws Exception {

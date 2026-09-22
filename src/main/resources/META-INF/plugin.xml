@@ -57,6 +57,10 @@
                              displayName="Doc View"
                              nonDefaultProject="true"/>
 
+        <applicationConfigurable instance="com.liuzhihang.doc.view.config.McpSettingsConfigurable"
+                                 id="liuzhihang.api.doc.McpSettingsConfigurable"
+                                 displayName="Doc View MCP Server"/>
+
 
         <projectConfigurable instance="com.liuzhihang.doc.view.config.TemplateConfigurable"
                              id="liuzhihang.api.doc.TemplateConfigurable"
