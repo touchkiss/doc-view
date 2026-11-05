@@ -4,6 +4,7 @@ import com.intellij.openapi.util.Key;
 import com.intellij.psi.PsiClass;
 import com.intellij.psi.PsiClassType;
 import com.intellij.psi.PsiFile;
+import com.intellij.psi.PsiField;
 import com.intellij.psi.PsiType;
 import com.intellij.psi.util.PsiUtil;
 import org.jetbrains.annotations.NotNull;
@@ -43,6 +44,18 @@ public class ProtoUtils {
         }
         PsiFile containingFile = psiClass.getContainingFile();
         return containingFile != null && Boolean.TRUE.equals(containingFile.getUserData(PROTO_SYNTHETIC));
+    }
+
+    private static final Key<Boolean> REQUIRED_SYNTHETIC_FIELD = Key.create("docview.proto.required.field");
+
+    /** Stores proto2 required semantics on the in-memory PSI without adding source annotations or tags. */
+    public static void markRequiredSyntheticField(@NotNull PsiField field) {
+        field.putUserData(REQUIRED_SYNTHETIC_FIELD, Boolean.TRUE);
+    }
+
+    public static boolean isRequiredSyntheticField(@NotNull PsiField field) {
+        return isSyntheticProtoClass(field.getContainingClass())
+                && Boolean.TRUE.equals(field.getUserData(REQUIRED_SYNTHETIC_FIELD));
     }
 
     public static boolean isProto(PsiType psiType) {

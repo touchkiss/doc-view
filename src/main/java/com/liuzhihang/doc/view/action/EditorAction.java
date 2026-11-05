@@ -5,6 +5,7 @@ import com.intellij.openapi.editor.Editor;
 import com.intellij.openapi.project.DumbService;
 import com.intellij.openapi.project.Project;
 import com.intellij.psi.PsiClass;
+import com.intellij.psi.PsiDocumentManager;
 import com.intellij.psi.PsiFile;
 import com.liuzhihang.doc.view.DocViewBundle;
 import com.liuzhihang.doc.view.notification.DocViewNotification;
@@ -14,7 +15,7 @@ import com.liuzhihang.doc.view.utils.DocViewUtils;
 import org.jetbrains.annotations.NotNull;
 
 /**
- * 编辑实体类字段注释
+ * 编辑和复制文档字段草稿，不修改业务源码
  *
  * @author liuzhihang
  * @date 2020/2/26 21:57
@@ -37,12 +38,13 @@ public class EditorAction extends AbstractAction {
             return;
         }
 
-        // .proto 文件不支持 Doc Editor: 编辑结果需要通过 WriterService 以 JavaDoc 形式写回源码,
-        // 而 proto 文档背后是合成出来的非物理类, 写回没有意义
+        // 保持 Doc Editor 的 Java 实体范围；.proto 继续使用独立文档预览入口。
         if (CustomPsiUtils.isProtoFile(psiFile)) {
             return;
         }
 
+        // Read pending editor changes from PSI without persisting the business file.
+        PsiDocumentManager.getInstance(project).commitAllDocuments();
         // 获取Java类或者接口
         PsiClass targetClass = CustomPsiUtils.getTargetClass(editor, psiFile);
 

@@ -3,10 +3,10 @@ package com.liuzhihang.doc.view.action;
 import com.intellij.openapi.actionSystem.*;
 import com.intellij.openapi.diagnostic.Logger;
 import com.intellij.openapi.editor.Editor;
-import com.intellij.openapi.fileEditor.FileDocumentManager;
 import com.intellij.openapi.project.DumbService;
 import com.intellij.openapi.project.Project;
 import com.intellij.psi.PsiClass;
+import com.intellij.psi.PsiDocumentManager;
 import com.intellij.psi.PsiFile;
 import com.intellij.psi.PsiMethod;
 import com.liuzhihang.doc.view.DocViewBundle;
@@ -64,17 +64,17 @@ public class AbstractAction extends AnAction {
         targetMethod = null;
 
         try {
-            // 对所有未保存的文件进行保存
-            FileDocumentManager.getInstance().saveAllDocuments();
-
             project = e.getData(PlatformDataKeys.PROJECT);
             psiFile = e.getData(CommonDataKeys.PSI_FILE);
             editor = e.getData(CommonDataKeys.EDITOR);
 
             // 验证是否为空
-            if (editor == null || project == null || psiFile == null || DumbService.isDumb(project)) {
+            if (editor == null || project == null || psiFile == null || project.isDisposed() || DumbService.isDumb(project)) {
                 throw new DocViewException(DocViewBundle.message("notify.action.invalid.context"));
             }
+            // Parse the user's pending edits without saving any business file.
+            // This synchronizes only this project's editor documents with PSI.
+            PsiDocumentManager.getInstance(project).commitAllDocuments();
             // 获取Java类或者接口; .proto 文件会将光标所在 message 合成为内存 Java 类
             boolean protoFile = CustomPsiUtils.isProtoFile(psiFile);
             targetClass = CustomPsiUtils.getTargetClass(editor, psiFile);

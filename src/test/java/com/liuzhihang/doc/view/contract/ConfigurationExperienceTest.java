@@ -206,7 +206,7 @@ public final class ConfigurationExperienceTest extends LightJavaCodeInsightFixtu
                 general.reset();
                 rules.reset();
                 JCheckBox marker = findCheckBox(generalUi, "lineMarkerCheckBox");
-                JCheckBox title = findCheckBox(rulesUi, "titleCommentTagCheckBox");
+                JCheckBox title = findCheckBox(rulesUi, "titleClassCommentCheckBox");
                 marker.setSelected(!marker.isSelected());
                 title.setSelected(!title.isSelected());
                 boolean markerDraft = marker.isSelected();

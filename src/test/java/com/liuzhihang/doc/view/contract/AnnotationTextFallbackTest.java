@@ -30,7 +30,6 @@ public final class AnnotationTextFallbackTest extends LightJavaCodeInsightFixtur
 
     private Boolean originalNameUseSwagger3;
     private Boolean originalNameUseSwagger;
-    private Boolean originalNameUseCommentTag;
     private Boolean originalNameMethodComment;
     private Boolean originalDescUseSwagger3;
     private Boolean originalDescUseSwagger;
@@ -56,14 +55,12 @@ public final class AnnotationTextFallbackTest extends LightJavaCodeInsightFixtur
         Settings settings = Settings.getInstance(getProject());
         originalNameUseSwagger3 = settings.getNameUseSwagger3();
         originalNameUseSwagger = settings.getNameUseSwagger();
-        originalNameUseCommentTag = settings.getNameUseCommentTag();
         originalNameMethodComment = settings.getNameMethodComment();
         originalDescUseSwagger3 = settings.getDescUseSwagger3();
         originalDescUseSwagger = settings.getDescUseSwagger();
 
         settings.setNameUseSwagger3(true);
         settings.setNameUseSwagger(true);
-        settings.setNameUseCommentTag(true);
         settings.setNameMethodComment(true);
         settings.setDescUseSwagger3(true);
         settings.setDescUseSwagger(true);
@@ -79,7 +76,6 @@ public final class AnnotationTextFallbackTest extends LightJavaCodeInsightFixtur
             Settings settings = Settings.getInstance(getProject());
             settings.setNameUseSwagger3(originalNameUseSwagger3);
             settings.setNameUseSwagger(originalNameUseSwagger);
-            settings.setNameUseCommentTag(originalNameUseCommentTag);
             settings.setNameMethodComment(originalNameMethodComment);
             settings.setDescUseSwagger3(originalDescUseSwagger3);
             settings.setDescUseSwagger(originalDescUseSwagger);
@@ -171,9 +167,11 @@ public final class AnnotationTextFallbackTest extends LightJavaCodeInsightFixtur
                 }
                 """);
 
-        assertEquals("TagFallback", name(controller, "tagFallback"));
+        assertEquals("Legacy source tags are ignored when no standard name exists",
+                "tagFallback", name(controller, "tagFallback"));
         assertEquals("abcdefghijklmnopqr", name(controller, "javadocFallback"));
-        assertEquals("DefaultFallback", name(controller, "defaultFallback"));
+        assertEquals("Legacy source tags do not replace the Java method fallback",
+                "defaultFallback", name(controller, "defaultFallback"));
         assertEquals("methodFallback", name(controller, "methodFallback"));
     }
 
@@ -210,10 +208,8 @@ public final class AnnotationTextFallbackTest extends LightJavaCodeInsightFixtur
         assertEquals("Swagger2Fallback", name(controller, "nameSources"));
 
         settings.setNameUseSwagger(false);
-        assertEquals("TagFallback", name(controller, "nameSources"));
-
-        settings.setNameUseCommentTag(false);
-        assertEquals("abcdefghijklmnopqr", name(controller, "nameSources"));
+        assertEquals("Standard Javadoc is the next source; legacy tags cannot override it",
+                "abcdefghijklmnopqr", name(controller, "nameSources"));
 
         settings.setNameMethodComment(false);
         assertEquals("nameSources", name(controller, "nameSources"));

@@ -77,7 +77,6 @@ public final class ClassNodeCancellationTest extends LightJavaCodeInsightFixture
         private CancelAfterFirstMethodSettings(ProgressIndicator indicator) {
             this.indicator = indicator;
             setNameUseSwagger(false);
-            setNameUseCommentTag(false);
             setNameMethodComment(false);
             setDescUseSwagger3(false);
             setDescUseSwagger(false);

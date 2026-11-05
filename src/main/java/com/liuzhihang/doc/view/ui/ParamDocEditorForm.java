@@ -22,11 +22,9 @@ import com.liuzhihang.doc.view.config.SettingsConfigurable;
 import com.liuzhihang.doc.view.dto.Body;
 import com.liuzhihang.doc.view.dto.DocViewData;
 import com.liuzhihang.doc.view.dto.DocViewParamData;
-import com.liuzhihang.doc.view.exception.DocViewException;
 import com.liuzhihang.doc.view.notification.DocViewNotification;
 import com.liuzhihang.doc.view.ui.treeview.ParamTreeTableView;
 import com.liuzhihang.doc.view.utils.DocViewBackgroundTasks;
-import com.liuzhihang.doc.view.utils.DocViewUtils;
 import com.liuzhihang.doc.view.utils.GsonFormatUtil;
 import com.liuzhihang.doc.view.utils.ParamPsiUtils;
 import com.liuzhihang.doc.view.utils.ProtoUtils;
@@ -248,27 +246,16 @@ public class ParamDocEditorForm {
 
         rightGroup.add(createMarkdownCopyAction());
 
-        rightGroup.add(new AnAction(DocViewBundle.message("action.confirm"),
-                DocViewBundle.message("action.confirm.description"), DocViewIcons.CHECKED) {
+        rightGroup.add(new AnAction(DocViewBundle.message("action.close"),
+                DocViewBundle.message("action.close.description"), null) {
             @Override
             public void actionPerformed(@NotNull AnActionEvent e) {
-
-                if (tableView == null) {
-                    DocViewNotification.notifyInfo(project, DocViewBundle.message("ui.docview.loading.retry"));
-                    return;
+                // Field edits belong only to this document draft. Closing never
+                // confirms them into JavaDoc, Swagger annotations or source files.
+                ++markdownCopyRequest;
+                if (popup != null) {
+                    popup.cancel();
                 }
-
-                if (tableView.isEditing()) {
-                    tableView.getCellEditor().stopCellEditing();
-                }
-
-                try {
-                    DocViewUtils.writeComment(project, tableView.getModifiedMap());
-                } catch (DocViewException exception) {
-                    DocViewNotification.notifyError(project, exception.getMessage());
-                    return;
-                }
-                popup.cancel();
             }
         });
 

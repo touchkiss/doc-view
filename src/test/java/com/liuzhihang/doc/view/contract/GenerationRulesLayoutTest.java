@@ -22,10 +22,9 @@ import java.util.List;
 public final class GenerationRulesLayoutTest extends LightJavaCodeInsightFixtureTestCase {
 
     private static final String[] CHECKBOX_NAMES = {
-            "titleCommentTagCheckBox", "titleClassCommentCheckBox", "titleSimpleClassNameCheckBox",
-            "titleFullClassNameCheckBox", "nameSwagger3CheckBox", "nameSwaggerCheckBox",
-            "nameCommentTagCheckBox", "nameMethodCommentCheckBox", "descSwagger3CheckBox",
-            "descSwaggerCheckBox", "requireCommentTagCheckBox", "fieldNameJsonPropertyCheckBox"
+            "titleClassCommentCheckBox", "titleSimpleClassNameCheckBox", "titleFullClassNameCheckBox",
+            "nameSwagger3CheckBox", "nameSwaggerCheckBox", "nameMethodCommentCheckBox",
+            "descSwagger3CheckBox", "descSwaggerCheckBox", "fieldNameJsonPropertyCheckBox", "fieldNameSnakeCase"
     };
 
     @Override
@@ -45,7 +44,7 @@ public final class GenerationRulesLayoutTest extends LightJavaCodeInsightFixture
                 "generationDescriptionSummary", "generationRequiredSummary", "generationFieldNameSummary"};
         String[] helpNames = {"generationTitleHelpIcon", "generationNameHelpIcon",
                 "generationDescriptionHelpIcon", "generationRequiredHelpIcon", "generationFieldNameHelpIcon"};
-        String[] detailSnippets = {"@DocView.Title", "@Operation summary", "@Operation description",
+        String[] detailSnippets = {"Class comment", "@Operation summary", "@Operation description",
                 "@Schema(requiredMode=", "@JsonProperty"};
 
         for (int index = 0; index < groups.length; index++) {
@@ -73,6 +72,10 @@ public final class GenerationRulesLayoutTest extends LightJavaCodeInsightFixture
             assertNotNull(accessible.getAccessibleName());
             assertFalse("Help icon needs an accessible name", accessible.getAccessibleName().isBlank());
             assertNotNull(accessible.getAccessibleDescription());
+            assertFalse("Removed proprietary source tags must not remain in settings help",
+                    accessible.getAccessibleDescription().contains("@DocView."));
+            assertFalse("Removed proprietary source tags must not remain in visible summaries",
+                    summary.getText().contains("@DocView."));
             assertTrue("Rule details should use explicit lines instead of relying on tooltip wrapping",
                     accessible.getAccessibleDescription().contains("\n1."));
             assertTrue("Tooltip/accessibility should explain the configured rule order",
@@ -101,7 +104,7 @@ public final class GenerationRulesLayoutTest extends LightJavaCodeInsightFixture
                 settingsGuide instanceof ContextHelpLabel);
         assertEquals("The page should have five rule details and one separate guide icon",
                 6, findAll(root, ContextHelpLabel.class).size());
-        assertEquals("The rule page retains upstream sources and fork snake_case control", 13, findAll(root, JCheckBox.class).size());
+        assertEquals("The rule page exposes only standard sources and fork snake_case", 10, findAll(root, JCheckBox.class).size());
         for (String name : CHECKBOX_NAMES) {
             assertNotNull("Missing existing rule control " + name, findByName(root, name));
         }
@@ -124,24 +127,24 @@ public final class GenerationRulesLayoutTest extends LightJavaCodeInsightFixture
         form.reset();
         assertFalse(form.isModified());
 
-        JCheckBox titleCommentTag = findCheckBox(form.getRootPanel(), "titleCommentTagCheckBox");
-        boolean originalValue = settings.getTitleUseCommentTag();
-        titleCommentTag.setSelected(!originalValue);
+        JCheckBox titleClassComment = findCheckBox(form.getRootPanel(), "titleClassCommentCheckBox");
+        boolean originalValue = settings.getTitleClassComment();
+        titleClassComment.setSelected(!originalValue);
         assertTrue(form.isModified());
 
         form.apply();
-        assertTrue(settings.getTitleUseCommentTag() != originalValue);
+        assertTrue(settings.getTitleClassComment() != originalValue);
         assertFalse(form.isModified());
 
-        titleCommentTag.setSelected(originalValue);
+        titleClassComment.setSelected(originalValue);
         assertTrue(form.isModified());
         form.reset();
-        assertEquals(!originalValue, titleCommentTag.isSelected());
+        assertEquals(!originalValue, titleClassComment.isSelected());
         assertFalse(form.isModified());
 
-        titleCommentTag.setSelected(originalValue);
+        titleClassComment.setSelected(originalValue);
         form.apply();
-        assertTrue(settings.getTitleUseCommentTag() == originalValue);
+        assertTrue(settings.getTitleClassComment() == originalValue);
         form.reset();
     }
 

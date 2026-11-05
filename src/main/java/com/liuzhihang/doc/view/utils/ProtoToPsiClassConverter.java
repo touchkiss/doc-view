@@ -18,11 +18,11 @@ import com.intellij.psi.PsiClass;
 import com.intellij.psi.PsiComment;
 import com.intellij.psi.PsiElement;
 import com.intellij.psi.PsiFile;
+import com.intellij.psi.PsiField;
 import com.intellij.psi.PsiFileFactory;
 import com.intellij.psi.PsiNameHelper;
 import com.intellij.psi.PsiReference;
 import com.intellij.psi.util.PsiTreeUtil;
-import com.liuzhihang.doc.view.config.Settings;
 import org.apache.commons.lang3.StringUtils;
 import org.apache.commons.lang3.Strings;
 import org.jetbrains.annotations.NotNull;
@@ -81,7 +81,8 @@ public final class ProtoToPsiClassConverter {
     @Nullable
     public static PsiClass convert(@NotNull PbMessageType message, @NotNull Project project) {
 
-        String javaCode = new Generator(project).generate(message);
+        Generator generator = new Generator(project);
+        String javaCode = generator.generate(message);
 
         if (StringUtils.isBlank(javaCode)) {
             return null;
@@ -93,7 +94,9 @@ public final class ProtoToPsiClassConverter {
         // 标记为 proto 合成类, 供 DocViewService 路由到 PojoDocViewServiceImpl
         ProtoUtils.markSynthetic(javaPsiFile);
 
-        return PsiTreeUtil.findChildOfType(javaPsiFile, PsiClass.class);
+        PsiClass result = PsiTreeUtil.findChildOfType(javaPsiFile, PsiClass.class);
+        if (result != null) generator.applyRequiredMetadata(result);
+        return result;
     }
 
     /**
@@ -103,10 +106,8 @@ public final class ProtoToPsiClassConverter {
 
         private final Project project;
 
-        /**
-         * 必填字段的 JavaDoc tag 名, 默认 DocView.Required
-         */
-        private final String requiredTag;
+        /** Generated class name -> direct required field names; never serialized into Java source. */
+        private final Map<String, Set<String>> requiredFieldsByJavaName = new HashMap<>();
 
         /**
          * proto 全限定名 -> 生成的 Java 类名, 同时充当已生成集合, 保证递归类型图能终止
@@ -125,7 +126,16 @@ public final class ProtoToPsiClassConverter {
 
         private Generator(Project project) {
             this.project = project;
-            this.requiredTag = Settings.getInstance(project).getRequired();
+        }
+
+        private void applyRequiredMetadata(PsiClass type) {
+            Set<String> requiredNames = requiredFieldsByJavaName.get(type.getName());
+            if (requiredNames != null) {
+                for (PsiField field : type.getFields()) {
+                    if (requiredNames.contains(field.getName())) ProtoUtils.markRequiredSyntheticField(field);
+                }
+            }
+            for (PsiClass nested : type.getInnerClasses()) applyRequiredMetadata(nested);
         }
 
         private String generate(PbMessageType root) {
@@ -143,14 +153,14 @@ public final class ProtoToPsiClassConverter {
                 StringBuilder body = new StringBuilder();
                 renderMembers(item.message(), item.depth(), body);
 
-                appendJavaDoc(nested, commentOf(item.message()), null, "    ");
+                appendJavaDoc(nested, commentOf(item.message()), "    ");
                 nested.append("    public static class ").append(item.javaName()).append(" {\n\n");
                 nested.append(body);
                 nested.append("    }\n\n");
             }
 
             StringBuilder code = new StringBuilder();
-            appendJavaDoc(code, commentOf(root), null, "");
+            appendJavaDoc(code, commentOf(root), "");
             code.append("public class ").append(rootName).append(" {\n\n");
             code.append(rootFields);
             code.append(nested);
@@ -170,6 +180,8 @@ public final class ProtoToPsiClassConverter {
                 return;
             }
 
+            String ownerJavaName = javaNameByProtoName.get(protoQualifiedName(message));
+
             // 用 identity 去重, 避免子节点遍历与 getXxxList() 兜底重复渲染同一字段
             Map<PsiElement, Boolean> rendered = new IdentityHashMap<>();
 
@@ -179,7 +191,7 @@ public final class ProtoToPsiClassConverter {
                     renderMapField(mapField, depth, out);
                 } else if (child instanceof PbField field) {
                     rendered.put(field, Boolean.TRUE);
-                    renderField(field, null, depth, out);
+                    renderField(field, null, depth, out, ownerJavaName);
                 } else if (child instanceof PbOneofDefinition oneof) {
                     PbOneofBody oneofBody = oneof.getBody();
                     if (oneofBody == null) {
@@ -187,7 +199,7 @@ public final class ProtoToPsiClassConverter {
                     }
                     for (PbSimpleField oneofField : oneofBody.getSimpleFieldList()) {
                         rendered.put(oneofField, Boolean.TRUE);
-                        renderField(oneofField, oneof.getName(), depth, out);
+                        renderField(oneofField, oneof.getName(), depth, out, ownerJavaName);
                     }
                 }
             }
@@ -195,7 +207,7 @@ public final class ProtoToPsiClassConverter {
             // 兜底: 若字段并非 body 的直接子节点, 上面的遍历会漏掉
             for (PbSimpleField field : body.getSimpleFieldList()) {
                 if (!rendered.containsKey(field)) {
-                    renderField(field, null, depth, out);
+                    renderField(field, null, depth, out, ownerJavaName);
                 }
             }
             for (PbMapField mapField : body.getMapFieldList()) {
@@ -205,7 +217,8 @@ public final class ProtoToPsiClassConverter {
             }
         }
 
-        private void renderField(PbField field, @Nullable String oneofName, int depth, StringBuilder out) {
+        private void renderField(PbField field, @Nullable String oneofName, int depth, StringBuilder out,
+                                 String ownerJavaName) {
 
             String protoName = field.getName();
             if (StringUtils.isBlank(protoName)) {
@@ -221,8 +234,11 @@ public final class ProtoToPsiClassConverter {
             // oneof 成员一定不是必填
             boolean required = oneofName == null && field.isRequired();
 
-            appendField(out, protoName, javaType, required,
-                    descOf(commentOf(field), oneofName, type.note()));
+            if (required) {
+                requiredFieldsByJavaName.computeIfAbsent(ownerJavaName, ignored -> new HashSet<>())
+                        .add(toJavaIdentifier(protoName));
+            }
+            appendField(out, protoName, javaType, descOf(commentOf(field), oneofName, type.note()));
         }
 
         private void renderMapField(PbMapField mapField, int depth, StringBuilder out) {
@@ -237,19 +253,17 @@ public final class ProtoToPsiClassConverter {
 
             String javaType = "java.util.Map<" + keyType.javaType() + ", " + valueType.javaType() + ">";
 
-            appendField(out, protoName, javaType, false,
-                    descOf(commentOf(mapField), null, valueType.note()));
+            appendField(out, protoName, javaType, descOf(commentOf(mapField), null, valueType.note()));
         }
 
-        private void appendField(StringBuilder out, String protoName, String javaType,
-                                 boolean required, String desc) {
+        private void appendField(StringBuilder out, String protoName, String javaType, String desc) {
 
             String javaName = toJavaIdentifier(protoName);
             String finalDesc = javaName.equals(protoName)
                     ? desc
                     : joinDesc(desc, "proto 字段名: " + protoName);
 
-            appendJavaDoc(out, finalDesc, required ? requiredTag : null, "    ");
+            appendJavaDoc(out, finalDesc, "    ");
             out.append("    private ").append(javaType).append(" ").append(javaName).append(";\n\n");
         }
 
@@ -430,26 +444,21 @@ public final class ProtoToPsiClassConverter {
         }
 
         /**
-         * 输出 JavaDoc; 无内容且无 tag 时不输出
+         * 输出标准 JavaDoc；无描述时不输出。
          *
-         * @param tag    需要额外写入的 tag 名, 如 DocView.Required
          * @param indent 缩进
          */
-        private void appendJavaDoc(StringBuilder out, @Nullable String desc,
-                                   @Nullable String tag, String indent) {
+        private void appendJavaDoc(StringBuilder out, @Nullable String desc, String indent) {
 
             String safeDesc = escapeJavaDoc(desc);
 
-            if (StringUtils.isBlank(safeDesc) && tag == null) {
+            if (StringUtils.isBlank(safeDesc)) {
                 return;
             }
 
             out.append(indent).append("/**\n");
             if (StringUtils.isNotBlank(safeDesc)) {
                 out.append(indent).append(" * ").append(safeDesc).append("\n");
-            }
-            if (tag != null) {
-                out.append(indent).append(" * @").append(tag).append("\n");
             }
             out.append(indent).append(" */\n");
         }

@@ -24,6 +24,11 @@
 
 - Copy gRPC cURL 的默认域名由 `localhost:9090` 改为 `http://localhost:9090`；需要不带 scheme 的形式可在设置中填 `localhost:9090`
 
+### Removed
+
+- 移除 Doc View 专属 JavaDoc 标签的读取、生成和配置入口；标题、名称、必填仅使用业务代码中已有的标准注释/注解。
+- 移除 Doc Editor 源码写回及自动保存业务文件；编辑只作用于文档草稿，复制/导出/上传保留。Proto2 必填改用内存模型元数据，不生成标签。
+
 ### Fixed
 
 - 修复 Spring 完整 `ValueConstants.DEFAULT_NONE` 被当作业务默认值的问题，统一 RequestParam/Header 必填、示例与默认值描述解析；回归使用真正编译的无源码注解 JAR。

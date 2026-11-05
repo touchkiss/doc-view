@@ -52,7 +52,7 @@ public final class SpringMarkdownContractTest extends LightJavaCodeInsightFixtur
 
         assertEquals("用户接口", docView.getDocTitle());
         assertEquals("查询用户", docView.getName());
-        assertEquals("按编号查询用户。", docView.getDesc());
+        assertEquals("查询用户", docView.getDesc());
         assertEquals("/api/users", docView.getPath());
         assertEquals("GET", docView.getMethod());
         assertEquals(ContentTypeEnum.FORM, docView.getContentType());

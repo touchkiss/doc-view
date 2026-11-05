@@ -33,11 +33,6 @@ import static com.liuzhihang.doc.view.constant.JsonPropertyConstant.SNAKE_CASE;
 @State(name = "DocViewSettingsComponent", storages = {@Storage("DocViewSettings.xml")})
 public class Settings implements PersistentStateComponent<Settings> {
 
-    /**
-     * DocView 的 注释 tag 统一使用 DocView 当做前缀, 防止和用户自身的注释 tag 冲突
-     */
-    private String titleTag = "DocView.Title";
-    private Boolean titleUseCommentTag = true;
     private Boolean titleClassComment = true;
     private Boolean titleUseSimpleClassName = true;
     private Boolean titleUseFullClassName = true;
@@ -45,10 +40,8 @@ public class Settings implements PersistentStateComponent<Settings> {
     /**
      * 接口名字
      */
-    private String nameTag = "DocView.Name";
     private Boolean nameUseSwagger3 = true;
     private Boolean nameUseSwagger = true;
-    private Boolean nameUseCommentTag = true;
     private Boolean nameMethodComment = true;
 
     /**
@@ -56,16 +49,6 @@ public class Settings implements PersistentStateComponent<Settings> {
      */
     private Boolean descUseSwagger3 = true;
     private Boolean descUseSwagger = true;
-
-    /**
-     * 字段是否必填
-     */
-    private String required = "DocView.Required";
-
-    /**
-     * 是否使用注解
-     */
-    private Boolean requiredUseCommentTag = true;
 
     /**
      * 字段名称取 JsonProperty 注解
@@ -120,9 +103,9 @@ public class Settings implements PersistentStateComponent<Settings> {
      * 字段必填注解
      */
     private Set<String> requiredFieldAnnotation = new HashSet<>() {{
-        add(Arrays.toString(ValidationConstant.NOT_BLANK));
-        add(Arrays.toString(ValidationConstant.NOT_EMPTY));
-        add(Arrays.toString(ValidationConstant.NOT_NULL));
+        addAll(Arrays.asList(ValidationConstant.NOT_BLANK));
+        addAll(Arrays.asList(ValidationConstant.NOT_EMPTY));
+        addAll(Arrays.asList(ValidationConstant.NOT_NULL));
         add(LombokConstant.NON_NULL);
     }};
 
@@ -236,6 +219,16 @@ public class Settings implements PersistentStateComponent<Settings> {
     @Override
     public void loadState(@NotNull Settings state) {
         XmlSerializerUtil.copyBean(state, this);
+        // Old builds accidentally stored each pair as Arrays.toString(...), not annotation FQNs.
+        // Migrate only those exact known values; respect empty and user-defined source lists.
+        if (requiredFieldAnnotation != null) {
+            requiredFieldAnnotation = new HashSet<>(requiredFieldAnnotation);
+            for (String[] names : List.of(ValidationConstant.NOT_BLANK, ValidationConstant.NOT_EMPTY, ValidationConstant.NOT_NULL)) {
+                if (requiredFieldAnnotation.remove(Arrays.toString(names))) {
+                    requiredFieldAnnotation.addAll(Arrays.asList(names));
+                }
+            }
+        }
     }
 
 

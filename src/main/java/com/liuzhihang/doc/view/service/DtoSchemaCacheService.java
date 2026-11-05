@@ -132,8 +132,6 @@ public final class DtoSchemaCacheService {
     private int settingsHash() {
         Settings settings = Settings.getInstance(project);
         return Objects.hash(
-                settings.getRequired(),
-                settings.getRequiredUseCommentTag(),
                 settings.getFieldNameJsonProperty(),
                 settings.getFieldNameCaseType(),
                 settings.getContainClassAnnotationName(),

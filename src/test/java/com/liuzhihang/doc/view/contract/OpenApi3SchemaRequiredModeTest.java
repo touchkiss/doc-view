@@ -16,7 +16,6 @@ import com.liuzhihang.doc.view.DocViewBundle;
 import com.liuzhihang.doc.view.dto.DocView;
 import com.liuzhihang.doc.view.dto.DocViewData;
 import com.liuzhihang.doc.view.dto.DocViewParamData;
-import com.liuzhihang.doc.view.exception.DocViewException;
 import com.liuzhihang.doc.view.service.DocViewService;
 import com.liuzhihang.doc.view.service.DtoSchemaCacheService;
 import com.liuzhihang.doc.view.testsupport.AnnotationStubs;
@@ -34,8 +33,6 @@ import java.util.Set;
 public final class OpenApi3SchemaRequiredModeTest extends LightJavaCodeInsightFixtureTestCase {
 
     private Set<String> originalRequiredFieldAnnotations;
-    private Boolean originalRequiredUseCommentTag;
-    private String originalRequiredTag;
     private Boolean originalFieldNameJsonProperty;
 
     @Override
@@ -80,12 +77,8 @@ public final class OpenApi3SchemaRequiredModeTest extends LightJavaCodeInsightFi
 
         Settings settings = Settings.getInstance(getProject());
         originalRequiredFieldAnnotations = new HashSet<>(settings.getRequiredFieldAnnotation());
-        originalRequiredUseCommentTag = settings.getRequiredUseCommentTag();
-        originalRequiredTag = settings.getRequired();
         originalFieldNameJsonProperty = settings.getFieldNameJsonProperty();
         settings.setRequiredFieldAnnotation(new HashSet<>(Set.of("javax.validation.constraints.NotNull")));
-        settings.setRequiredUseCommentTag(true);
-        settings.setRequired("DocView.Required");
         settings.setFieldNameJsonProperty(true);
     }
 
@@ -94,8 +87,6 @@ public final class OpenApi3SchemaRequiredModeTest extends LightJavaCodeInsightFi
         try {
             Settings settings = Settings.getInstance(getProject());
             settings.setRequiredFieldAnnotation(new HashSet<>(originalRequiredFieldAnnotations));
-            settings.setRequiredUseCommentTag(originalRequiredUseCommentTag);
-            settings.setRequired(originalRequiredTag);
             settings.setFieldNameJsonProperty(originalFieldNameJsonProperty);
 
             DtoSchemaCacheService cacheService = getProject().getService(DtoSchemaCacheService.class);
@@ -123,7 +114,7 @@ public final class OpenApi3SchemaRequiredModeTest extends LightJavaCodeInsightFi
         assertTrue(DocViewUtils.isRequired(field(dto, "value")));
     }
 
-    public void testNotRequiredOverridesValidationSwagger2AndDocViewTag() {
+    public void testNotRequiredOverridesValidationSwagger2AndIgnoresLegacySourceTag() {
         installSchema(true);
         PsiClass dto = myFixture.addClass("""
                 package contract.openapi3;
@@ -146,7 +137,7 @@ public final class OpenApi3SchemaRequiredModeTest extends LightJavaCodeInsightFi
         assertFalse(DocViewUtils.isRequired(field(dto, "value")));
     }
 
-    public void testAutoAndMissingModeUseExistingRequiredSources() {
+    public void testAutoAndMissingModeUseStandardSourcesAndIgnoreLegacyTag() {
         installSchema(true);
         PsiClass dto = myFixture.addClass("""
                 package contract.openapi3;
@@ -175,7 +166,8 @@ public final class OpenApi3SchemaRequiredModeTest extends LightJavaCodeInsightFi
 
         assertTrue(DocViewUtils.isRequired(field(dto, "validation")));
         assertTrue(DocViewUtils.isRequired(field(dto, "swagger2")));
-        assertTrue(DocViewUtils.isRequired(field(dto, "docViewTag")));
+        assertFalse("Proprietary source tags no longer make fields required",
+                DocViewUtils.isRequired(field(dto, "docViewTag")));
         assertFalse(DocViewUtils.isRequired(field(dto, "optional")));
     }
 
@@ -334,7 +326,7 @@ public final class OpenApi3SchemaRequiredModeTest extends LightJavaCodeInsightFi
         assertFalse(params.get(1).getRequired());
     }
 
-    public void testSchemaWriteBackUpdatesModesPreservesMembersAndEscapesDescription() {
+    public void testDraftModesAndEscapedDescriptionsDoNotAlterSchemaMembers() {
         installSchema(true);
         PsiClass dto = myFixture.addClass("""
                 package contract.openapi3;
@@ -357,26 +349,32 @@ public final class OpenApi3SchemaRequiredModeTest extends LightJavaCodeInsightFi
         Map<PsiElement, DocViewParamData> changes = new LinkedHashMap<>();
         changes.put(optional, fieldEdit(optional, false, "可选说明"));
         changes.put(required, fieldEdit(required, true, escapedDescription));
-        DocViewUtils.writeComment(getProject(), changes);
+        assertSourceRemainsUnchanged(dto, changes);
 
         PsiAnnotation optionalSchema = optional.getAnnotation("io.swagger.v3.oas.annotations.media.Schema");
         assertNotNull(optionalSchema);
-        assertTrue(attributeText(optionalSchema, "requiredMode").endsWith("NOT_REQUIRED"));
-        assertFalse(declaresAttribute(optionalSchema, "required"));
+        assertTrue(attributeText(optionalSchema, "requiredMode").endsWith("AUTO"));
+        assertTrue(declaresAttribute(optionalSchema, "required"));
+        assertEquals("true", attributeText(optionalSchema, "required"));
         assertEquals("api-name", stringAttribute(optionalSchema, "name"));
         assertEquals("保留标题", stringAttribute(optionalSchema, "title"));
         assertEquals("保留示例", stringAttribute(optionalSchema, "example"));
-        assertEquals("可选说明", stringAttribute(optionalSchema, "description"));
+        assertFalse(declaresAttribute(optionalSchema, "description"));
+        assertEquals("", stringAttribute(optionalSchema, "description"));
+        assertEquals("", DocViewUtils.fieldDesc(optional));
 
         PsiAnnotation requiredSchema = required.getAnnotation("io.swagger.v3.oas.annotations.media.Schema");
         assertNotNull(requiredSchema);
-        assertTrue(attributeText(requiredSchema, "requiredMode").endsWith("REQUIRED"));
-        assertFalse(declaresAttribute(requiredSchema, "required"));
+        assertTrue(attributeText(requiredSchema, "requiredMode").endsWith("AUTO"));
+        assertTrue(declaresAttribute(requiredSchema, "required"));
+        assertEquals("true", attributeText(requiredSchema, "required"));
         assertEquals("另一个标题", stringAttribute(requiredSchema, "title"));
-        assertEquals(escapedDescription, stringAttribute(requiredSchema, "description"));
+        assertFalse(declaresAttribute(requiredSchema, "description"));
+        assertEquals("", stringAttribute(requiredSchema, "description"));
+        assertEquals("", DocViewUtils.fieldDesc(required));
     }
 
-    public void testModeOnlyWriteBackPreservesSchemaDescriptionJavaStringValue() {
+    public void testModeEditsLeaveLiteralAndConstantSchemaDescriptionsUntouched() {
         installSchema(true);
         PsiClass dto = myFixture.addClass("""
                 package contract.openapi3;
@@ -407,11 +405,11 @@ public final class OpenApi3SchemaRequiredModeTest extends LightJavaCodeInsightFi
         Map<PsiElement, DocViewParamData> changes = new LinkedHashMap<>();
         changes.put(literal, fieldEdit(literal, true, DocViewUtils.fieldDesc(literal)));
         changes.put(constant, fieldEdit(constant, false, DocViewUtils.fieldDesc(constant)));
-        DocViewUtils.writeComment(getProject(), changes);
+        assertSourceRemainsUnchanged(dto, changes);
 
         PsiAnnotation literalSchema = literal.getAnnotation("io.swagger.v3.oas.annotations.media.Schema");
         assertNotNull(literalSchema);
-        assertTrue(attributeText(literalSchema, "requiredMode").endsWith("REQUIRED"));
+        assertTrue(attributeText(literalSchema, "requiredMode").endsWith("AUTO"));
         assertEquals("literal-name", stringAttribute(literalSchema, "name"));
         assertEquals("Literal title", stringAttribute(literalSchema, "title"));
         assertEquals("Literal example", stringAttribute(literalSchema, "example"));
@@ -419,14 +417,16 @@ public final class OpenApi3SchemaRequiredModeTest extends LightJavaCodeInsightFi
 
         PsiAnnotation constantSchema = constant.getAnnotation("io.swagger.v3.oas.annotations.media.Schema");
         assertNotNull(constantSchema);
-        assertTrue(attributeText(constantSchema, "requiredMode").endsWith("NOT_REQUIRED"));
+        assertTrue(attributeText(constantSchema, "requiredMode").endsWith("AUTO"));
         assertEquals("constant-name", stringAttribute(constantSchema, "name"));
         assertEquals("Constant title", stringAttribute(constantSchema, "title"));
         assertEquals("Constant example", stringAttribute(constantSchema, "example"));
-        assertEquals(constantDescription, stringAttribute(constantSchema, "description"));
+        assertFalse("Read-only metadata must retain the original constant expression",
+                constantSchema.findDeclaredAttributeValue("description") instanceof PsiLiteralExpression);
+        assertEquals(constantDescription, DocViewUtils.fieldDesc(constant));
     }
 
-    public void testModeOnlyWriteBackPreservesExplicitBlankSchemaDescriptionsAgainstJavadocFallback() {
+    public void testDraftModesPreserveExplicitBlankSchemaDescriptionsAgainstJavadocFallback() {
         installSchema(true);
         PsiClass dto = myFixture.addClass("""
                 package contract.openapi3;
@@ -458,22 +458,22 @@ public final class OpenApi3SchemaRequiredModeTest extends LightJavaCodeInsightFi
         Map<PsiElement, DocViewParamData> changes = new LinkedHashMap<>();
         changes.put(empty, fieldEdit(empty, true, DocViewUtils.fieldDesc(empty)));
         changes.put(whitespace, fieldEdit(whitespace, false, DocViewUtils.fieldDesc(whitespace)));
-        DocViewUtils.writeComment(getProject(), changes);
+        assertSourceRemainsUnchanged(dto, changes);
 
         PsiAnnotation emptySchema = empty.getAnnotation("io.swagger.v3.oas.annotations.media.Schema");
         assertNotNull(emptySchema);
-        assertTrue(attributeText(emptySchema, "requiredMode").endsWith("REQUIRED"));
+        assertTrue(attributeText(emptySchema, "requiredMode").endsWith("AUTO"));
         assertEquals("", stringAttribute(emptySchema, "description"));
         assertEquals("", DocViewUtils.fieldDesc(empty));
 
         PsiAnnotation whitespaceSchema = whitespace.getAnnotation("io.swagger.v3.oas.annotations.media.Schema");
         assertNotNull(whitespaceSchema);
-        assertTrue(attributeText(whitespaceSchema, "requiredMode").endsWith("NOT_REQUIRED"));
+        assertTrue(attributeText(whitespaceSchema, "requiredMode").endsWith("AUTO"));
         assertEquals("   ", stringAttribute(whitespaceSchema, "description"));
         assertEquals("   ", DocViewUtils.fieldDesc(whitespace));
     }
 
-    public void testWritingBlankSchemaDescriptionPreventsJavadocFallbackFromReturning() {
+    public void testDraftBlankDescriptionsDoNotReplaceAnnotationsOrJavadocFallback() {
         installSchema(true);
         PsiClass dto = myFixture.addClass("""
                 package contract.openapi3;
@@ -494,27 +494,28 @@ public final class OpenApi3SchemaRequiredModeTest extends LightJavaCodeInsightFi
         PsiField cleared = field(dto, "cleared");
         PsiField whitespace = field(dto, "whitespace");
         assertEquals("Existing description", DocViewUtils.fieldDesc(cleared));
-        assertFalse(DocViewUtils.fieldDesc(whitespace).isEmpty());
+        String originalFallback = DocViewUtils.fieldDesc(whitespace);
+        assertFalse(originalFallback.isEmpty());
 
         Map<PsiElement, DocViewParamData> changes = new LinkedHashMap<>();
         changes.put(cleared, fieldEdit(cleared, true, ""));
         changes.put(whitespace, fieldEdit(whitespace, false, "   "));
-        DocViewUtils.writeComment(getProject(), changes);
+        assertSourceRemainsUnchanged(dto, changes);
 
         PsiAnnotation clearedSchema = cleared.getAnnotation("io.swagger.v3.oas.annotations.media.Schema");
         assertNotNull(clearedSchema);
         assertTrue(declaresAttribute(clearedSchema, "description"));
-        assertEquals("", stringAttribute(clearedSchema, "description"));
-        assertEquals("", DocViewUtils.fieldDesc(cleared));
+        assertEquals("Existing description", stringAttribute(clearedSchema, "description"));
+        assertEquals("Existing description", DocViewUtils.fieldDesc(cleared));
 
         PsiAnnotation whitespaceSchema = whitespace.getAnnotation("io.swagger.v3.oas.annotations.media.Schema");
         assertNotNull(whitespaceSchema);
-        assertTrue(declaresAttribute(whitespaceSchema, "description"));
-        assertEquals("   ", stringAttribute(whitespaceSchema, "description"));
-        assertEquals("   ", DocViewUtils.fieldDesc(whitespace));
+        assertFalse(declaresAttribute(whitespaceSchema, "description"));
+        assertEquals("", stringAttribute(whitespaceSchema, "description"));
+        assertEquals(originalFallback, DocViewUtils.fieldDesc(whitespace));
     }
 
-    public void testUnsupportedSchemaIsPreflightedBeforeAnyFieldWrite() {
+    public void testMixedBatchWithUnsupportedSchemaRemainsReadOnly() {
         myFixture.addClass("""
                 package io.swagger.v3.oas.annotations.media;
                 public @interface Schema {
@@ -539,27 +540,26 @@ public final class OpenApi3SchemaRequiredModeTest extends LightJavaCodeInsightFi
         PsiField ordinary = field(dto, "ordinary");
         PsiField unsupported = field(dto, "unsupported");
         String originalOrdinaryText = ordinary.getText();
+        String originalOrdinaryDescription = DocViewUtils.fieldDesc(ordinary);
+        assertFalse("The original standard Javadoc remains readable", originalOrdinaryDescription.isEmpty());
         String originalUnsupportedText = unsupported.getText();
         Map<PsiElement, DocViewParamData> changes = new LinkedHashMap<>();
         changes.put(ordinary, fieldEdit(ordinary, true, "Draft ordinary description"));
         changes.put(unsupported, fieldEdit(unsupported, false, "Draft Schema description"));
 
-        DocViewException failure = null;
-        try {
-            DocViewUtils.writeComment(getProject(), changes);
-        } catch (DocViewException exception) {
-            failure = exception;
-        }
-
-        assertNotNull("Expected a user-readable unsupported dependency error", failure);
-        assertTrue(failure.getMessage().contains("swagger-annotations"));
-        assertTrue(failure.getMessage().contains("2.2.5"));
-        assertEquals("A requiredMode capability failure must precede all batch writes",
+        assertSourceRemainsUnchanged(dto, changes);
+        assertEquals("Ordinary field Javadoc remains unchanged in a mixed draft batch",
                 originalOrdinaryText, ordinary.getText());
         assertEquals(originalUnsupportedText, unsupported.getText());
+        assertEquals("Read-only drafts preserve the fork's existing description formatting",
+                originalOrdinaryDescription, DocViewUtils.fieldDesc(ordinary));
+        PsiAnnotation originalSchema = unsupported.getAnnotation("io.swagger.v3.oas.annotations.media.Schema");
+        assertNotNull(originalSchema);
+        assertEquals("Original Schema description", stringAttribute(originalSchema, "description"));
+        assertEquals("stable-name", stringAttribute(originalSchema, "name"));
     }
 
-    public void testMissingRequiredModePreservesForkWriteBackUsingRequiredMember() {
+    public void testLegacyRequiredSchemaRemainsReadableAndUnmodifiedByDrafts() {
         installSchema(false);
         PsiClass dto = myFixture.addClass("""
                 package contract.openapi3;
@@ -571,14 +571,22 @@ public final class OpenApi3SchemaRequiredModeTest extends LightJavaCodeInsightFi
                 """);
         PsiField value = field(dto, "value");
         assertTrue(DocViewUtils.isRequired(value));
-        DocViewUtils.writeComment(getProject(), Map.of(value, fieldEdit(value, false, "新描述")));
+        assertSourceRemainsUnchanged(dto, Map.of(value, fieldEdit(value, false, "新描述")));
         PsiAnnotation schema = value.getAnnotation("io.swagger.v3.oas.annotations.media.Schema");
         assertNotNull(schema);
-        assertEquals("false", attributeText(schema, "required"));
+        assertEquals("true", attributeText(schema, "required"));
         assertEquals("original-name", stringAttribute(schema, "name"));
-        assertEquals("新描述", stringAttribute(schema, "description"));
+        assertFalse(declaresAttribute(schema, "description"));
+        assertEquals("", stringAttribute(schema, "description"));
         assertFalse(declaresAttribute(schema, "requiredMode"));
-        assertFalse(DocViewUtils.isRequired(value));
+        assertTrue("Legacy Schema metadata remains readable without write-back", DocViewUtils.isRequired(value));
+    }
+
+    private void assertSourceRemainsUnchanged(PsiClass dto, Map<PsiElement, DocViewParamData> draftChanges) {
+        String originalSource = dto.getContainingFile().getText();
+        DocViewUtils.writeComment(getProject(), draftChanges);
+        assertEquals("Document drafts must not modify any JavaDoc, annotation or source text",
+                originalSource, dto.getContainingFile().getText());
     }
 
     private void installSchema(boolean includeRequiredMode) {

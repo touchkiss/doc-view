@@ -2,29 +2,22 @@ package com.liuzhihang.doc.view.utils;
 
 import com.intellij.codeInsight.AnnotationUtil;
 import com.intellij.openapi.application.ApplicationManager;
-import com.intellij.openapi.command.WriteCommandAction;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.util.Computable;
-import com.intellij.openapi.util.text.StringUtil;
 import com.intellij.psi.*;
 import com.intellij.psi.javadoc.PsiDocComment;
 import com.intellij.psi.javadoc.PsiDocTag;
 import com.intellij.psi.util.InheritanceUtil;
 import com.intellij.psi.util.PsiTreeUtil;
-import com.liuzhihang.doc.view.DocViewBundle;
 import com.liuzhihang.doc.view.config.Settings;
 import com.liuzhihang.doc.view.constant.JsonPropertyConstant;
 import com.liuzhihang.doc.view.constant.SpringConstant;
 import com.liuzhihang.doc.view.constant.SwaggerConstant;
 import com.liuzhihang.doc.view.dto.DocViewParamData;
-import com.liuzhihang.doc.view.exception.DocViewException;
-import com.liuzhihang.doc.view.service.impl.WriterService;
 import org.apache.commons.lang3.StringUtils;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
-import java.util.ArrayList;
-import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
@@ -113,15 +106,6 @@ public class DocViewUtils {
         return ApplicationManager.getApplication().runReadAction((Computable<String>) () -> {
             Settings settings = Settings.getInstance(psiClass.getProject());
 
-            if (settings.getTitleUseCommentTag()) {
-                // 注释 @DocView.Title
-                String docTitleTagValue = CustomPsiCommentUtils.tagDocComment(psiClass.getDocComment(), settings.getTitleTag());
-
-                if (StringUtils.isNotBlank(docTitleTagValue)) {
-                    return docTitleTagValue;
-                }
-            }
-
             if (settings.getTitleClassComment()) {
                 // 获取类注释
 
@@ -157,7 +141,7 @@ public class DocViewUtils {
      * <p>
      * 方法名字(接口标题):
      * <p>
-     * 支持 Swagger/方法名/自定义注释 tag
+     * 支持 Swagger、标准方法注释和方法名
      * <p>
      * 方法注释保留完整首行内容
      *
@@ -187,15 +171,6 @@ public class DocViewUtils {
                     if (StringUtils.isNotBlank(value)) {
                         return value;
                     }
-                }
-            }
-
-            // 注释上的 tag
-            if (settings.getNameUseCommentTag()) {
-                String comment = CustomPsiCommentUtils.tagDocComment(psiMethod.getDocComment(), settings.getNameTag());
-
-                if (StringUtils.isNotBlank(comment)) {
-                    return comment;
                 }
             }
 
@@ -366,6 +341,7 @@ public class DocViewUtils {
     public static boolean isRequired(@NotNull PsiField field) {
 
         return ApplicationManager.getApplication().runReadAction((Computable<Boolean>) () -> {
+            if (ProtoUtils.isRequiredSyntheticField(field)) return true;
             Settings settings = Settings.getInstance(field.getProject());
 
             Boolean schemaRequired = explicitSchemaRequired(field);
@@ -383,22 +359,7 @@ public class DocViewUtils {
                 }
             }
 
-            if (settings.getRequiredUseCommentTag()) {
-                // 查看注释
-                PsiDocComment docComment = field.getDocComment();
 
-                if (docComment == null) {
-                    // 没有注释, 非必填
-                    return false;
-                }
-
-                PsiDocTag requiredTag = docComment.findTagByName(settings.getRequired());
-
-                if (requiredTag != null) {
-                    return true;
-                }
-
-            }
 
             return false;
         });
@@ -679,12 +640,7 @@ public class DocViewUtils {
                     return true;
                 }
             }
-            if (settings.getRequiredUseCommentTag()) {
-                PsiDocComment docComment = PsiTreeUtil.findChildOfType(component, PsiDocComment.class);
-                if (docComment != null && docComment.findTagByName(settings.getRequired()) != null) {
-                    return true;
-                }
-            }
+
             return false;
         });
     }
@@ -710,137 +666,11 @@ public class DocViewUtils {
     }
 
     /**
-     * 变动的字段生成注释
+     * Compatibility boundary for legacy callers. Documentation edits are held in memory only;
+     * this method deliberately leaves business source code and annotations unchanged.
      */
     public static void writeComment(Project project, @NotNull Map<PsiElement, DocViewParamData> modifyBodyMap) {
-
-        // Validate every Schema capability before writing any field, so a missing annotation dependency
-        // cannot leave a partially applied edit. Older Schema definitions use their existing required member.
-        for (PsiElement element : modifyBodyMap.keySet()) {
-            PsiField psiField = (PsiField) element;
-            PsiAnnotation schemaAnnotation = psiField.getAnnotation(SwaggerConstant.SCHEMA);
-            if (schemaAnnotation != null) {
-                validateSchemaRequiredMode(schemaAnnotation);
-            }
-        }
-
-        for (PsiElement element : modifyBodyMap.keySet()) {
-            DocViewParamData data = modifyBodyMap.get(element);
-            String docComment;
-
-            PsiField psiField = (PsiField) element;
-
-            // swagger v3 @Schema 直接修改属性
-            PsiAnnotation schemaAnnotation = psiField.getAnnotation(SwaggerConstant.SCHEMA);
-            if (schemaAnnotation != null) {
-                writeSchemaRequiredMode(project, psiField, schemaAnnotation, data);
-                continue;
-            }
-            // swagger @ApiModelProperty 直接修改属性
-            PsiAnnotation apiModelPropertyAnnotation = psiField.getAnnotation(SwaggerConstant.API_MODEL_PROPERTY);
-            if (apiModelPropertyAnnotation != null) {
-
-                String annotationText = "";
-
-                if (StringUtils.isNotBlank(data.getDesc()) && data.getRequired()) {
-                    annotationText = "@ApiModelProperty(value = \"" + data.getDesc() + "\", required = true)";
-                } else if (StringUtils.isNotBlank(data.getDesc()) && !data.getRequired()) {
-                    annotationText = "@ApiModelProperty(\"" + data.getDesc() + "\")";
-                } else if (StringUtils.isBlank(data.getDesc()) && data.getRequired()) {
-                    annotationText = "@ApiModelProperty(required = true)";
-                }
-
-                if (StringUtils.isNotBlank(annotationText)) {
-                    final PsiElementFactory elementFactory = JavaPsiFacade.getElementFactory(project);
-                    PsiAnnotation newAnnotation = elementFactory.createAnnotationFromText(annotationText, psiField);
-                    // 调用生成逻辑
-                    WriteCommandAction.runWriteCommandAction(project, () -> {
-                        apiModelPropertyAnnotation.replace(newAnnotation);
-                    });
-
-                }
-                return;
-            }
-
-            // 不修改原有注解
-            if (!DocViewUtils.isRequired(psiField) && data.getRequired()) {
-                docComment = "/** " + data.getDesc() + "\n" + "* @" + Settings.getInstance(project).getRequired() + " */";
-            } else {
-                docComment = "/** " + data.getDesc() + " */";
-            }
-
-            PsiComment comment = PsiTreeUtil.findChildOfType(psiField, PsiComment.class);
-
-            if (comment != null && !(comment instanceof PsiDocComment)) {
-                WriteCommandAction.runWriteCommandAction(project, comment::delete);
-            }
-
-            PsiElementFactory factory = PsiElementFactory.getInstance(project);
-            PsiDocComment psiDocComment = factory.createDocCommentFromText(docComment);
-            ApplicationManager.getApplication().getService(WriterService.class).write(project, element, psiDocComment);
-
-        }
-    }
-
-    private static void writeSchemaRequiredMode(Project project, PsiField field,
-                                                PsiAnnotation schemaAnnotation, DocViewParamData data) {
-        validateSchemaRequiredMode(schemaAnnotation);
-
-        List<String> members = new ArrayList<>();
-        boolean hasDescription = false;
-        boolean hasRequiredMode = false;
-        String description = data.getDesc();
-        String descriptionMember = "description = \""
-                + StringUtil.escapeStringCharacters(description == null ? "" : description) + "\"";
-        PsiClass schemaClass = schemaAnnotation.resolveAnnotationType();
-        boolean supportsMode = schemaClass != null && schemaClass.findMethodsByName("requiredMode", false).length > 0;
-        String modeMember = supportsMode
-                ? "requiredMode = " + SwaggerConstant.SCHEMA + ".RequiredMode."
-                    + (Boolean.TRUE.equals(data.getRequired()) ? "REQUIRED" : "NOT_REQUIRED")
-                : "required = " + Boolean.TRUE.equals(data.getRequired());
-
-        for (PsiNameValuePair pair : schemaAnnotation.getParameterList().getAttributes()) {
-            String name = pair.getName();
-            if ("required".equals(name)) {
-                continue;
-            }
-            if ("requiredMode".equals(name)) {
-                members.add(modeMember);
-                hasRequiredMode = true;
-                continue;
-            }
-            if ("description".equals(name)) {
-                if (description != null) {
-                    members.add(descriptionMember);
-                    hasDescription = true;
-                }
-                continue;
-            }
-            members.add(pair.getText());
-        }
-
-        if (!hasDescription && description != null) {
-            members.add(descriptionMember);
-        }
-        if (!hasRequiredMode) {
-            members.add(modeMember);
-        }
-
-        String annotationText = "@" + SwaggerConstant.SCHEMA
-                + (members.isEmpty() ? "" : "(" + String.join(", ", members) + ")");
-        PsiAnnotation replacement = JavaPsiFacade.getElementFactory(project)
-                .createAnnotationFromText(annotationText, field);
-        WriteCommandAction.runWriteCommandAction(project, () -> {
-            schemaAnnotation.replace(replacement);
-        });
-    }
-
-    private static void validateSchemaRequiredMode(PsiAnnotation schemaAnnotation) {
-        PsiClass schemaClass = schemaAnnotation.resolveAnnotationType();
-        if (schemaClass == null || (schemaClass.findMethodsByName("requiredMode", false).length == 0
-                && schemaClass.findMethodsByName("required", false).length == 0)) {
-            throw new DocViewException(DocViewBundle.message("schema.required.mode.unsupported"));
-        }
+        // No source writes, standard annotation rewrites, or plugin-specific JavaDoc tags.
     }
 
     @Nullable

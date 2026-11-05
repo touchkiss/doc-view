@@ -29,17 +29,14 @@ public final class GenerationRulesForm {
     private final JPanel rootPanel = new JPanel();
     private final List<JCheckBox> controls = new ArrayList<>();
 
-    private final JCheckBox titleCommentTagCheckBox = checkBox("settings.doc.title.comment.tag", "titleCommentTagCheckBox");
     private final JCheckBox titleClassCommentCheckBox = checkBox("settings.doc.title.class.comment", "titleClassCommentCheckBox");
     private final JCheckBox titleSimpleClassNameCheckBox = checkBox("settings.doc.title.simple", "titleSimpleClassNameCheckBox");
     private final JCheckBox titleFullClassNameCheckBox = checkBox("settings.doc.title.full", "titleFullClassNameCheckBox");
     private final JCheckBox nameSwagger3CheckBox = checkBox("settings.doc.name.swagger3", "nameSwagger3CheckBox");
     private final JCheckBox nameSwaggerCheckBox = checkBox("settings.doc.name.swagger", "nameSwaggerCheckBox");
-    private final JCheckBox nameCommentTagCheckBox = checkBox("settings.doc.name.comment.tag", "nameCommentTagCheckBox");
     private final JCheckBox nameMethodCommentCheckBox = checkBox("settings.doc.name.method.comment", "nameMethodCommentCheckBox");
     private final JCheckBox descSwagger3CheckBox = checkBox("settings.doc.desc.swagger3", "descSwagger3CheckBox");
     private final JCheckBox descSwaggerCheckBox = checkBox("settings.doc.desc.swagger", "descSwaggerCheckBox");
-    private final JCheckBox requireCommentTagCheckBox = checkBox("settings.doc.required.comment.tag", "requireCommentTagCheckBox");
     private final JCheckBox fieldNameJsonPropertyCheckBox = checkBox("settings.doc.field.name.JsonProperty", "fieldNameJsonPropertyCheckBox");
 
     private final JCheckBox fieldNameSnakeCase = new JCheckBox("Use snake_case field names");
@@ -54,12 +51,12 @@ public final class GenerationRulesForm {
 
         rootPanel.add(group("settings.doc.title", "generationTitle", "settings.rules.title.summary",
                 "settings.rules.title.help.name", DocViewBundle.message("settings.rules.title.order"),
-                titleCommentTagCheckBox, titleClassCommentCheckBox,
+                titleClassCommentCheckBox,
                 titleSimpleClassNameCheckBox, titleFullClassNameCheckBox));
         rootPanel.add(group("settings.doc.name", "generationName", "settings.rules.name.summary",
                 "settings.rules.name.help.name", DocViewBundle.message("settings.rules.name.order"),
                 nameSwagger3CheckBox, nameSwaggerCheckBox,
-                nameCommentTagCheckBox, nameMethodCommentCheckBox));
+                nameMethodCommentCheckBox));
         rootPanel.add(group("settings.doc.desc", "generationDescription", "settings.rules.desc.summary",
                 "settings.rules.desc.help.name", DocViewBundle.message("settings.rules.desc.order"),
                 descSwagger3CheckBox, descSwaggerCheckBox));
@@ -69,7 +66,7 @@ public final class GenerationRulesForm {
                 DocViewBundle.message("settings.rules.required.fields"),
                 DocViewBundle.message("settings.rules.required.parameters"));
         rootPanel.add(group("settings.doc.required", "generationRequired", "settings.rules.required.summary",
-                "settings.rules.required.help.name", requiredHelp, requireCommentTagCheckBox));
+                "settings.rules.required.help.name", requiredHelp));
         rootPanel.add(group("settings.doc.field.name", "generationFieldName", "settings.rules.field.name.summary",
                 "settings.rules.field.name.help.name", DocViewBundle.message("settings.rules.field.name.order"),
                 fieldNameJsonPropertyCheckBox, fieldNameSnakeCase));
@@ -154,51 +151,42 @@ public final class GenerationRulesForm {
 
     public boolean isModified() {
         Settings settings = Settings.getInstance(project);
-        return titleCommentTagCheckBox.isSelected() != settings.getTitleUseCommentTag()
-                || titleFullClassNameCheckBox.isSelected() != settings.getTitleUseFullClassName()
+        return titleFullClassNameCheckBox.isSelected() != settings.getTitleUseFullClassName()
                 || titleSimpleClassNameCheckBox.isSelected() != settings.getTitleUseSimpleClassName()
                 || titleClassCommentCheckBox.isSelected() != settings.getTitleClassComment()
                 || nameSwagger3CheckBox.isSelected() != settings.getNameUseSwagger3()
                 || nameSwaggerCheckBox.isSelected() != settings.getNameUseSwagger()
-                || nameCommentTagCheckBox.isSelected() != settings.getNameUseCommentTag()
                 || nameMethodCommentCheckBox.isSelected() != settings.getNameMethodComment()
                 || descSwagger3CheckBox.isSelected() != settings.getDescUseSwagger3()
                 || descSwaggerCheckBox.isSelected() != settings.getDescUseSwagger()
-                || requireCommentTagCheckBox.isSelected() != settings.getRequiredUseCommentTag()
                 || fieldNameJsonPropertyCheckBox.isSelected() != settings.getFieldNameJsonProperty()
                 || fieldNameSnakeCase.isSelected() != settings.getFieldNameCaseType();
     }
 
     public void apply() {
         Settings settings = Settings.getInstance(project);
-        settings.setTitleUseCommentTag(titleCommentTagCheckBox.isSelected());
         settings.setTitleUseFullClassName(titleFullClassNameCheckBox.isSelected());
         settings.setTitleUseSimpleClassName(titleSimpleClassNameCheckBox.isSelected());
         settings.setTitleClassComment(titleClassCommentCheckBox.isSelected());
         settings.setNameUseSwagger3(nameSwagger3CheckBox.isSelected());
         settings.setNameUseSwagger(nameSwaggerCheckBox.isSelected());
-        settings.setNameUseCommentTag(nameCommentTagCheckBox.isSelected());
         settings.setNameMethodComment(nameMethodCommentCheckBox.isSelected());
         settings.setDescUseSwagger3(descSwagger3CheckBox.isSelected());
         settings.setDescUseSwagger(descSwaggerCheckBox.isSelected());
-        settings.setRequiredUseCommentTag(requireCommentTagCheckBox.isSelected());
         settings.setFieldNameJsonProperty(fieldNameJsonPropertyCheckBox.isSelected());
         settings.setFieldNameCaseType(fieldNameSnakeCase.isSelected());
     }
 
     public void reset() {
         Settings settings = Settings.getInstance(project);
-        titleCommentTagCheckBox.setSelected(settings.getTitleUseCommentTag());
         titleFullClassNameCheckBox.setSelected(settings.getTitleUseFullClassName());
         titleSimpleClassNameCheckBox.setSelected(settings.getTitleUseSimpleClassName());
         titleClassCommentCheckBox.setSelected(settings.getTitleClassComment());
         nameSwagger3CheckBox.setSelected(settings.getNameUseSwagger3());
         nameSwaggerCheckBox.setSelected(settings.getNameUseSwagger());
-        nameCommentTagCheckBox.setSelected(settings.getNameUseCommentTag());
         nameMethodCommentCheckBox.setSelected(settings.getNameMethodComment());
         descSwagger3CheckBox.setSelected(settings.getDescUseSwagger3());
         descSwaggerCheckBox.setSelected(settings.getDescUseSwagger());
-        requireCommentTagCheckBox.setSelected(settings.getRequiredUseCommentTag());
         fieldNameJsonPropertyCheckBox.setSelected(settings.getFieldNameJsonProperty());
         fieldNameSnakeCase.setSelected(settings.getFieldNameCaseType());
     }

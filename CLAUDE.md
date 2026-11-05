@@ -73,6 +73,10 @@ Each impl's `buildDoc()` uses PSI utility classes to extract annotations, types,
 | `CustomPsiCommentUtils` | Extract JavaDoc `@param`/`@return`/`@see`/`@link` tags |
 | `VelocityUtils` | Render Velocity template string → Markdown |
 
+### Source Metadata
+
+Use standard JavaDoc text/tags, Swagger/OpenAPI and Validation/Spring annotation metadata. Proprietary Doc View JavaDoc tags are not read, generated or configurable. Do not reintroduce source-tag settings or parser fallbacks. `${DocView.*}` expressions are template-context variables, not source tags; JSON5, cURL, version metadata and parameter-list variables remain supported.
+
 ### Velocity Templates
 
 Templates for Spring, Dubbo, and POJO are stored in `config/TemplateSettings` (project-scoped, user-customizable). `DocViewData` exposes all fields that templates reference. When modifying what appears in generated docs, change both the `DocViewData` getters and the default templates in `TemplateSettings`.
@@ -92,9 +96,9 @@ Platform credentials live in project-scoped `YApiSettings`, `ShowDocSettings`, `
 
 `DocViewToolWindowFactory` creates the right-side panel on IDE startup. It builds a tree: Module → Class → Method nodes, each caching their `DocView` objects. `WindowClearAction` invalidates the cache. The window independently re-runs the detection+build pipeline when refreshed.
 
-### PSI Write-back
+### Source Read-only Boundary
 
-`WriterService` uses `WriteCommandAction` to sync UI-edited documentation back to Java source as JavaDoc comments. This is how "Doc Editor" saves changes to code.
+Plugin document actions must not change or save business source files, JavaDoc or Swagger/OpenAPI annotations. Doc Editor description/required edits affect copied Markdown drafts only. Copy JSON retains its existing type structure/example output. There is no confirmation action that writes edits back. Parsing and template preview read metadata without adding proprietary source tags.
 
 ### Settings Persistence
 

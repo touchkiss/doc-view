@@ -18,6 +18,14 @@
 
 生成文档时按类型自动选择：Spring Controller 和 Feign 接口使用 Spring 模板，Dubbo Service 使用 Dubbo 模板，普通 POJO、record 和已解析的 Proto message 使用 POJO 模板。设置页提供 Spring、Dubbo、POJO 三个标签页，无需在生成文档时手动切换。
 
+## 源码元数据与模板变量
+
+标题和名称使用标准类/方法 JavaDoc、Swagger/OpenAPI 注解以及 Java 类名/方法名；必填信息使用 Validation、Spring 参数声明、Swagger/OpenAPI 的标准属性。插件专属 JavaDoc 标签不再读取、生成或提供配置入口，旧标签不会覆盖这些标准来源。
+
+`${DocView.…}` 是模板数据对象的变量表达式，与源码 JavaDoc 标签无关；本页列出的 JSON5、cURL、版本信息和结构化参数变量继续可用。标准 `@param`、`@return`、`@since`、`@version`、`@see`、`@link` 仍按对应功能解析。
+
+文档操作保持业务源码只读，不改写 JavaDoc 或 Swagger/OpenAPI 注解，也不自动保存业务源码。参数编辑中的描述/必填改动只作用于复制的 Markdown 文档草稿；复制纯 JSON 保持现有类型结构/示例生成行为，不会确认写回业务文件。
+
 ## 模板生效范围
 
 基于 `DocViewData.markdownText()` 的预览、复制、导出以及 ShowDoc、YuQue 上传会使用当前接口对应的自定义模板。YApi 上传由本分支的 `YapiSaveFactory` 组装请求字段和返回结构，描述正文使用 `buildDesc()` 生成的固定 Markdown（含 JSON5 与 cURL），不调用 `DocViewData.markdownText()`；改这里的模板不会改变 YApi 上传布局。
