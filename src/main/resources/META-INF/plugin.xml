@@ -44,7 +44,6 @@
         <applicationService serviceImplementation="com.liuzhihang.doc.view.service.impl.YuQueServiceImpl"/>
         <applicationService serviceImplementation="com.liuzhihang.doc.view.integration.impl.YuQueFacadeServiceImpl"/>
 
-        <postStartupActivity implementation="com.liuzhihang.doc.view.notification.DocViewStartupNotification"/>
         <postStartupActivity implementation="com.liuzhihang.doc.view.mcp.McpStartupActivity"/>
 
         <!-- provider -->
