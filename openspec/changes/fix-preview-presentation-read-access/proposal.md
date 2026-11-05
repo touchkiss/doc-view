@@ -1,0 +1,3 @@
+# 修复预览选择回调的PSI读锁错误
+
+用户异常栈定位PreviewForm.applyDocViewList的Swing选择回调直接调用PsiClass.getQualifiedName，没有读访问。批量导出captureAllExport也直接取PsiClass.getName。界面事件不可假设隐式持有读锁；改为后台生成文档时冻结展示/文件名元数据，UI只消费普通字符串。

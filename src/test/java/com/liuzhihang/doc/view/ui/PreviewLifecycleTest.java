@@ -37,6 +37,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.IdentityHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
@@ -109,6 +110,90 @@ public final class PreviewLifecycleTest extends LightJavaCodeInsightFixtureTestC
                 super.tearDown();
             }
         }
+    }
+
+    public void testCatalogSelectionUsesFrozenClassNamesWithoutEdtPsiReads() throws Exception {
+        assertUiNamesDoNotReadPsi(false);
+    }
+
+    public void testAllExportCaptureUsesFrozenClassNameWithoutEdtPsiReads() throws Exception {
+        assertUiNamesDoNotReadPsi(true);
+    }
+
+    private void assertUiNamesDoNotReadPsi(boolean exportOnly) throws Exception {
+        java.util.concurrent.atomic.AtomicInteger edtReads = new java.util.concurrent.atomic.AtomicInteger();
+        java.util.concurrent.atomic.AtomicInteger backgroundReads = new java.util.concurrent.atomic.AtomicInteger();
+        PsiClass guarded = (PsiClass) java.lang.reflect.Proxy.newProxyInstance(PsiClass.class.getClassLoader(),
+                new Class<?>[]{PsiClass.class}, (proxy, method, arguments) -> {
+                    if (method.getName().equals("getQualifiedName") || method.getName().equals("getName")) {
+                        if (ApplicationManager.getApplication().isDispatchThread()) {
+                            edtReads.incrementAndGet();
+                        } else {
+                            assertTrue("Class presentation must be captured inside read access",
+                                    ApplicationManager.getApplication().isReadAccessAllowed());
+                            backgroundReads.incrementAndGet();
+                        }
+                    }
+                    try {
+                        return method.invoke(fixtureClass, arguments);
+                    } catch (java.lang.reflect.InvocationTargetException exception) {
+                        throw exception.getCause();
+                    }
+                });
+        DocView first = presentationFixture("first-preview", guarded);
+        DocView second = presentationFixture("second-preview", guarded);
+        TemplateSettings templates = TemplateSettings.getInstance(project);
+        String original = templates.getDubboTemplate();
+        Disposable owner = Disposer.newDisposable();
+        try {
+            templates.setDubboTemplate("${DocView.name}");
+            replaceListService(owner, () -> List.of(first, second));
+            PreviewForm form = createListForm();
+            EdtTestUtil.runInEdtAndWait(() -> {
+                initializeUi(form);
+                invoke(form, "buildDoc", new Class<?>[0]);
+            });
+            awaitMarkdown(form, "first-preview");
+            if (exportOnly) {
+                edtReads.set(0);
+                AtomicReference<Object> snapshot = new AtomicReference<>();
+                EdtTestUtil.runInEdtAndWait(() -> snapshot.set(invoke(form, "captureAllExport", new Class<?>[0])));
+                assertNotNull(snapshot.get());
+                assertEquals("PreviewFixture", recordComponent(snapshot.get(), "className"));
+                assertEquals("Export button callbacks must not query PSI class names on EDT", 0, edtReads.get());
+            } else {
+                EdtTestUtil.runInEdtAndWait(() -> fieldValue(form, "catalogList", javax.swing.JList.class).setSelectedIndex(1));
+                awaitMarkdown(form, "second-preview");
+                AtomicReference<String> label = new AtomicReference<>();
+                EdtTestUtil.runInEdtAndWait(() -> label.set(fieldValue(form, "docNameLabel", javax.swing.JLabel.class).getText()));
+                assertEquals("preview.PreviewFixture", label.get());
+                assertEquals("Swing selection callbacks must not query PSI class names on EDT", 0, edtReads.get());
+                assertTrue("Names should be snapshotted by background generation", backgroundReads.get() > 0);
+                AtomicReference<Integer> listenerCount = new AtomicReference<>();
+                EdtTestUtil.runInEdtAndWait(() -> {
+                    listenerCount.set(fieldValue(form, "catalogList", javax.swing.JList.class).getListSelectionListeners().length);
+                    invoke(form, "buildDoc", new Class<?>[0]);
+                });
+                awaitMarkdown(form, "first-preview");
+                EdtTestUtil.runInEdtAndWait(() -> assertEquals("Reload must not accumulate selection listeners",
+                        listenerCount.get().intValue(), fieldValue(form, "catalogList", javax.swing.JList.class).getListSelectionListeners().length));
+                assertEquals("Reload selection must also use frozen metadata", 0, edtReads.get());
+            }
+        } finally {
+            templates.setDubboTemplate(original);
+            Disposer.dispose(owner);
+        }
+    }
+
+    private static DocView presentationFixture(String name, PsiClass owner) {
+        DocView doc = new DocView(name);
+        doc.setPsiClass(owner);
+        doc.setDocTitle("Presentation fixture");
+        doc.setType(FrameworkEnum.DUBBO);
+        doc.setMethod("Dubbo");
+        doc.setPath("/preview/" + name);
+        doc.setContentType(com.liuzhihang.doc.view.enums.ContentTypeEnum.FORM);
+        return doc;
     }
 
     public void testUnshownFormDoesNotAllocateEditorOrAffectUnrelatedEditor() throws Exception {
@@ -428,7 +513,10 @@ public final class PreviewLifecycleTest extends LightJavaCodeInsightFixtureTestC
         DocView another = new DocView("业务文档-B");
         another.setPsiClass(fixtureClass);
         List<DocView> sourceList = new ArrayList<>(List.of(current, another));
+        Map<?, ?> classNames = ApplicationManager.getApplication().runReadAction((Computable<Map<?, ?>>) () ->
+                (Map<?, ?>) invoke(form, "captureClassPresentations", new Class<?>[]{List.class}, sourceList));
         EdtTestUtil.runInEdtAndWait(() -> {
+            setField(form, "classPresentations", classNames);
             setField(form, "currentDocView", current);
             setField(form, "currentMarkdownText", "# 业务文档-A\n正文\n");
             setField(form, "docViewList", sourceList);

@@ -54,6 +54,7 @@ import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
 import javax.swing.*;
+import javax.swing.event.ListSelectionListener;
 import java.awt.*;
 import java.awt.datatransfer.Clipboard;
 import java.awt.datatransfer.StringSelection;
@@ -68,6 +69,8 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.HashMap;
+import java.util.Collections;
+import java.util.IdentityHashMap;
 import java.util.stream.Collectors;
 
 /**
@@ -173,6 +176,8 @@ public class PreviewForm implements Disposable {
      */
     private final PsiClass psiClass;
 
+    private final Project project;
+
     /**
      * 当前方法
      */
@@ -188,6 +193,9 @@ public class PreviewForm implements Disposable {
      */
     private Map<String, DocView> docViewMap;
 
+    private Map<DocView, ClassPresentation> classPresentations = Map.of();
+    private ListSelectionListener catalogSelectionListener;
+
     private final Map<String, String> markdownCache = new HashMap<>();
     private final AtomicLong renderRequest = new AtomicLong();
     private final AtomicLong loadRequest = new AtomicLong();
@@ -200,6 +208,7 @@ public class PreviewForm implements Disposable {
     public PreviewForm(@NotNull PsiClass psiClass, PsiMethod psiMethod) {
 
         this.psiClass = psiClass;
+        this.project = psiClass.getProject();
         this.psiMethod = psiMethod;
 
     }
@@ -239,7 +248,7 @@ public class PreviewForm implements Disposable {
             // dialog 改成 popup, 第一个为根面板，第二个为焦点面板
             popup = JBPopupFactory.getInstance()
                     .createComponentPopupBuilder(rootPanel, previewToolbarPanel)
-                    .setProject(psiClass.getProject())
+                    .setProject(project)
                     .setResizable(true)
                     .setMovable(true)
                     .setModalContext(false)
@@ -257,7 +266,7 @@ public class PreviewForm implements Disposable {
                     .setCancelOnWindowDeactivation(false)
                     .createPopup();
             Disposer.register(popup, this);
-            popup.showCenteredInCurrentWindow(psiClass.getProject());
+            popup.showCenteredInCurrentWindow(project);
             if (!disposed && !popup.isDisposed()) {
                 buildDoc();
             }
@@ -301,6 +310,11 @@ public class PreviewForm implements Disposable {
         cancelIndicators(loadIndicators);
         cancelIndicators(renderIndicators);
         markdownCache.clear();
+        classPresentations = Map.of();
+        if (catalogSelectionListener != null) {
+            catalogList.removeListSelectionListener(catalogSelectionListener);
+            catalogSelectionListener = null;
+        }
 
         if (markdownEditor != null && !markdownEditor.isDisposed()) {
             EditorFactory.getInstance().releaseEditor(markdownEditor);
@@ -473,10 +487,10 @@ public class PreviewForm implements Disposable {
      */
     private void markdownSourcePanel() {
 
-        markdownEditor = (EditorEx) EditorFactory.getInstance().createViewer(markdownDocument, psiClass.getProject(), EditorKind.UNTYPED);
+        markdownEditor = (EditorEx) EditorFactory.getInstance().createViewer(markdownDocument, project, EditorKind.UNTYPED);
 
         FileType fileType = FileTypeManager.getInstance().getFileTypeByExtension("md");
-        markdownEditor.setHighlighter(EditorHighlighterFactory.getInstance().createEditorHighlighter(psiClass.getProject(), fileType));
+        markdownEditor.setHighlighter(EditorHighlighterFactory.getInstance().createEditorHighlighter(project, fileType));
 
         EditorUtils.renderMarkdownEditor(markdownEditor);
 
@@ -544,7 +558,7 @@ public class PreviewForm implements Disposable {
                 if (jcefBrowser == null) {
                     // 不支持 JCEF 不允许预览
                     previewIsHtml.set(false);
-                    DocViewNotification.notifyInfo(psiClass.getProject(), DocViewBundle.message("notify.not.support.jcef"));
+                    DocViewNotification.notifyInfo(project, DocViewBundle.message("notify.not.support.jcef"));
                 } else {
                     previewIsHtml.set(state);
                     if (state) {
@@ -594,7 +608,7 @@ public class PreviewForm implements Disposable {
 
                 DocView selectedDocView = currentDocView;
                 if (selectedDocView == null) {
-                    DocViewNotification.notifyInfo(psiClass.getProject(), DocViewBundle.message("ui.docview.loading.retry"));
+                    DocViewNotification.notifyInfo(project, DocViewBundle.message("ui.docview.loading.retry"));
                     return;
                 }
 
@@ -610,8 +624,8 @@ public class PreviewForm implements Disposable {
 
                     @Override
                     public @Nullable PopupStep<?> onChosen(UploadPlatform selectedValue, boolean finalChoice) {
-                        if (!disposed && !psiClass.getProject().isDisposed()) {
-                            DocViewUploadService.getInstance(selectedValue).upload(psiClass.getProject(), selectedDocView);
+                        if (!disposed && !project.isDisposed()) {
+                            DocViewUploadService.getInstance(selectedValue).upload(project, selectedDocView);
                         }
 
                         return FINAL_CHOICE;
@@ -630,13 +644,13 @@ public class PreviewForm implements Disposable {
 
                 SingleExportSnapshot snapshot = captureSingleExport();
                 if (snapshot == null) {
-                    DocViewNotification.notifyInfo(psiClass.getProject(), DocViewBundle.message("ui.docview.loading.retry"));
+                    DocViewNotification.notifyInfo(project, DocViewBundle.message("ui.docview.loading.retry"));
                     return;
                 }
 
                 popup.cancel();
 
-                ExportUtils.exportMarkdown(psiClass.getProject(), snapshot.fileName(), snapshot.markdownText());
+                ExportUtils.exportMarkdown(project, snapshot.fileName(), snapshot.markdownText());
             }
         });
 
@@ -646,7 +660,7 @@ public class PreviewForm implements Disposable {
             public void actionPerformed(@NotNull AnActionEvent e) {
 
                 if (currentDocView == null || currentMarkdownText == null) {
-                    DocViewNotification.notifyInfo(psiClass.getProject(), DocViewBundle.message("ui.docview.loading.retry"));
+                    DocViewNotification.notifyInfo(project, DocViewBundle.message("ui.docview.loading.retry"));
                     return;
                 }
 
@@ -654,7 +668,7 @@ public class PreviewForm implements Disposable {
                 Clipboard clipboard = Toolkit.getDefaultToolkit().getSystemClipboard();
                 clipboard.setContents(selection, selection);
 
-                DocViewNotification.notifyInfo(psiClass.getProject(), DocViewBundle.message("notify.copy.success", currentDocView.getName()));
+                DocViewNotification.notifyInfo(project, DocViewBundle.message("notify.copy.success", currentDocView.getName()));
             }
         });
 
@@ -685,12 +699,12 @@ public class PreviewForm implements Disposable {
 
                 AllExportSnapshot snapshot = captureAllExport();
                 if (snapshot == null) {
-                    DocViewNotification.notifyInfo(psiClass.getProject(), DocViewBundle.message("ui.docview.loading.retry"));
+                    DocViewNotification.notifyInfo(project, DocViewBundle.message("ui.docview.loading.retry"));
                     return;
                 }
 
                 popup.cancel();
-                ExportUtils.batchExportMarkdown(psiClass.getProject(), snapshot.className(), snapshot::docViews);
+                ExportUtils.batchExportMarkdown(project, snapshot.className(), snapshot::docViews);
             }
         });
         menuGroup.addSeparator();
@@ -702,7 +716,7 @@ public class PreviewForm implements Disposable {
 
                 List<DocView> selectedDocViews = docViewList == null ? null : List.copyOf(docViewList);
                 if (selectedDocViews == null) {
-                    DocViewNotification.notifyInfo(psiClass.getProject(), DocViewBundle.message("ui.docview.loading.retry"));
+                    DocViewNotification.notifyInfo(project, DocViewBundle.message("ui.docview.loading.retry"));
                     return;
                 }
 
@@ -720,8 +734,8 @@ public class PreviewForm implements Disposable {
 
                     @Override
                     public @Nullable PopupStep<?> onChosen(UploadPlatform selectedValue, boolean finalChoice) {
-                        if (!disposed && !psiClass.getProject().isDisposed()) {
-                            DocViewUploadService.getInstance(selectedValue).upload(psiClass.getProject(), selectedDocViews);
+                        if (!disposed && !project.isDisposed()) {
+                            DocViewUploadService.getInstance(selectedValue).upload(project, selectedDocViews);
                         }
 
                         return FINAL_CHOICE;
@@ -752,16 +766,17 @@ public class PreviewForm implements Disposable {
         cancelIndicators(loadIndicators);
         showPreviewStatus(DocViewBundle.message("ui.preview.loading"));
 
-        AtomicReference<List<DocView>> result = new AtomicReference<>();
-        new Task.Backgroundable(psiClass.getProject(), DocViewBundle.message("task.docview.preview"), true) {
+        AtomicReference<PreviewLoadResult> result = new AtomicReference<>();
+        new Task.Backgroundable(project, DocViewBundle.message("task.docview.preview"), true) {
             @Override
             public void run(@NotNull ProgressIndicator indicator) {
                 indicator.setIndeterminate(true);
-                trackIndicator(loadIndicators, requestId, indicator, loadRequest, psiClass.getProject());
+                trackIndicator(loadIndicators, requestId, indicator, loadRequest, project);
                 try {
-                    result.set(ApplicationManager.getApplication().runReadAction((Computable<List<DocView>>) () -> {
+                    result.set(ApplicationManager.getApplication().runReadAction((Computable<PreviewLoadResult>) () -> {
                         indicator.checkCanceled();
-                        return DocViewService.getInstance(psiClass.getProject(), psiClass).buildDoc(psiClass, psiMethod);
+                        List<DocView> docs = List.copyOf(DocViewService.getInstance(project, psiClass).buildDoc(psiClass, psiMethod));
+                        return new PreviewLoadResult(docs, captureClassPresentations(docs));
                     }));
                 } finally {
                     loadIndicators.remove(requestId, indicator);
@@ -772,7 +787,9 @@ public class PreviewForm implements Disposable {
             public void onSuccess() {
                 if (isCurrentLoad(requestId)) {
                     try {
-                        applyDocViewList(result.get(), requestId);
+                        PreviewLoadResult loaded = result.get();
+                        classPresentations = loaded.classPresentations();
+                        applyDocViewList(loaded.documents(), requestId);
                     } catch (RuntimeException exception) {
                         handleLoadFailure(requestId, exception);
                     }
@@ -802,9 +819,17 @@ public class PreviewForm implements Disposable {
 
         Vector<String> nameVector = docViewList.stream().map(DocView::getName).collect(Collectors.toCollection(Vector::new));
 
+        if (catalogSelectionListener != null) {
+            catalogList.removeListSelectionListener(catalogSelectionListener);
+        }
+
         catalogList.setListData(nameVector);
 
-        catalogList.addListSelectionListener(catalog -> {
+        catalogSelectionListener = catalog -> {
+
+            if (catalog.getValueIsAdjusting() || disposed) {
+                return;
+            }
 
             String selectedValue = catalogList.getSelectedValue();
 
@@ -814,11 +839,13 @@ public class PreviewForm implements Disposable {
                 return;
             }
 
-            docNameLabel.setText(currentDocView.getPsiClass().getQualifiedName());
+            ClassPresentation presentation = classPresentations.get(currentDocView);
+            docNameLabel.setText(presentation == null ? "" : presentation.qualifiedName());
 
             renderMarkdown(currentDocView);
 
-        });
+        };
+        catalogList.addListSelectionListener(catalogSelectionListener);
 
         // 默认选择第一个
         if (!docViewList.isEmpty()) {
@@ -843,14 +870,14 @@ public class PreviewForm implements Disposable {
 
         boolean generateHtml = jcefBrowser != null;
         AtomicReference<RenderResult> result = new AtomicReference<>();
-        new Task.Backgroundable(psiClass.getProject(), DocViewBundle.message("task.docview.markdown"), true) {
+        new Task.Backgroundable(project, DocViewBundle.message("task.docview.markdown"), true) {
             @Override
             public void run(@NotNull ProgressIndicator indicator) {
                 if (ApplicationManager.getApplication().isDispatchThread()) {
                     throw new AssertionError("Markdown preview generation must run outside the dispatch thread");
                 }
                 indicator.setIndeterminate(true);
-                trackIndicator(renderIndicators, requestId, indicator, renderRequest, psiClass.getProject());
+                trackIndicator(renderIndicators, requestId, indicator, renderRequest, project);
                 try {
                     result.set(ApplicationManager.getApplication().runReadAction((Computable<RenderResult>) () -> {
                         indicator.checkCanceled();
@@ -859,11 +886,11 @@ public class PreviewForm implements Disposable {
                         }
                         String markdownText = cachedMarkdown != null
                                 ? cachedMarkdown
-                                : DocViewData.markdownText(psiClass.getProject(), docView);
+                                : DocViewData.markdownText(project, docView);
                         indicator.checkCanceled();
                         String htmlText = generateHtml
                                 ? MarkdownUtil.INSTANCE.generateMarkdownHtml(
-                                        psiClass.getContainingFile().getVirtualFile(), markdownText, psiClass.getProject())
+                                        psiClass.getContainingFile().getVirtualFile(), markdownText, project)
                                 : null;
                         indicator.checkCanceled();
                         return new RenderResult(markdownText, htmlText);
@@ -947,7 +974,7 @@ public class PreviewForm implements Disposable {
             return;
         }
         showPreviewStatus(DocViewBundle.message("ui.preview.load.failed"));
-        DocViewNotification.notifyError(psiClass.getProject(), errorMessage(throwable));
+        DocViewNotification.notifyError(project, errorMessage(throwable));
     }
 
     private void handleRenderCancellation(long requestId) {
@@ -961,7 +988,7 @@ public class PreviewForm implements Disposable {
             return;
         }
         showPreviewStatus(DocViewBundle.message("ui.preview.render.failed"));
-        DocViewNotification.notifyError(psiClass.getProject(), errorMessage(throwable));
+        DocViewNotification.notifyError(project, errorMessage(throwable));
     }
 
     private static String errorMessage(@NotNull Throwable throwable) {
@@ -971,11 +998,11 @@ public class PreviewForm implements Disposable {
     }
 
     private boolean isCurrentLoad(long requestId) {
-        return !disposed && !psiClass.getProject().isDisposed() && requestId == loadRequest.get();
+        return !disposed && !project.isDisposed() && requestId == loadRequest.get();
     }
 
     private boolean isCurrentRender(long requestId, @Nullable DocView docView) {
-        return !disposed && !psiClass.getProject().isDisposed()
+        return !disposed && !project.isDisposed()
                 && docView != null && requestId == renderRequest.get() && currentDocView == docView;
     }
 
@@ -994,7 +1021,7 @@ public class PreviewForm implements Disposable {
         if (disposed || markdownDocument == null) {
             return;
         }
-        WriteCommandAction.runWriteCommandAction(psiClass.getProject(), () -> {
+        WriteCommandAction.runWriteCommandAction(project, () -> {
             // 光标放在顶部
             markdownDocument.setText(markdownText);
         });
@@ -1011,8 +1038,32 @@ public class PreviewForm implements Disposable {
         if (currentDocView == null || docViewList == null) {
             return null;
         }
-        return new AllExportSnapshot(currentDocView.getPsiClass().getName(), List.copyOf(docViewList));
+        ClassPresentation presentation = classPresentations.get(currentDocView);
+        return presentation == null ? null : new AllExportSnapshot(presentation.simpleName(), List.copyOf(docViewList));
     }
+
+    /** Freeze PSI-derived names while the generating task still owns read access. */
+    private static Map<DocView, ClassPresentation> captureClassPresentations(List<DocView> documents) {
+        ApplicationManager.getApplication().assertReadAccessAllowed();
+        Map<DocView, ClassPresentation> names = new IdentityHashMap<>();
+        for (DocView document : documents) {
+            com.intellij.openapi.progress.ProgressManager.checkCanceled();
+            PsiClass source = document.getPsiClass();
+            String simpleName = source == null ? null : source.getName();
+            if (simpleName == null || simpleName.isBlank()) {
+                simpleName = document.getDocTitle() == null || document.getDocTitle().isBlank()
+                        ? "DocView" : document.getDocTitle();
+            }
+            String qualifiedName = source == null ? null : source.getQualifiedName();
+            names.put(document, new ClassPresentation(qualifiedName == null ? simpleName : qualifiedName, simpleName));
+        }
+        return Collections.unmodifiableMap(names);
+    }
+
+    private record ClassPresentation(String qualifiedName, String simpleName) { }
+
+    private record PreviewLoadResult(List<DocView> documents,
+                                     Map<DocView, ClassPresentation> classPresentations) { }
 
     private record RenderResult(@NotNull String markdownText, @Nullable String htmlText) {
     }
@@ -1024,9 +1075,9 @@ public class PreviewForm implements Disposable {
     }
 
     private String markdownCacheKey(@NotNull DocView docView) {
-        Settings settings = Settings.getInstance(psiClass.getProject());
-        TemplateSettings templateSettings = TemplateSettings.getInstance(psiClass.getProject());
-        long modificationCount = PsiModificationTracker.getInstance(psiClass.getProject()).getModificationCount();
+        Settings settings = Settings.getInstance(project);
+        TemplateSettings templateSettings = TemplateSettings.getInstance(project);
+        long modificationCount = PsiModificationTracker.getInstance(project).getModificationCount();
         int versionHash = Objects.hash(
                 settings.getSeparateParam(),
                 settings.getPrefixSymbol1(),
