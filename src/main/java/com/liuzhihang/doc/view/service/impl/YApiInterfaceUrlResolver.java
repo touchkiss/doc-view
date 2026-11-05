@@ -3,48 +3,66 @@ package com.liuzhihang.doc.view.service.impl;
 import com.liuzhihang.doc.view.integration.YApiFacadeService;
 import com.liuzhihang.doc.view.integration.dto.YapiSave;
 import com.intellij.openapi.progress.ProcessCanceledException;
-import org.apache.commons.lang3.StringUtils;
 
 import java.util.Optional;
 
 public final class YApiInterfaceUrlResolver {
 
-    private YApiInterfaceUrlResolver() {
+    private YApiInterfaceUrlResolver() { }
+
+    /** Compatibility entry point; callers presenting upload success should inspect the outcome. */
+    public static String resolve(YApiFacadeService facadeService, YapiSave save) {
+        return resolveWithStatus(facadeService, save).url();
     }
 
-    public static String resolve(YApiFacadeService facadeService, YapiSave save) {
+    /** Distinguishes an actual interface detail link from an explicitly reported category fallback. */
+    public static LinkResolution resolveWithStatus(YApiFacadeService facadeService, YapiSave save) {
         try {
-            return resolveStrict(facadeService, save);
+            String url = resolveStrict(facadeService, save);
+            if (url.equals(categoryUrl(save))) {
+                return new LinkResolution(url, false, "接口已保存，但未找到接口详情，当前链接打开分类。");
+            }
+            return new LinkResolution(url, true, null);
         } catch (ProcessCanceledException canceled) {
             throw canceled;
-        } catch (Exception e) {
-            String categoryUrl = baseUrl(save) + "cat_" + save.getCatId();
-            return categoryUrl;
+        } catch (Exception failure) {
+            // Neither transport exceptions nor remote response text belong in a notification.
+            return new LinkResolution(categoryUrl(save), false, "接口已保存，但接口详情查询失败，当前链接打开分类。");
         }
     }
 
     public static String resolveStrict(YApiFacadeService facadeService, YapiSave save) throws Exception {
-        String baseUrl = baseUrl(save);
-        String categoryUrl = baseUrl + "cat_" + save.getCatId();
-        if (StringUtils.isNotBlank(save.getId())) {
-            return baseUrl + save.getId();
+        Long existingId = positiveId(save.getId());
+        if (existingId != null) {
+            return baseUrl(save) + existingId;
         }
         Optional<Long> interfaceId = facadeService.findInterfaceId(
                 save.getYapiUrl(), save.getProjectId(), save.getToken(),
                 save.getCatId(), save.getMethod(), save.getPath());
-        return interfaceId.map(id -> baseUrl + id).orElse(categoryUrl);
+        if (interfaceId.isPresent() && interfaceId.get() > 0) {
+            save.setId(String.valueOf(interfaceId.get()));
+            return baseUrl(save) + interfaceId.get();
+        }
+        return categoryUrl(save);
+    }
+
+    private static Long positiveId(String value) {
+        if (value == null || !value.matches("[0-9]+")) return null;
+        try {
+            long id = Long.parseLong(value);
+            return id > 0 ? id : null;
+        } catch (NumberFormatException invalid) {
+            return null;
+        }
+    }
+
+    private static String categoryUrl(YapiSave save) {
+        return baseUrl(save) + "cat_" + save.getCatId();
     }
 
     private static String baseUrl(YapiSave save) {
-        return save.getYapiUrl() + "/project/" + save.getProjectId() + "/interface/api/";
+        return save.getYapiUrl().replaceAll("/+$", "") + "/project/" + save.getProjectId() + "/interface/api/";
     }
 
-    private static String redact(String value, String token) {
-        String redacted = StringUtils.defaultString(value);
-        if (StringUtils.isNotBlank(token)) {
-            redacted = redacted.replace(token, "***");
-        }
-        return redacted.replaceAll("(?i)(token=)[^&\\s]+", "$1***")
-                .replaceAll("(?i)(\\\"token\\\"\\s*:\\s*\\\")[^\\\"]*(\\\")", "$1***$2");
-    }
+    public record LinkResolution(String url, boolean interfaceDetail, String warning) { }
 }

@@ -53,7 +53,7 @@ public final class YApiServiceImpl implements DocViewUploadService {
             if ("failed".equals(result.getStatus())) {
                 DocViewNotification.notifyError(project, DocViewBundle.message("notify.integration.upload.error"));
             } else {
-                DocViewNotification.uploadSuccess(project, "YApi", result.getYapiUrl());
+                DocViewNotification.uploadSuccess(project, "YApi", result.getYapiUrl(), result.getMessage());
             }
         } catch (ProcessCanceledException canceled) {
             throw canceled;

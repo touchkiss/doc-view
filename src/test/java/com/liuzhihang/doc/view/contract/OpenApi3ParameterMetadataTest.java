@@ -477,7 +477,7 @@ public final class OpenApi3ParameterMetadataTest extends LightJavaCodeInsightFix
                 public @interface RequestParam {
                     String name() default "";
                     String value() default "";
-                    String defaultValue() default "\\n\\t\\t\\n\\t\\t\\n\\uE000\\uE001\\uE002";
+                    String defaultValue() default "\\n\\t\\t\\n\\t\\t\\n\\uE000\\uE001\\uE002\\n\\t\\t\\t\\t\\n";
                     boolean required() default true;
                 }
                 """);
@@ -496,7 +496,7 @@ public final class OpenApi3ParameterMetadataTest extends LightJavaCodeInsightFix
                 public @interface RequestHeader {
                     String name() default "";
                     String value() default "";
-                    String defaultValue() default "\\n\\t\\t\\n\\t\\t\\n\\uE000\\uE001\\uE002";
+                    String defaultValue() default "\\n\\t\\t\\n\\t\\t\\n\\uE000\\uE001\\uE002\\n\\t\\t\\t\\t\\n";
                     boolean required() default true;
                 }
                 """);

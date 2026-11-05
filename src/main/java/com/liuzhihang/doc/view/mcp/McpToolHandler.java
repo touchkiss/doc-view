@@ -192,12 +192,12 @@ public final class McpToolHandler {
         return results.stream().map(McpToolHandler::resultItem).toList();
     }
 
-    private static McpResult.Item resultItem(YApiUploadOrchestrator.UploadItemResult result) {
+    static McpResult.Item resultItem(YApiUploadOrchestrator.UploadItemResult result) {
         if ("updated".equals(result.getStatus())) {
-            return McpResult.Item.updated(result.getReference(), result.getYapiUrl());
+            return new McpResult.Item(McpResult.Status.UPDATED, result.getReference(), result.getYapiUrl(), null, result.getMessage());
         }
         if ("created".equals(result.getStatus())) {
-            return McpResult.Item.created(result.getReference(), result.getYapiUrl());
+            return new McpResult.Item(McpResult.Status.CREATED, result.getReference(), result.getYapiUrl(), null, result.getMessage());
         }
         return McpResult.Item.failed(result.getReference(), result.getErrorCode(), result.getMessage());
     }

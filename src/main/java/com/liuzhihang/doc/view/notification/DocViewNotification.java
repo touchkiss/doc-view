@@ -48,13 +48,24 @@ public class DocViewNotification {
      * @param link        打开地址
      */
     public static void uploadSuccess(Project project, String docPlatform, String link) {
+        uploadSuccess(project, docPlatform, link, null);
+    }
 
+    public static void uploadSuccess(Project project, String docPlatform, String link, String warning) {
+        boolean categoryFallback = "YApi".equals(docPlatform) && link != null
+                && link.matches(".*/interface/api/cat_[0-9]+/?");
+        if (categoryFallback && (warning == null || warning.isBlank())) {
+            warning = DocViewBundle.message("notify.upload.detail.unresolved");
+        }
+        boolean hasWarning = warning != null && !warning.isBlank();
         String info = DocViewBundle.message("notify.upload.success.info", docPlatform);
-        String linkText = DocViewBundle.message("notify.upload.success.link.text");
+        if (hasWarning) info += "<br/>" + warning;
+        String linkText = DocViewBundle.message(categoryFallback
+                ? "notify.upload.category.link.text" : "notify.upload.success.link.text");
         String copy = DocViewBundle.message("notify.upload.success.link.copy");
 
         notificationGroup()
-                .createNotification(DocViewBundle.message("title"), info, NotificationType.INFORMATION)
+                .createNotification(DocViewBundle.message("title"), info, hasWarning ? NotificationType.WARNING : NotificationType.INFORMATION)
                 .setIcon(DocViewIcons.DOC_VIEW)
                 .addAction(new BrowseNotificationAction(linkText, link))
                 .addAction(new NotificationAction(copy) {

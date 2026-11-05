@@ -3,6 +3,7 @@ package com.liuzhihang.doc.view.integration.impl;
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import com.google.gson.JsonObject;
+import com.google.gson.JsonElement;
 import com.google.gson.JsonParser;
 import com.google.gson.reflect.TypeToken;
 import com.liuzhihang.doc.view.integration.YApiFacadeService;
@@ -15,10 +16,11 @@ import org.apache.http.client.utils.URIBuilder;
 import org.apache.commons.lang3.StringUtils;
 
 import java.lang.reflect.Type;
+import java.math.BigDecimal;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
 import java.util.HashSet;
-import java.util.Objects;
 import java.util.Optional;
 
 /** HTTP-backed YApi facade with explicit transport and response failure categories. */
@@ -59,6 +61,10 @@ public class YApiFacadeServiceImpl implements YApiFacadeService {
         }
         JsonObject response = parseObject(post(save.getYapiUrl() + "/api/interface/save", GSON.toJson(save)), "保存接口");
         requireSuccess(response, "保存接口");
+        Long savedId = savedInterfaceId(response.get("data"), save);
+        if (savedId != null) {
+            save.setId(String.valueOf(savedId));
+        }
     }
 
     @Override
@@ -78,32 +84,45 @@ public class YApiFacadeServiceImpl implements YApiFacadeService {
     public Optional<Long> findInterfaceId(String yapiUrl, Long projectId, String token,
                                           Long catId, String method, String path) throws Exception {
         Set<Long> seenIds = new HashSet<>();
-        for (int page = 1; ; page++) {
+        for (long page = 1; ; page++) {
             ProgressManager.checkCanceled();
-            String url = new URIBuilder(yapiUrl + "/api/interface/list")
-                    .addParameter("project_id", String.valueOf(projectId)).addParameter("token", token)
+            String url = new URIBuilder(yapiUrl + "/api/interface/list_cat")
+                    .addParameter("catid", String.valueOf(catId)).addParameter("token", token)
                     .addParameter("page", String.valueOf(page)).addParameter("limit", String.valueOf(INTERFACE_PAGE_SIZE))
                     .build().toString();
-            List<YApiInterfaceSummary> interfaces = parseInterfaceList(get(url));
-            if (!interfaces.isEmpty()) {
-                Set<Long> pageIds = new HashSet<>();
-                for (YApiInterfaceSummary item : interfaces) pageIds.add(item.getId());
-                if (pageIds.size() != interfaces.size() || !seenIds.addAll(pageIds)) {
+            InterfacePage result = parseInterfaceList(get(url));
+            List<YApiInterfaceSummary> interfaces = result.items();
+            for (YApiInterfaceSummary item : interfaces) {
+                ProgressManager.checkCanceled();
+                if (!seenIds.add(item.getId())) {
                     throw YApiRemoteException.responseInvalid("读取接口列表返回重复分页");
                 }
             }
+            if ((result.totalPages() != null && page > result.totalPages() && !interfaces.isEmpty())
+                    || (result.count() != null && seenIds.size() > result.count())) {
+                throw YApiRemoteException.responseInvalid("读取接口列表分页信息不一致");
+            }
             Optional<Long> match = interfaces.stream()
-                    .filter(item -> catId.equals(item.getCatId()))
-                    .filter(item -> item.getMethod() != null && method.equalsIgnoreCase(item.getMethod()))
+                    // list_cat scopes rows to catId; some servers omit the redundant row field.
+                    .filter(item -> item.getCatId() == null || catId.equals(item.getCatId()))
+                    .filter(item -> method.equalsIgnoreCase(item.getMethod()))
                     .filter(item -> path.equals(item.getPath()))
                     .map(YApiInterfaceSummary::getId)
-                    .filter(Objects::nonNull)
                     .findFirst();
             if (match.isPresent()) {
                 return match;
             }
-            if (interfaces.size() < INTERFACE_PAGE_SIZE) {
+            boolean hasMore = result.totalPages() != null ? page < result.totalPages()
+                    : result.count() != null ? seenIds.size() < result.count()
+                    : interfaces.size() >= INTERFACE_PAGE_SIZE;
+            if (!hasMore) {
+                if (result.count() != null && seenIds.size() != result.count()) {
+                    throw YApiRemoteException.responseInvalid("读取接口列表分页信息不一致");
+                }
                 return Optional.empty();
+            }
+            if (interfaces.isEmpty()) {
+                throw YApiRemoteException.responseInvalid("读取接口列表分页信息不一致");
             }
         }
     }
@@ -121,29 +140,101 @@ public class YApiFacadeServiceImpl implements YApiFacadeService {
         return response.getData();
     }
 
-    private List<YApiInterfaceSummary> parseInterfaceList(String body) throws Exception {
+    private InterfacePage parseInterfaceList(String body) throws Exception {
         JsonObject response = parseObject(body, "读取接口列表");
         requireSuccess(response, "读取接口列表");
         try {
-            var data = response.get("data");
+            JsonElement data = response.get("data");
             if (data == null || data.isJsonNull()) throw YApiRemoteException.responseInvalid("读取接口列表响应缺少 data");
-            // YApi deployments return either a direct array or a paginated object.
-            var list = data.isJsonArray() ? data : data.getAsJsonObject().get("list");
+            JsonElement list = data.isJsonArray() ? data : data.getAsJsonObject().get("list");
             if (list == null || !list.isJsonArray()) throw YApiRemoteException.responseInvalid("读取接口列表响应缺少 list");
-            List<YApiInterfaceSummary> items = GSON.fromJson(list,
-                    new TypeToken<List<YApiInterfaceSummary>>() { }.getType());
-            if (items.stream().anyMatch(item -> item == null || item.getId() == null || item.getId() <= 0
-                    || item.getCatId() == null || item.getCatId() <= 0
-                    || StringUtils.isBlank(item.getMethod()) || StringUtils.isBlank(item.getPath()))) {
-                throw YApiRemoteException.responseInvalid("读取接口列表响应包含无效接口");
+            Long totalPages = data.isJsonObject() ? paginationNumber(data.getAsJsonObject(), "total") : null;
+            Long count = data.isJsonObject() ? paginationNumber(data.getAsJsonObject(), "count") : null;
+            List<YApiInterfaceSummary> items = new ArrayList<>();
+            for (JsonElement entry : list.getAsJsonArray()) {
+                ProgressManager.checkCanceled();
+                if (!entry.isJsonObject()) throw YApiRemoteException.responseInvalid("读取接口列表响应包含无效接口");
+                JsonObject row = entry.getAsJsonObject();
+                Long id = positiveId(row.get("_id"));
+                JsonElement catIdValue = row.get("catid");
+                Long catId = positiveId(catIdValue);
+                String method = stringValue(row.get("method"));
+                String path = stringValue(row.get("path"));
+                if (id == null || (catIdValue != null && !catIdValue.isJsonNull() && catId == null)
+                        || StringUtils.isBlank(method) || StringUtils.isBlank(path)) {
+                    throw YApiRemoteException.responseInvalid("读取接口列表响应包含无效接口");
+                }
+                YApiInterfaceSummary item = new YApiInterfaceSummary();
+                item.setId(id);
+                item.setCatId(catId);
+                item.setMethod(method);
+                item.setPath(path);
+                items.add(item);
             }
-            return items;
+            return new InterfacePage(items, totalPages, count);
+        } catch (ProcessCanceledException canceled) {
+            throw canceled;
         } catch (YApiRemoteException invalid) {
             throw invalid;
         } catch (RuntimeException invalid) {
             throw YApiRemoteException.responseInvalid("读取接口列表响应不是有效 JSON");
         }
     }
+
+    private static Long paginationNumber(JsonObject data, String name) throws YApiRemoteException {
+        JsonElement value = data.get(name);
+        if (value == null || value.isJsonNull()) return null;
+        Long parsed = integerValue(value);
+        if (parsed == null || parsed < 0) {
+            throw YApiRemoteException.responseInvalid("读取接口列表分页信息无效");
+        }
+        return parsed;
+    }
+
+    private static Long savedInterfaceId(JsonElement data, YapiSave save) {
+        if (data == null || data.isJsonNull()) return null;
+        // Official save can return a one-row _id array for updates and [] for creates.
+        // A scalar write count is not an interface ID; ambiguous arrays require lookup.
+        if (data.isJsonArray()) {
+            if (data.getAsJsonArray().size() != 1) return null;
+            data = data.getAsJsonArray().get(0);
+        }
+        if (!data.isJsonObject()) return null;
+        JsonObject row = data.getAsJsonObject();
+        Long underscoredId = positiveId(row.get("_id"));
+        Long plainId = positiveId(row.get("id"));
+        if (underscoredId != null && plainId != null && !underscoredId.equals(plainId)) return null;
+        Long id = underscoredId == null ? plainId : underscoredId;
+        if (id == null) return null;
+        if (row.has("catid") && !row.get("catid").isJsonNull()
+                && !java.util.Objects.equals(save.getCatId(), positiveId(row.get("catid")))) return null;
+        if (row.has("method") && !row.get("method").isJsonNull()
+                && (save.getMethod() == null || !save.getMethod().equalsIgnoreCase(stringValue(row.get("method"))))) return null;
+        if (row.has("path") && !row.get("path").isJsonNull()
+                && !java.util.Objects.equals(save.getPath(), stringValue(row.get("path")))) return null;
+        return id;
+    }
+
+    private static String stringValue(JsonElement value) {
+        return value != null && value.isJsonPrimitive() && value.getAsJsonPrimitive().isString()
+                ? value.getAsString() : null;
+    }
+
+    private static Long positiveId(JsonElement value) {
+        Long parsed = integerValue(value);
+        return parsed != null && parsed > 0 ? parsed : null;
+    }
+
+    private static Long integerValue(JsonElement value) {
+        if (value == null || !value.isJsonPrimitive() || value.getAsJsonPrimitive().isBoolean()) return null;
+        try {
+            return new BigDecimal(value.getAsString()).longValueExact();
+        } catch (NumberFormatException | ArithmeticException invalid) {
+            return null;
+        }
+    }
+
+    private record InterfacePage(List<YApiInterfaceSummary> items, Long totalPages, Long count) { }
 
     private String get(String url) throws Exception {
         try {

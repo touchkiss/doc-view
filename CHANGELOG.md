@@ -26,6 +26,9 @@
 
 ### Fixed
 
+- 修复 Spring 完整 `ValueConstants.DEFAULT_NONE` 被当作业务默认值的问题，统一 RequestParam/Header 必填、示例与默认值描述解析；回归使用真正编译的无源码注解 JAR。
+- YApi 查重和详情定位改为按分类分页扫描，支持保存响应返回有效接口 ID；定位失败时通知与 MCP 明确警告，不再静默显示分类链接。
+
 - 修复在 proto message 上右键 Doc View 报错的问题：原实现把 .proto 源码当作二进制 FileDescriptorProto 解析，必然失败且忽略光标位置
 - 修复 proto message 名称不符合 POJO 命名约定（如 Order）时被误路由、提示 "在此处不支持使用 Doc View" 的问题
 - .proto 文件中隐藏 Doc Editor：其编辑结果需以 JavaDoc 写回源码，对合成类无意义

@@ -41,7 +41,7 @@ import static com.liuzhihang.doc.view.constant.MethodConstant.*;
  */
 public class SpringPsiUtils extends ParamPsiUtils {
 
-    private static final String SPRING_DEFAULT_VALUE_SENTINEL = "\n\t\t\n\t\t\n\uE000\uE001\uE002";
+    private static final String SPRING_DEFAULT_VALUE_SENTINEL = "\n\t\t\n\t\t\n\uE000\uE001\uE002\n\t\t\t\t\n";
 
     /**
      * 检查类或者接口是否是 Spring 接口
@@ -635,13 +635,9 @@ public class SpringPsiUtils extends ParamPsiUtils {
 
     private static String getExample(PsiModifierListOwner psiField, String exampleFromComment) {
         PsiAnnotation requestParam = AnnotationUtil.findAnnotation(psiField, SpringConstant.REQUEST_PARAM);
-        if (requestParam != null) {
-            List<JvmAnnotationAttribute> attributes = requestParam.getAttributes();
-            for (JvmAnnotationAttribute attribute : attributes) {
-                if ("defaultValue".equals(attribute.getAttributeName())) {
-                    return Objects.requireNonNull(((JvmAnnotationConstantValue) Objects.requireNonNull(attribute.getAttributeValue())).getConstantValue()).toString();
-                }
-            }
+        String springDefault = springDefaultValue(requestParam);
+        if (springDefault != null) {
+            return springDefault;
         }
         if (psiField instanceof PsiField psiField1) {
             String example = PsiConstantUtils.expressionText(psiField1.getInitializer());
@@ -703,13 +699,9 @@ public class SpringPsiUtils extends ParamPsiUtils {
             validatedValue.append("最大值:").append(AnnotationUtil.getLongAttributeValue(sizeAnnotation, "max")).append(";");
         }
         PsiAnnotation requestParam = AnnotationUtil.findAnnotation(psiField, SpringConstant.REQUEST_PARAM);
-        if (requestParam != null) {
-            List<JvmAnnotationAttribute> attributes = requestParam.getAttributes();
-            for (JvmAnnotationAttribute attribute : attributes) {
-                if ("defaultValue".equals(attribute.getAttributeName())) {
-                    validatedValue.append("默认值:").append(Objects.requireNonNull(((JvmAnnotationConstantValue) Objects.requireNonNull(attribute.getAttributeValue())).getConstantValue()).toString()).append(";");
-                }
-            }
+        String springDefault = springDefaultValue(requestParam);
+        if (springDefault != null) {
+            validatedValue.append("默认值:").append(springDefault).append(";");
         }
         return StringUtils.isBlank(validatedValue) ? "" : validatedValue.toString();
     }
@@ -810,8 +802,16 @@ public class SpringPsiUtils extends ParamPsiUtils {
     }
 
     private static boolean hasCustomSpringDefaultValue(PsiAnnotation annotation) {
-        String defaultValue = AnnotationUtil.getStringAttributeValue(annotation, "defaultValue");
-        return defaultValue != null && !SPRING_DEFAULT_VALUE_SENTINEL.equals(defaultValue);
+        return springDefaultValue(annotation) != null;
+    }
+
+    /** null means absent; an explicit empty string is a real Spring default. */
+    private static @Nullable String springDefaultValue(@Nullable PsiAnnotation annotation) {
+        if (annotation == null || annotation.findDeclaredAttributeValue("defaultValue") == null) {
+            return null;
+        }
+        String value = AnnotationUtil.getStringAttributeValue(annotation, "defaultValue");
+        return SPRING_DEFAULT_VALUE_SENTINEL.equals(value) ? null : value;
     }
 
     private static Boolean declaredBooleanValue(PsiAnnotation annotation, String attributeName) {

@@ -23,6 +23,17 @@ import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 
 public class YApiUploadOrchestratorTest {
+    @Test
+    public void returnsDetailLinkFromSaveResponseWithoutAnotherLookup() {
+        FakeFacade facade = new FakeFacade();
+        facade.savedId = "4396";
+        var result = upload(facade, document("GET", "/orders")).get(0);
+        assertEquals("created", result.getStatus());
+        assertEquals("http://yapi.example/project/299/interface/api/4396", result.getYapiUrl());
+        assertNull(result.getMessage());
+        assertEquals(1, facade.lookupCounts.get("GET /orders").intValue());
+    }
+
 
     @Test(expected = com.intellij.openapi.progress.ProcessCanceledException.class)
     public void cancellationDuringMappingStopsBatch() {
@@ -57,7 +68,7 @@ public class YApiUploadOrchestratorTest {
         assertEquals("created", result.getStatus());
         assertEquals("http://yapi.example/project/299/interface/api/cat_1376", result.getYapiUrl());
         assertNull(result.getErrorCode());
-        assertNull(result.getMessage());
+        assertTrue(result.getMessage() != null && !result.getMessage().isBlank());
         assertNull(facade.saved.get(0).getId());
     }
 
@@ -128,7 +139,13 @@ public class YApiUploadOrchestratorTest {
         assertEquals("created", result.getStatus());
         assertEquals("http://yapi.example/project/299/interface/api/cat_1376", result.getYapiUrl());
         assertNull(result.getErrorCode());
-        assertNull(result.getMessage());
+        assertTrue("A successful save with an unresolved detail link must carry a warning",
+                result.getMessage() != null && !result.getMessage().isBlank());
+        assertFalse(result.getMessage().contains("token-value"));
+        var item = McpToolHandler.resultItem(result);
+        assertEquals(result.getMessage(), item.message());
+        assertTrue(McpResult.UploadBatch.of("/workspace", "Controller", List.of(item), List.of(), List.of(), List.of())
+                .structuredContent().toString().contains(result.getMessage()));
         assertEquals(1, facade.saved.size());
     }
 
@@ -234,6 +251,7 @@ public class YApiUploadOrchestratorTest {
     }
 
     private static final class FakeFacade implements YApiFacadeService {
+        private String savedId;
         private final Map<String, Long> interfaceIds = new HashMap<>();
         private final Map<String, Exception> lookupFailures = new HashMap<>();
         private final Map<String, Exception> detailLookupFailures = new HashMap<>();
@@ -252,6 +270,7 @@ public class YApiUploadOrchestratorTest {
             if (failure != null) {
                 throw failure;
             }
+            if (savedId != null) save.setId(savedId);
         }
 
         @Override

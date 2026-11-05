@@ -49,6 +49,7 @@ public final class McpResult {
             }
             if (yapiUrl != null) {
                 content.put("yapiUrl", yapiUrl);
+                if (message != null) content.put("message", message);
                 return content;
             }
             content.put("message", message);

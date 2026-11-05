@@ -118,8 +118,8 @@ public final class YApiUploadOrchestrator {
             }
             facadeService.save(save);
             String status = existingId.isPresent() ? "updated" : "created";
-            return UploadItemResult.success(reference, status,
-                    YApiInterfaceUrlResolver.resolve(facadeService, save));
+            var link = YApiInterfaceUrlResolver.resolveWithStatus(facadeService, save);
+            return UploadItemResult.success(reference, status, link.url(), link.warning());
         } catch (ProcessCanceledException exception) {
             throw exception;
         } catch (Exception exception) {
@@ -204,8 +204,8 @@ public final class YApiUploadOrchestrator {
             this.message = message;
         }
 
-        private static UploadItemResult success(String reference, String status, String yapiUrl) {
-            return new UploadItemResult(reference, status, yapiUrl, null, null);
+        private static UploadItemResult success(String reference, String status, String yapiUrl, String warning) {
+            return new UploadItemResult(reference, status, yapiUrl, null, warning);
         }
 
         private static UploadItemResult failure(String reference, McpException.Code errorCode, String message) {
