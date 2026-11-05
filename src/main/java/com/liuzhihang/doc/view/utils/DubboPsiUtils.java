@@ -128,7 +128,7 @@ public class DubboPsiUtils {
 
             // 集合
             Body body = new Body();
-            body.setRequired(false);
+            body.setRequired(DocViewUtils.isRequired(parameter));
             body.setName(parameter.getName());
             body.setType(type.getPresentableText());
             body.setParent(root);

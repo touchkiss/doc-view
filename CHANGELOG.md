@@ -31,6 +31,8 @@
 
 ### Fixed
 
+- 标准必填注解回归覆盖 `javax/jakarta` 的 `@NotNull/@NotEmpty/@NotBlank`；补齐 Dubbo 顶层参数识别，并修复字段/record 数组解析的类型强转异常，保持业务源码只读；数组 JSON5 示例保留维度与数字/布尔类型。
+
 - 修复预览目录切换时在 EDT 无读锁访问 PSI 类名的异常；类名在后台读锁内冻结，批量导出也使用同一快照，刷新不再累积选择监听器。
 
 - 修复 Spring 完整 `ValueConstants.DEFAULT_NONE` 被当作业务默认值的问题，统一 RequestParam/Header 必填、示例与默认值描述解析；回归使用真正编译的无源码注解 JAR。

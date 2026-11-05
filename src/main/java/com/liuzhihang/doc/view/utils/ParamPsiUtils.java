@@ -166,6 +166,14 @@ public class ParamPsiUtils {
             }
             return;
         }
+        if (type instanceof PsiArrayType) {
+            body.setCollection(true);
+            while (type instanceof PsiArrayType arrayType) type = arrayType.getComponentType();
+            fieldClass = PsiUtil.resolveClassInType(type);
+            qualifiedName = type.getCanonicalText();
+            body.setQualifiedNameForClassType(qualifiedName);
+            if (setScalarArrayItemExample(body, type)) return;
+        }
         if (type instanceof PsiPrimitiveType || FieldTypeConstant.FIELD_TYPE.containsKey(type.getPresentableText())) {
 
             String example = PsiConstantUtils.expressionText(field.getInitializer());
@@ -393,6 +401,17 @@ public class ParamPsiUtils {
     private static boolean isJsonSimpleType(String jsonType) {
         return FieldTypeConstant.FIELD_TYPE.containsKey(jsonType)
                 || FieldTypeConstant.BASE_TYPE_SET.contains(jsonType);
+    }
+
+    /** Array examples hold an element sample, not a Java array initializer expression. */
+    private static boolean setScalarArrayItemExample(Body body, PsiType itemType) {
+        if (!(itemType instanceof PsiPrimitiveType) && !FieldTypeConstant.FIELD_TYPE.containsKey(itemType.getPresentableText())) {
+            return false;
+        }
+        Object sample = itemType instanceof PsiPrimitiveType ? PsiTypesUtil.getDefaultValue(itemType)
+                : FieldTypeConstant.FIELD_TYPE.get(itemType.getPresentableText());
+        body.setExample(sample == null ? "null" : String.valueOf(sample));
+        return true;
     }
 
     static void applyCollectionContentOverride(@NotNull Body body, @NotNull JsonWireType contentWireType) {
@@ -977,6 +996,14 @@ public class ParamPsiUtils {
                 return;
             }
 
+            if (type instanceof PsiArrayType) {
+                body.setCollection(true);
+                while (type instanceof PsiArrayType arrayType) type = arrayType.getComponentType();
+                fieldClass = PsiUtil.resolveClassInType(type);
+                qualifiedName = type.getCanonicalText();
+                body.setQualifiedNameForClassType(qualifiedName);
+                if (setScalarArrayItemExample(body, type)) return;
+            }
             if (type instanceof PsiPrimitiveType || FieldTypeConstant.FIELD_TYPE.containsKey(type.getPresentableText())) {
                 return;
             }

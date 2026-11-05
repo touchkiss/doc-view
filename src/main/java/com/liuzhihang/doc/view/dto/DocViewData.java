@@ -187,9 +187,10 @@ public class DocViewData {
                 builder.append(tab);
             }
             builder.append("\"").append(data.getName()).append("\": ");
+            int collectionDepth = Math.max(1, arrayDimensions(data.getType()));
             if (CollectionUtils.isNotEmpty(data.getChildList())) {
                 if (data.isCollection()) {
-                    builder.append("[");
+                    builder.append("[".repeat(collectionDepth));
                     addDesc(data, builder, tab);
                     for (int i = 0; i < data.getTabCount() + 1; i++) {
                         builder.append(tab);
@@ -213,7 +214,7 @@ public class DocViewData {
                     for (int i = 0; i < data.getTabCount(); i++) {
                         builder.append(tab);
                     }
-                    builder.append("]");
+                    builder.append("]".repeat(collectionDepth));
                 } else {
                     for (int i = 0; i < data.getTabCount(); i++) {
                         builder.append(tab);
@@ -229,9 +230,9 @@ public class DocViewData {
                 // 集合（无子节点）必须输出数组；并根据元素类型决定是否需要引号
                 if (data.isCollection()) {
                     if (doNotNeedQuote(extractCollectionItemType(data.getType()))) {
-                        builder.append("[").append(data.getExample()).append("]");
+                        builder.append("[".repeat(collectionDepth)).append(data.getExample()).append("]".repeat(collectionDepth));
                     } else {
-                        builder.append("[\"").append(data.getExample()).append("\"]");
+                        builder.append("[".repeat(collectionDepth)).append("\"").append(data.getExample()).append("\"").append("]".repeat(collectionDepth));
                     }
                 } else if (doNotNeedQuote(data.getType())) {
                     builder.append(data.getExample());
@@ -250,13 +251,15 @@ public class DocViewData {
     }
 
     /**
-     * 从类似 List<Integer> / Set<Long> / Collection<Boolean> 提取元素类型名。
+     * 从 List<Integer> / Set<Long> / Collection<Boolean> 或 Java 数组提取标量元素类型名。
      * 解析失败时返回原 type，保持兼容。
      */
     private static String extractCollectionItemType(String type) {
         if (StringUtils.isBlank(type)) {
             return type;
         }
+        int dimensions = arrayDimensions(type);
+        if (dimensions > 0) return type.trim().substring(0, type.trim().length() - dimensions * 2).trim();
         int lt = type.indexOf('<');
         int gt = type.lastIndexOf('>');
         if (lt < 0 || gt < 0 || gt <= lt) {
@@ -271,8 +274,21 @@ public class DocViewData {
         return inner;
     }
 
+    private static int arrayDimensions(String type) {
+        if (type == null) return 0;
+        String value = type.trim();
+        int dimensions = 0;
+        while (value.endsWith("[]")) {
+            dimensions++;
+            value = value.substring(0, value.length() - 2);
+        }
+        return dimensions;
+    }
+
     private static boolean doNotNeedQuote(String type) {
-        return "int".equals(type) || "Integer".equals(type)
+        return "byte".equals(type) || "Byte".equals(type)
+                || "short".equals(type) || "Short".equals(type)
+                || "int".equals(type) || "Integer".equals(type)
                 || "long".equals(type) || "Long".equals(type)
                 || "float".equals(type) || "Float".equals(type)
                 || "double".equals(type) || "Double".equals(type)

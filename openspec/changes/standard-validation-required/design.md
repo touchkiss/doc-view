@@ -1,0 +1,7 @@
+# 设计
+
+复用DocViewUtils的标准必填识别入口，保持现有Spring/Swagger显式规则优先级及已配置标准来源。Dubbo顶层参数不再硬编码false。数组类型先保留容器type/required并提取元素类型，再复用已有标量或对象解析，避免PsiArrayType强转为PsiClassType；Jackson显式标量覆盖优先级不变。
+
+测试真实标准annotation Target（包含FIELD/PARAMETER/TYPE_USE而不虚构RECORD_COMPONENT），覆盖两套namespace的三个约束在字段、record、HTTP/RPC参数，保留无PSI缓存、Markdown/YApi required，验证Size/Min/Valid不凭空表示非空，旧tag无效、业务源原文不变。另覆盖标量/对象/多维数组的容器与字段必填保留。
+
+数组示例修复：JSON5按Java数组维度配对括号并提取深层元素类型，基础类型数组使用与集合一致的元素示例，不能把Java初始化式当成单个字符串；集合的原有一层容器行为保持。独立复核提出的示例类型/维度缺口经实际JSON5用例先RED后GREEN。

@@ -1,0 +1,3 @@
+# 标准校验注解作为必填来源
+
+移除DocView专属标记后，文档按已存在的NotNull/NotEmpty/NotBlank读取必填，支持jakarta/javax；默认来源已有此配置，本轮补充全链路回归并修复Dubbo参数固定非必填以及数组模型强转异常。禁止向业务代码添加注解。
