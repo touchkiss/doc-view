@@ -58,6 +58,10 @@ public class AbstractAction extends AnAction {
      */
     @Override
     public void actionPerformed(AnActionEvent e) {
+        // Registered action instances are reused across invocations. A failed validation
+        // must not expose a class or method selected by a previous invocation.
+        targetClass = null;
+        targetMethod = null;
 
         try {
             // 对所有未保存的文件进行保存
@@ -69,7 +73,7 @@ public class AbstractAction extends AnAction {
 
             // 验证是否为空
             if (editor == null || project == null || psiFile == null || DumbService.isDumb(project)) {
-                throw new DocViewException("当前位置不合法");
+                throw new DocViewException(DocViewBundle.message("notify.action.invalid.context"));
             }
             // 获取Java类或者接口; .proto 文件会将光标所在 message 合成为内存 Java 类
             boolean protoFile = CustomPsiUtils.isProtoFile(psiFile);
@@ -95,6 +99,8 @@ public class AbstractAction extends AnAction {
             targetMethod = CustomPsiUtils.getTargetMethod(editor, psiFile);
 
         } catch (DocViewException ex) {
+            targetClass = null;
+            targetMethod = null;
             DocViewNotification.notifyError(project, ex.getMessage());
             LOG.info("DocView 执行错误：" + ex.getMessage());
         }

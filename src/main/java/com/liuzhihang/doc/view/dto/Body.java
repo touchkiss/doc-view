@@ -77,4 +77,7 @@ public class Body {
      */
     private boolean isMap = false;
 
+    /** Only parser-created element/key/value wrappers, never a real business field. */
+    private boolean syntheticContainerNode;
+
 }

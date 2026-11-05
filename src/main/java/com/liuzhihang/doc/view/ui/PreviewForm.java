@@ -1,8 +1,10 @@
 package com.liuzhihang.doc.view.ui;
 
 import com.intellij.find.editorHeaderActions.Utils;
+import icons.DocViewIcons;
 import com.intellij.openapi.actionSystem.*;
-import com.intellij.openapi.actionSystem.impl.ActionToolbarImpl;
+import com.intellij.openapi.actionSystem.toolbarLayout.ToolbarLayoutStrategy;
+import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.command.WriteCommandAction;
 import com.intellij.openapi.util.Disposer;
 import com.intellij.openapi.editor.Document;
@@ -13,12 +15,18 @@ import com.intellij.openapi.editor.highlighter.EditorHighlighterFactory;
 import com.intellij.openapi.fileTypes.FileType;
 import com.intellij.openapi.fileTypes.FileTypeManager;
 import com.intellij.openapi.options.ShowSettingsUtil;
+import com.intellij.openapi.progress.ProgressIndicator;
+import com.intellij.openapi.progress.Task;
+import com.intellij.openapi.project.Project;
+import com.intellij.openapi.util.Computable;
+import com.intellij.openapi.Disposable;
 import com.intellij.openapi.ui.popup.JBPopup;
 import com.intellij.openapi.ui.popup.JBPopupFactory;
 import com.intellij.openapi.ui.popup.PopupStep;
 import com.intellij.openapi.ui.popup.util.BaseListPopupStep;
 import com.intellij.psi.PsiClass;
 import com.intellij.psi.PsiMethod;
+import com.intellij.psi.util.PsiModificationTracker;
 import com.intellij.ui.*;
 import com.intellij.ui.components.JBList;
 import com.intellij.ui.components.JBPanel;
@@ -27,15 +35,17 @@ import com.intellij.ui.jcef.JBCefBrowser;
 import com.intellij.util.ui.JBUI;
 import com.intellij.util.ui.UIUtil;
 import com.liuzhihang.doc.view.DocViewBundle;
+import com.liuzhihang.doc.view.config.Settings;
 import com.liuzhihang.doc.view.config.SettingsConfigurable;
+import com.liuzhihang.doc.view.config.TemplateSettings;
 import com.liuzhihang.doc.view.dto.DocView;
 import com.liuzhihang.doc.view.dto.DocViewData;
+import com.liuzhihang.doc.view.enums.UploadPlatform;
 import com.liuzhihang.doc.view.notification.DocViewNotification;
 import com.liuzhihang.doc.view.service.DocViewService;
 import com.liuzhihang.doc.view.service.DocViewUploadService;
 import com.liuzhihang.doc.view.utils.EditorUtils;
 import com.liuzhihang.doc.view.utils.ExportUtils;
-import icons.DocViewIcons;
 import lombok.extern.slf4j.Slf4j;
 import org.intellij.plugins.markdown.ui.preview.html.MarkdownUtil;
 import org.jetbrains.annotations.Contract;
@@ -50,8 +60,14 @@ import java.awt.datatransfer.StringSelection;
 import java.awt.event.MouseEvent;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Vector;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicLong;
+import java.util.concurrent.atomic.AtomicReference;
+import java.util.HashMap;
 import java.util.stream.Collectors;
 
 /**
@@ -61,14 +77,14 @@ import java.util.stream.Collectors;
  * @date 2020/2/26 19:40
  */
 @Slf4j
-public class PreviewForm {
+public class PreviewForm implements Disposable {
 
     @NonNls
     public static final String DOC_VIEW_POPUP = "com.intellij.docview.popup";
     public static final AtomicBoolean myIsPinned = new AtomicBoolean(false);
     private static final AtomicBoolean previewIsHtml = new AtomicBoolean(false);
 
-    private final Document markdownDocument = EditorFactory.getInstance().createDocument("");
+    private Document markdownDocument;
 
     /**
      * 分割窗口
@@ -172,18 +188,20 @@ public class PreviewForm {
      */
     private Map<String, DocView> docViewMap;
 
+    private final Map<String, String> markdownCache = new HashMap<>();
+    private final AtomicLong renderRequest = new AtomicLong();
+    private final AtomicLong loadRequest = new AtomicLong();
+    private final ConcurrentMap<Long, ProgressIndicator> renderIndicators = new ConcurrentHashMap<>();
+    private final ConcurrentMap<Long, ProgressIndicator> loadIndicators = new ConcurrentHashMap<>();
+    private boolean uiInitialized;
+    private volatile boolean disposed;
+
 
     public PreviewForm(@NotNull PsiClass psiClass, PsiMethod psiMethod) {
 
         this.psiClass = psiClass;
         this.psiMethod = psiMethod;
 
-        // UI调整
-        layout();
-        // 生成文档
-        buildDoc();
-        // 鼠标监听事件
-        addMouseListeners();
     }
 
     /**
@@ -208,35 +226,99 @@ public class PreviewForm {
      * 弹出窗口
      */
     public void popup() {
-
-        // dialog 改成 popup, 第一个为根面板，第二个为焦点面板
-        popup = JBPopupFactory.getInstance()
-                .createComponentPopupBuilder(rootPanel, previewToolbarPanel)
-                .setProject(psiClass.getProject())
-                .setResizable(true)
-                .setMovable(true)
-                .setModalContext(false)
-                .setRequestFocus(true)
-                .setBelongsToGlobalPopupStack(true)
-                .setDimensionServiceKey(null, DOC_VIEW_POPUP, true)
-                .setLocateWithinScreenBounds(false)
-                // 鼠标点击外部时是否取消弹窗 外部单击, 未处于 pin 状态则可关闭
-                .setCancelOnMouseOutCallback(event ->
-                        event.getID() == MouseEvent.MOUSE_PRESSED && !myIsPinned.get()
-                )
-                // 单击外部时取消弹窗
-                .setCancelOnClickOutside(false)
-                // 在其他窗口打开时取消
-                .setCancelOnOtherWindowOpen(false)
-                .setCancelOnWindowDeactivation(false)
-                .createPopup();
-
-        // JCEF 浏览器持有本地资源，绑定到弹窗生命周期，弹窗关闭时释放，避免泄漏
-        if (jcefBrowser != null) {
-            Disposer.register(popup, jcefBrowser);
+        ApplicationManager.getApplication().assertIsDispatchThread();
+        if (disposed) {
+            return;
+        }
+        if (popup != null && !popup.isDisposed()) {
+            return;
         }
 
-        popup.showCenteredInCurrentWindow(psiClass.getProject());
+        try {
+            initializeUi();
+            // dialog 改成 popup, 第一个为根面板，第二个为焦点面板
+            popup = JBPopupFactory.getInstance()
+                    .createComponentPopupBuilder(rootPanel, previewToolbarPanel)
+                    .setProject(psiClass.getProject())
+                    .setResizable(true)
+                    .setMovable(true)
+                    .setModalContext(false)
+                    .setRequestFocus(true)
+                    .setBelongsToGlobalPopupStack(true)
+                    .setDimensionServiceKey(null, DOC_VIEW_POPUP, true)
+                    .setLocateWithinScreenBounds(false)
+                    // 鼠标点击外部时是否取消弹窗 外部单击, 未处于 pin 状态则可关闭
+                    .setCancelOnMouseOutCallback(event ->
+                            event.getID() == MouseEvent.MOUSE_PRESSED && !myIsPinned.get()
+                    )
+                    // 单击外部时取消弹窗
+                    .setCancelOnClickOutside(false)
+                    .setCancelOnOtherWindowOpen(false)
+                    .setCancelOnWindowDeactivation(false)
+                    .createPopup();
+            Disposer.register(popup, this);
+            popup.showCenteredInCurrentWindow(psiClass.getProject());
+            if (!disposed && !popup.isDisposed()) {
+                buildDoc();
+            }
+        } catch (RuntimeException | Error exception) {
+            try {
+                if (popup != null && !popup.isDisposed()) {
+                    popup.cancel();
+                }
+            } finally {
+                dispose();
+            }
+            throw exception;
+        }
+    }
+
+    private void initializeUi() {
+        ApplicationManager.getApplication().assertIsDispatchThread();
+        if (uiInitialized || disposed) {
+            return;
+        }
+
+        try {
+            markdownDocument = EditorFactory.getInstance().createDocument("");
+            layout();
+            addMouseListeners();
+            uiInitialized = true;
+        } catch (RuntimeException | Error exception) {
+            dispose();
+            throw exception;
+        }
+    }
+
+    @Override
+    public void dispose() {
+        if (disposed) {
+            return;
+        }
+        disposed = true;
+        loadRequest.incrementAndGet();
+        renderRequest.incrementAndGet();
+        cancelIndicators(loadIndicators);
+        cancelIndicators(renderIndicators);
+        markdownCache.clear();
+
+        if (markdownEditor != null && !markdownEditor.isDisposed()) {
+            EditorFactory.getInstance().releaseEditor(markdownEditor);
+            markdownEditor = null;
+        }
+        if (jcefBrowser != null) {
+            Disposer.dispose(jcefBrowser);
+            jcefBrowser = null;
+        }
+
+        currentMarkdownText = null;
+        currentDocView = null;
+        docViewList = null;
+        docViewMap = null;
+    }
+
+    private static void cancelIndicators(@NotNull ConcurrentMap<Long, ProgressIndicator> indicators) {
+        indicators.values().forEach(ProgressIndicator::cancel);
     }
 
 
@@ -320,7 +402,8 @@ public class PreviewForm {
     private void layoutHeadToolbar() {
         DefaultActionGroup group = new DefaultActionGroup();
 
-        group.add(new AnAction("Setting", "Doc view settings", DocViewIcons.SETTINGS) {
+        group.add(new AnAction(DocViewBundle.message("action.settings"),
+                DocViewBundle.message("action.settings.description"), DocViewIcons.SETTINGS) {
             @Override
             public void actionPerformed(@NotNull AnActionEvent e) {
                 popup.cancel();
@@ -330,7 +413,8 @@ public class PreviewForm {
 
         group.addSeparator();
 
-        group.add(new ToggleAction("Pin", "Pin window", DocViewIcons.PIN) {
+        group.add(new ToggleAction(DocViewBundle.message("action.pin"),
+                DocViewBundle.message("action.pin.description"), DocViewIcons.PIN) {
 
             @Override
             public boolean isDumbAware() {
@@ -354,13 +438,33 @@ public class PreviewForm {
 
         });
 
-        ActionToolbarImpl toolbar = (ActionToolbarImpl) ActionManager.getInstance().createActionToolbar("DocViewRootToolbar", group, true);
+        ActionToolbar toolbar = ActionManager.getInstance().createActionToolbar("DocViewRootToolbar", group, true);
         toolbar.setTargetComponent(headToolbarPanel);
 
-        toolbar.setForceMinimumSize(true);
-        Utils.setSmallerFontForChildren(toolbar);
+        keepToolbarPreferredMinimumSize(toolbar);
+        Utils.setSmallerFontForChildren(toolbar.getComponent());
 
         headToolbarPanel.add(toolbar.getComponent(), BorderLayout.EAST);
+    }
+
+    private static void keepToolbarPreferredMinimumSize(@NotNull ActionToolbar toolbar) {
+        ToolbarLayoutStrategy delegate = toolbar.getLayoutStrategy();
+        toolbar.setLayoutStrategy(new ToolbarLayoutStrategy() {
+            @Override
+            public @NotNull List<Rectangle> calculateBounds(@NotNull ActionToolbar actionToolbar) {
+                return delegate.calculateBounds(actionToolbar);
+            }
+
+            @Override
+            public @NotNull Dimension calcPreferredSize(@NotNull ActionToolbar actionToolbar) {
+                return delegate.calcPreferredSize(actionToolbar);
+            }
+
+            @Override
+            public @NotNull Dimension calcMinimumSize(@NotNull ActionToolbar actionToolbar) {
+                return delegate.calcPreferredSize(actionToolbar);
+            }
+        });
     }
 
 
@@ -421,7 +525,8 @@ public class PreviewForm {
 
         DefaultActionGroup leftGroup = new DefaultActionGroup();
 
-        leftGroup.add(new ToggleAction("Preview", "Preview markdown", DocViewIcons.EDITOR_PREVIEW) {
+        leftGroup.add(new ToggleAction(DocViewBundle.message("action.preview"),
+                DocViewBundle.message("action.preview.markdown.description"), DocViewIcons.EDITOR_PREVIEW) {
 
             @Override
             public boolean isDumbAware() {
@@ -464,14 +569,14 @@ public class PreviewForm {
 
         });
 
-        ActionToolbarImpl toolbar = (ActionToolbarImpl) ActionManager.getInstance().createActionToolbar("DocViewEditorLeftToolbar", leftGroup, true);
+        ActionToolbar toolbar = ActionManager.getInstance().createActionToolbar("DocViewEditorLeftToolbar", leftGroup, true);
         toolbar.setTargetComponent(previewToolbarPanel);
-        toolbar.getComponent().setBackground(markdownEditor.getBackgroundColor());
+        toolbar.getComponent().setBackground(UIUtil.getPanelBackground());
 
-        toolbar.setForceMinimumSize(true);
-        Utils.setSmallerFontForChildren(toolbar);
+        keepToolbarPreferredMinimumSize(toolbar);
+        Utils.setSmallerFontForChildren(toolbar.getComponent());
 
-        previewToolbarPanel.setBackground(markdownEditor.getBackgroundColor());
+        previewToolbarPanel.setBackground(UIUtil.getPanelBackground());
         previewToolbarPanel.add(toolbar.getComponent(), BorderLayout.WEST);
     }
 
@@ -481,10 +586,17 @@ public class PreviewForm {
     private void previewRightToolbar() {
         DefaultActionGroup rightGroup = new DefaultActionGroup();
 
-        rightGroup.add(new AnAction("Upload", "Upload", DocViewIcons.UPLOAD) {
+        rightGroup.add(new AnAction(DocViewBundle.message("action.upload"),
+                DocViewBundle.message("action.upload.documents.description"), DocViewIcons.UPLOAD) {
             @Override
             public void actionPerformed(@NotNull AnActionEvent e) {
                 myIsPinned.set(true);
+
+                DocView selectedDocView = currentDocView;
+                if (selectedDocView == null) {
+                    DocViewNotification.notifyInfo(psiClass.getProject(), DocViewBundle.message("ui.docview.loading.retry"));
+                    return;
+                }
 
                 Point location = previewToolbarPanel.getLocationOnScreen();
                 location.x = MouseInfo.getPointerInfo().getLocation().x;
@@ -492,14 +604,15 @@ public class PreviewForm {
                 JBPopupFactory.getInstance().createListPopup(new BaseListPopupStep<>(null, DocViewUploadService.UPLOAD_OPTIONS) {
 
                     @Override
-                    public @NotNull String getTextFor(String value) {
-                        return "Upload to " + value;
+                    public @NotNull String getTextFor(UploadPlatform value) {
+                        return DocViewBundle.message("action.upload.platform", value.getDisplayName());
                     }
 
                     @Override
-                    public @Nullable PopupStep<?> onChosen(String selectedValue, boolean finalChoice) {
-
-                        DocViewUploadService.getInstance(selectedValue).doUpload(psiClass.getProject(), currentDocView);
+                    public @Nullable PopupStep<?> onChosen(UploadPlatform selectedValue, boolean finalChoice) {
+                        if (!disposed && !psiClass.getProject().isDisposed()) {
+                            DocViewUploadService.getInstance(selectedValue).upload(psiClass.getProject(), selectedDocView);
+                        }
 
                         return FINAL_CHOICE;
                     }
@@ -510,19 +623,32 @@ public class PreviewForm {
 
         rightGroup.addSeparator();
 
-        rightGroup.add(new AnAction("Export", "Export markdown", DocViewIcons.DOWNLOAD) {
+        rightGroup.add(new AnAction(DocViewBundle.message("action.export"),
+                DocViewBundle.message("action.export.markdown.description"), DocViewIcons.EXPORT) {
             @Override
             public void actionPerformed(@NotNull AnActionEvent e) {
+
+                SingleExportSnapshot snapshot = captureSingleExport();
+                if (snapshot == null) {
+                    DocViewNotification.notifyInfo(psiClass.getProject(), DocViewBundle.message("ui.docview.loading.retry"));
+                    return;
+                }
 
                 popup.cancel();
 
-                ExportUtils.exportMarkdown(psiClass.getProject(), currentDocView.getName(), currentMarkdownText);
+                ExportUtils.exportMarkdown(psiClass.getProject(), snapshot.fileName(), snapshot.markdownText());
             }
         });
 
-        rightGroup.add(new AnAction("Copy", "Copy to clipboard", DocViewIcons.COPY) {
+        rightGroup.add(new AnAction(DocViewBundle.message("action.copy"),
+                DocViewBundle.message("action.copy.clipboard.description"), DocViewIcons.COPY) {
             @Override
             public void actionPerformed(@NotNull AnActionEvent e) {
+
+                if (currentDocView == null || currentMarkdownText == null) {
+                    DocViewNotification.notifyInfo(psiClass.getProject(), DocViewBundle.message("ui.docview.loading.retry"));
+                    return;
+                }
 
                 StringSelection selection = new StringSelection(currentMarkdownText);
                 Clipboard clipboard = Toolkit.getDefaultToolkit().getSystemClipboard();
@@ -533,14 +659,14 @@ public class PreviewForm {
         });
 
         // init toolbar
-        ActionToolbarImpl toolbar = (ActionToolbarImpl) ActionManager.getInstance().createActionToolbar("DocViewEditorRightToolbar", rightGroup, true);
+        ActionToolbar toolbar = ActionManager.getInstance().createActionToolbar("DocViewEditorRightToolbar", rightGroup, true);
         toolbar.setTargetComponent(previewToolbarPanel);
-        toolbar.getComponent().setBackground(markdownEditor.getBackgroundColor());
+        toolbar.getComponent().setBackground(UIUtil.getPanelBackground());
 
-        toolbar.setForceMinimumSize(true);
-        Utils.setSmallerFontForChildren(toolbar);
+        keepToolbarPreferredMinimumSize(toolbar);
+        Utils.setSmallerFontForChildren(toolbar.getComponent());
 
-        previewToolbarPanel.setBackground(markdownEditor.getBackgroundColor());
+        previewToolbarPanel.setBackground(UIUtil.getPanelBackground());
         previewToolbarPanel.add(toolbar.getComponent(), BorderLayout.EAST);
 
     }
@@ -552,19 +678,33 @@ public class PreviewForm {
 
         DefaultActionGroup menuGroup = new DefaultActionGroup();
 
-        menuGroup.add(new AnAction("Export All", "Export markdown", DocViewIcons.DOWNLOAD) {
+        menuGroup.add(new AnAction(DocViewBundle.message("action.export.all"),
+                DocViewBundle.message("action.export.markdown.description"), DocViewIcons.EXPORT) {
             @Override
             public void actionPerformed(@NotNull AnActionEvent e) {
 
+                AllExportSnapshot snapshot = captureAllExport();
+                if (snapshot == null) {
+                    DocViewNotification.notifyInfo(psiClass.getProject(), DocViewBundle.message("ui.docview.loading.retry"));
+                    return;
+                }
+
                 popup.cancel();
-                ExportUtils.batchExportMarkdown(psiClass.getProject(), currentDocView.getPsiClass().getName(), docViewList);
+                ExportUtils.batchExportMarkdown(psiClass.getProject(), snapshot.className(), snapshot::docViews);
             }
         });
         menuGroup.addSeparator();
 
-        menuGroup.add(new AnAction("Upload All", "Upload all To YApi", DocViewIcons.UPLOAD) {
+        menuGroup.add(new AnAction(DocViewBundle.message("action.upload.all"),
+                DocViewBundle.message("action.upload.all.description"), DocViewIcons.UPLOAD) {
             @Override
             public void actionPerformed(@NotNull AnActionEvent e) {
+
+                List<DocView> selectedDocViews = docViewList == null ? null : List.copyOf(docViewList);
+                if (selectedDocViews == null) {
+                    DocViewNotification.notifyInfo(psiClass.getProject(), DocViewBundle.message("ui.docview.loading.retry"));
+                    return;
+                }
 
                 Point location = previewToolbarPanel.getLocationOnScreen();
                 location.x = MouseInfo.getPointerInfo().getLocation().x;
@@ -574,14 +714,15 @@ public class PreviewForm {
 
                 JBPopupFactory.getInstance().createListPopup(new BaseListPopupStep<>(null, DocViewUploadService.UPLOAD_OPTIONS) {
                     @Override
-                    public @NotNull String getTextFor(String value) {
-                        return "Upload to " + value;
+                    public @NotNull String getTextFor(UploadPlatform value) {
+                        return DocViewBundle.message("action.upload.platform", value.getDisplayName());
                     }
 
                     @Override
-                    public @Nullable PopupStep<?> onChosen(String selectedValue, boolean finalChoice) {
-
-                        DocViewUploadService.getInstance(selectedValue).upload(psiClass.getProject(), docViewList);
+                    public @Nullable PopupStep<?> onChosen(UploadPlatform selectedValue, boolean finalChoice) {
+                        if (!disposed && !psiClass.getProject().isDisposed()) {
+                            DocViewUploadService.getInstance(selectedValue).upload(psiClass.getProject(), selectedDocViews);
+                        }
 
                         return FINAL_CHOICE;
                     }
@@ -591,12 +732,12 @@ public class PreviewForm {
 
 
         // init toolbar
-        ActionToolbarImpl toolbar = (ActionToolbarImpl) ActionManager.getInstance().createActionToolbar("DocViewMenuToolbar", menuGroup, true);
+        ActionToolbar toolbar = ActionManager.getInstance().createActionToolbar("DocViewMenuToolbar", menuGroup, true);
         toolbar.setTargetComponent(catalogToolbarPane);
         toolbar.getComponent().setBackground(UIUtil.getTextFieldBackground());
 
-        toolbar.setForceMinimumSize(true);
-        Utils.setSmallerFontForChildren(toolbar);
+        keepToolbarPreferredMinimumSize(toolbar);
+        Utils.setSmallerFontForChildren(toolbar.getComponent());
 
         catalogToolbarPane.setBackground(UIUtil.getTextFieldBackground());
         catalogToolbarPane.add(toolbar.getComponent(), BorderLayout.WEST);
@@ -607,8 +748,55 @@ public class PreviewForm {
      * 构造文档
      */
     private void buildDoc() {
+        long requestId = loadRequest.incrementAndGet();
+        cancelIndicators(loadIndicators);
+        showPreviewStatus(DocViewBundle.message("ui.preview.loading"));
 
-        docViewList = DocViewService.getInstance(psiClass.getProject(), psiClass).buildDoc(psiClass, psiMethod);
+        AtomicReference<List<DocView>> result = new AtomicReference<>();
+        new Task.Backgroundable(psiClass.getProject(), DocViewBundle.message("task.docview.preview"), true) {
+            @Override
+            public void run(@NotNull ProgressIndicator indicator) {
+                indicator.setIndeterminate(true);
+                trackIndicator(loadIndicators, requestId, indicator, loadRequest, psiClass.getProject());
+                try {
+                    result.set(ApplicationManager.getApplication().runReadAction((Computable<List<DocView>>) () -> {
+                        indicator.checkCanceled();
+                        return DocViewService.getInstance(psiClass.getProject(), psiClass).buildDoc(psiClass, psiMethod);
+                    }));
+                } finally {
+                    loadIndicators.remove(requestId, indicator);
+                }
+            }
+
+            @Override
+            public void onSuccess() {
+                if (isCurrentLoad(requestId)) {
+                    try {
+                        applyDocViewList(result.get(), requestId);
+                    } catch (RuntimeException exception) {
+                        handleLoadFailure(requestId, exception);
+                    }
+                }
+            }
+
+            @Override
+            public void onCancel() {
+                handleLoadCancellation(requestId);
+            }
+
+            @Override
+            public void onThrowable(@NotNull Throwable throwable) {
+                handleLoadFailure(requestId, throwable);
+            }
+        }.queue();
+    }
+
+    private void applyDocViewList(@NotNull List<DocView> loadedDocViewList, long requestId) {
+        if (!isCurrentLoad(requestId)) {
+            return;
+        }
+
+        docViewList = List.copyOf(loadedDocViewList);
 
         docViewMap = docViewList.stream().collect(Collectors.toMap(DocView::getName, docView -> docView));
 
@@ -622,25 +810,232 @@ public class PreviewForm {
 
             currentDocView = docViewMap.get(selectedValue);
 
-            docNameLabel.setText(currentDocView.getPsiClass().getQualifiedName());
-
-            // 将 docView 按照模版转换
-            currentMarkdownText = DocViewData.markdownText(psiClass.getProject(), currentDocView);
-
-            if (jcefBrowser != null) {
-
-                String html = MarkdownUtil.INSTANCE.generateMarkdownHtml(psiClass.getContainingFile().getVirtualFile(), currentMarkdownText, psiClass.getProject());
-                jcefBrowser.loadHTML(html);
+            if (currentDocView == null) {
+                return;
             }
 
-            WriteCommandAction.runWriteCommandAction(psiClass.getProject(), () -> {
-                // 光标放在顶部
-                markdownDocument.setText(currentMarkdownText);
-            });
+            docNameLabel.setText(currentDocView.getPsiClass().getQualifiedName());
+
+            renderMarkdown(currentDocView);
 
         });
 
         // 默认选择第一个
-        catalogList.setSelectedIndex(0);
+        if (!docViewList.isEmpty()) {
+            catalogList.setSelectedIndex(0);
+        } else {
+            currentDocView = null;
+            showPreviewStatus(DocViewBundle.message("ui.preview.empty"));
+        }
+    }
+
+    private void renderMarkdown(@NotNull DocView docView) {
+        if (disposed) {
+            return;
+        }
+        long requestId = renderRequest.incrementAndGet();
+        cancelIndicators(renderIndicators);
+        currentMarkdownText = null;
+        showPreviewStatus(DocViewBundle.message("ui.preview.rendering"));
+
+        String cacheKey = markdownCacheKey(docView);
+        String cachedMarkdown = markdownCache.get(cacheKey);
+
+        boolean generateHtml = jcefBrowser != null;
+        AtomicReference<RenderResult> result = new AtomicReference<>();
+        new Task.Backgroundable(psiClass.getProject(), DocViewBundle.message("task.docview.markdown"), true) {
+            @Override
+            public void run(@NotNull ProgressIndicator indicator) {
+                if (ApplicationManager.getApplication().isDispatchThread()) {
+                    throw new AssertionError("Markdown preview generation must run outside the dispatch thread");
+                }
+                indicator.setIndeterminate(true);
+                trackIndicator(renderIndicators, requestId, indicator, renderRequest, psiClass.getProject());
+                try {
+                    result.set(ApplicationManager.getApplication().runReadAction((Computable<RenderResult>) () -> {
+                        indicator.checkCanceled();
+                        if (ApplicationManager.getApplication().isDispatchThread()) {
+                            throw new AssertionError("Markdown preview generation must run outside the dispatch thread");
+                        }
+                        String markdownText = cachedMarkdown != null
+                                ? cachedMarkdown
+                                : DocViewData.markdownText(psiClass.getProject(), docView);
+                        indicator.checkCanceled();
+                        String htmlText = generateHtml
+                                ? MarkdownUtil.INSTANCE.generateMarkdownHtml(
+                                        psiClass.getContainingFile().getVirtualFile(), markdownText, psiClass.getProject())
+                                : null;
+                        indicator.checkCanceled();
+                        return new RenderResult(markdownText, htmlText);
+                    }));
+                } finally {
+                    renderIndicators.remove(requestId, indicator);
+                }
+            }
+
+            @Override
+            public void onSuccess() {
+                if (isCurrentRender(requestId, docView)) {
+                    RenderResult rendered = result.get();
+                    try {
+                        markdownCache.put(cacheKey, rendered.markdownText());
+                        applyMarkdown(docView, rendered.markdownText(), rendered.htmlText(), requestId);
+                    } catch (RuntimeException exception) {
+                        handleRenderFailure(requestId, exception);
+                    }
+                }
+            }
+
+            @Override
+            public void onCancel() {
+                handleRenderCancellation(requestId);
+            }
+
+            @Override
+            public void onThrowable(@NotNull Throwable throwable) {
+                handleRenderFailure(requestId, throwable);
+            }
+        }.queue();
+    }
+
+    private void applyMarkdown(@NotNull DocView docView,
+                               @NotNull String markdownText,
+                               @Nullable String htmlText,
+                               long requestId) {
+        ApplicationManager.getApplication().assertIsDispatchThread();
+        if (!isCurrentRender(requestId, docView)) {
+            return;
+        }
+
+        currentMarkdownText = markdownText;
+
+        if (jcefBrowser != null && htmlText != null) {
+            jcefBrowser.loadHTML(htmlText);
+        }
+
+        setMarkdownText(markdownText);
+    }
+
+    private void showPreviewStatus(@NotNull String message) {
+        ApplicationManager.getApplication().assertIsDispatchThread();
+        if (disposed) {
+            return;
+        }
+        currentMarkdownText = null;
+        setMarkdownText(message);
+        if (jcefBrowser != null) {
+            jcefBrowser.loadHTML("<!doctype html><html><body><p>" + escapeHtml(message) + "</p></body></html>");
+        }
+    }
+
+    private static String escapeHtml(@NotNull String value) {
+        return value.replace("&", "&amp;")
+                .replace("<", "&lt;")
+                .replace(">", "&gt;")
+                .replace("\"", "&quot;")
+                .replace("'", "&#39;");
+    }
+
+    private void handleLoadCancellation(long requestId) {
+        if (isCurrentLoad(requestId)) {
+            showPreviewStatus(DocViewBundle.message("ui.preview.load.cancelled"));
+        }
+    }
+
+    private void handleLoadFailure(long requestId, @NotNull Throwable throwable) {
+        if (!isCurrentLoad(requestId)) {
+            return;
+        }
+        showPreviewStatus(DocViewBundle.message("ui.preview.load.failed"));
+        DocViewNotification.notifyError(psiClass.getProject(), errorMessage(throwable));
+    }
+
+    private void handleRenderCancellation(long requestId) {
+        if (isCurrentRender(requestId, currentDocView)) {
+            showPreviewStatus(DocViewBundle.message("ui.preview.render.cancelled"));
+        }
+    }
+
+    private void handleRenderFailure(long requestId, @NotNull Throwable throwable) {
+        if (!isCurrentRender(requestId, currentDocView)) {
+            return;
+        }
+        showPreviewStatus(DocViewBundle.message("ui.preview.render.failed"));
+        DocViewNotification.notifyError(psiClass.getProject(), errorMessage(throwable));
+    }
+
+    private static String errorMessage(@NotNull Throwable throwable) {
+        String message = throwable.getMessage();
+        return message == null || message.isBlank()
+                ? DocViewBundle.message("ui.preview.operation.failed") : message;
+    }
+
+    private boolean isCurrentLoad(long requestId) {
+        return !disposed && !psiClass.getProject().isDisposed() && requestId == loadRequest.get();
+    }
+
+    private boolean isCurrentRender(long requestId, @Nullable DocView docView) {
+        return !disposed && !psiClass.getProject().isDisposed()
+                && docView != null && requestId == renderRequest.get() && currentDocView == docView;
+    }
+
+    private static void trackIndicator(@NotNull ConcurrentMap<Long, ProgressIndicator> indicators,
+                                       long requestId,
+                                       @NotNull ProgressIndicator indicator,
+                                       @NotNull AtomicLong currentRequest,
+                                       @NotNull Project project) {
+        indicators.put(requestId, indicator);
+        if (requestId != currentRequest.get() || project.isDisposed()) {
+            indicator.cancel();
+        }
+    }
+
+    private void setMarkdownText(@NotNull String markdownText) {
+        if (disposed || markdownDocument == null) {
+            return;
+        }
+        WriteCommandAction.runWriteCommandAction(psiClass.getProject(), () -> {
+            // 光标放在顶部
+            markdownDocument.setText(markdownText);
+        });
+    }
+
+    private @Nullable SingleExportSnapshot captureSingleExport() {
+        if (currentDocView == null || currentMarkdownText == null) {
+            return null;
+        }
+        return new SingleExportSnapshot(currentDocView.getName(), currentMarkdownText);
+    }
+
+    private @Nullable AllExportSnapshot captureAllExport() {
+        if (currentDocView == null || docViewList == null) {
+            return null;
+        }
+        return new AllExportSnapshot(currentDocView.getPsiClass().getName(), List.copyOf(docViewList));
+    }
+
+    private record RenderResult(@NotNull String markdownText, @Nullable String htmlText) {
+    }
+
+    private record SingleExportSnapshot(@NotNull String fileName, @NotNull String markdownText) {
+    }
+
+    private record AllExportSnapshot(@NotNull String className, @NotNull List<DocView> docViews) {
+    }
+
+    private String markdownCacheKey(@NotNull DocView docView) {
+        Settings settings = Settings.getInstance(psiClass.getProject());
+        TemplateSettings templateSettings = TemplateSettings.getInstance(psiClass.getProject());
+        long modificationCount = PsiModificationTracker.getInstance(psiClass.getProject()).getModificationCount();
+        int versionHash = Objects.hash(
+                settings.getSeparateParam(),
+                settings.getPrefixSymbol1(),
+                settings.getPrefixSymbol2(),
+                templateSettings.getSpringTemplate(),
+                templateSettings.getDubboTemplate(),
+                templateSettings.getPojoTemplate(),
+                settings.getCurlDocHost()
+        );
+        return docView.getName() + ":" + modificationCount + ":" + versionHash;
     }
 }

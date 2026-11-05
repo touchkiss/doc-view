@@ -1,5 +1,6 @@
 package com.liuzhihang.doc.view.utils;
 
+import com.intellij.openapi.progress.ProgressManager;
 import com.intellij.psi.*;
 import com.intellij.psi.impl.source.PsiClassReferenceType;
 import com.intellij.psi.util.InheritanceUtil;
@@ -23,6 +24,8 @@ import java.util.stream.Stream;
  */
 public class ParamPsiUtils {
 
+    public static final int DEFAULT_MAX_SCHEMA_DEPTH = 8;
+
     /**
      * 生成 body
      *
@@ -34,6 +37,28 @@ public class ParamPsiUtils {
      * @param parentIsProto   parent 是 proto
      */
     public static void buildBodyParam(PsiClass parentClass, PsiField field, Map<String, PsiType> genericsMap, Body parent, Map<String, Boolean> parentChildPair, boolean parentIsProto) {
+        buildBodyParam(parentClass, field, genericsMap, parent, parentChildPair, parentIsProto,
+                DtoParsingContext.root(DEFAULT_MAX_SCHEMA_DEPTH));
+    }
+
+    public static void buildBodyParam(PsiField field, Map<String, PsiType> genericsMap, Body parent,
+                                      Map<String, Boolean> parentChildPair) {
+        PsiClass owner = field.getContainingClass();
+        buildBodyParam(owner, field, genericsMap, parent, parentChildPair,
+                owner != null && ProtoUtils.isProto(PsiTypesUtil.getClassType(owner)));
+    }
+
+    public static void buildBodyParam(PsiField field, Map<String, PsiType> genericsMap, Body parent,
+                                      Map<String, Boolean> parentChildPair, DtoParsingContext context) {
+        PsiClass owner = field.getContainingClass();
+        buildBodyParam(owner, field, genericsMap, parent, parentChildPair,
+                owner != null && ProtoUtils.isProto(PsiTypesUtil.getClassType(owner)), context);
+    }
+
+    private static void buildBodyParam(PsiClass parentClass, PsiField field, Map<String, PsiType> genericsMap,
+                                       Body parent, Map<String, Boolean> parentChildPair, boolean parentIsProto,
+                                       DtoParsingContext context) {
+        ProgressManager.checkCanceled();
 
         // parentChildPair 语义：当前递归路径栈（而非"全局已访问集合"）
         // - 进入时入栈，退出时出栈（try-finally 保证）
@@ -56,6 +81,9 @@ public class ParamPsiUtils {
         String fieldName = DocViewUtils.fieldName(field, parentIsProto);
         body.setName(fieldName);
         body.setPsiElement(field);
+        PsiField documentationField = DependencySourceComments.documentationField(field);
+        body.setSince(CustomPsiCommentUtils.tagDocComment(documentationField.getDocComment(), "since"));
+        body.setVersion(CustomPsiCommentUtils.tagDocComment(documentationField.getDocComment(), "version"));
         boolean parseProtoFieldDesc = false;
         boolean isProtoMap = false;
         if (parentIsProto) {
@@ -152,9 +180,14 @@ public class ParamPsiUtils {
             return;
         }
 
+        String typeIdentity = typeIdentity(type, qualifiedName);
+        if (context.isDepthLimitReached() || context.hasVisited(typeIdentity)) {
+            return;
+        }
         Map<String, PsiType> fieldGenericsMap = null;
         PsiClass childClass;
         Body parentBody;
+        DtoParsingContext childContext;
         // List Set or HashSet
         if (InheritanceUtil.isInheritor(type, CommonClassNames.JAVA_UTIL_COLLECTION)) {
 
@@ -186,6 +219,10 @@ public class ParamPsiUtils {
                 return;
             } else {
                 parentBody = buildFieldGenericsBody("element", childClass, body);
+                parentBody.setCollection(true);
+                String childTypeIdentity = typeIdentity(iterableType, childClass.getQualifiedName());
+                if (context.hasVisited(childTypeIdentity)) return;
+                childContext = context.descend(childTypeIdentity);
 
                 // 集合参数构建, 集合就一个参数, 泛型 E
                 fieldGenericsMap = CustomPsiUtils.getGenericsMap((PsiClassType) iterableType);
@@ -204,7 +241,7 @@ public class ParamPsiUtils {
                 return;
             }
 
-            buildFieldGenericsBody("key", matKeyClass, body);
+            buildFieldGenericsBody("key", matKeyClass, body).setMap(true);
 
             // Value
             PsiType matValueType = PsiUtil.substituteTypeParameter(type, CommonClassNames.JAVA_UTIL_MAP, 1, false);
@@ -222,6 +259,11 @@ public class ParamPsiUtils {
             isProto = ProtoUtils.isProto(matValueType);
 
             parentBody.setMap(true);
+            String childTypeIdentity = typeIdentity(matValueType, childClass.getQualifiedName());
+            if (context.hasVisited(childTypeIdentity)) {
+                return;
+            }
+            childContext = context.descend(childTypeIdentity);
 
         } else if (fieldClass == null || fieldClass.isEnum() || fieldClass.isInterface() || fieldClass.isAnnotationType()) {
             // 字段是类, 也可能带泛型
@@ -232,6 +274,11 @@ public class ParamPsiUtils {
             fieldGenericsMap = CustomPsiUtils.getGenericsMap((PsiClassType) type);
             parentBody = body;
             childClass = fieldClass;
+            childContext = context.descend(typeIdentity);
+        }
+
+        if (childContext.isDepthLimitReached()) {
+            return;
         }
 
         if (FieldTypeConstant.FIELD_TYPE.containsKey(type.getPresentableText()) || isProtoMap) {
@@ -239,7 +286,8 @@ public class ParamPsiUtils {
         }
         if (childClass.isRecord()) {
             for (PsiRecordComponent rc : childClass.getRecordComponents()) {
-                buildBodyParamFromComponent(childClass, rc, fieldGenericsMap, parentBody, parentChildPair);
+                ProgressManager.checkCanceled();
+                buildBodyParamFromComponent(childClass, rc, fieldGenericsMap, parentBody, parentChildPair, childContext);
             }
             return;
         }
@@ -247,12 +295,13 @@ public class ParamPsiUtils {
         // 不依赖 parentChildPair 去重，因为 pair 在退出时会被移除（递归栈语义）
         Set<String> seenFieldNames = new HashSet<>();
         for (PsiField psiField : childClass.getAllFields()) {
-            if (!DocViewUtils.isExcludeField(psiField, isProto)) {
+            ProgressManager.checkCanceled();
+                if (!DocViewUtils.isExcludeField(psiField, isProto)) {
                 // 同一个类的 getAllFields() 可能因继承返回同名字段，保留第一个（子类优先）
                 if (!seenFieldNames.add(psiField.getName())) {
                     continue;
                 }
-                buildBodyParam(childClass, psiField, fieldGenericsMap, parentBody, parentChildPair, isProto);
+                buildBodyParam(childClass, psiField, fieldGenericsMap, parentBody, parentChildPair, isProto, childContext);
             }
         }
 
@@ -328,6 +377,7 @@ public class ParamPsiUtils {
     private static Body buildFieldGenericsBody(String name, PsiClass genericsClass, Body parent) {
         Body listBody = new Body();
         listBody.setRequired(true);
+        listBody.setSyntheticContainerNode(true);
         listBody.setName(name);
         listBody.setPsiElement(genericsClass);
         listBody.setType(genericsClass.getName());
@@ -369,6 +419,10 @@ public class ParamPsiUtils {
         return fieldType instanceof PsiPrimitiveType
                 || fieldType == null
                 || FieldTypeConstant.FIELD_TYPE.containsKey(fieldType.getPresentableText());
+    }
+
+    private static String typeIdentity(@NotNull PsiType type, String qualifiedName) {
+        return StringUtils.defaultIfBlank(qualifiedName, type.getCanonicalText()) + "<" + type.getCanonicalText() + ">";
     }
 
     /**
@@ -451,11 +505,13 @@ public class ParamPsiUtils {
     public static Map<String, Object> getFieldsAndDefaultValue(PsiClass psiClass, Map<String, PsiType> genericMap, LinkedList<String> qualifiedNameList) {
 
         Map<String, Object> fieldMap = new LinkedHashMap<>();
+        ProgressManager.checkCanceled();
 
         if (psiClass == null || psiClass.isEnum() || psiClass.isInterface() || psiClass.isAnnotationType()) {
             return fieldMap;
         }
 
+        if (qualifiedNameList.size() >= DEFAULT_MAX_SCHEMA_DEPTH) return fieldMap;
         if (psiClass.isRecord()) {
             return getFieldsAndDefaultValueForRecord(psiClass, genericMap, qualifiedNameList);
         }
@@ -465,7 +521,7 @@ public class ParamPsiUtils {
         // 设置当前类的类型
         qualifiedNameList.add(psiClass.getQualifiedName());
         for (PsiField field : psiClass.getAllFields()) {
-//            proto的map类型，不展示子属性
+            ProgressManager.checkCanceled();//            proto的map类型，不展示子属性
             if (("Map".equals(psiClass.getName()) || Objects.requireNonNull(psiClass.getName()).startsWith("Map<")) && isProto) {
                 break;
             }
@@ -547,7 +603,7 @@ public class ParamPsiUtils {
                     PsiClass classInType = PsiUtil.resolveClassInType(deepType);
 
                     LinkedList<String> temp = new LinkedList<>(qualifiedNameList);
-                    if (classInType != null && hasContainQualifiedName(temp, classInType.getQualifiedName())) {
+                    if (classInType != null && (hasContainQualifiedName(temp, classInType.getQualifiedName()) || temp.size() >= DEFAULT_MAX_SCHEMA_DEPTH)) {
                         list.add("Object for " + classInType.getName());
                     } else {
                         list.add(getFieldsAndDefaultValue(classInType, null, temp));
@@ -572,7 +628,7 @@ public class ParamPsiUtils {
 
                         // 参数类型为对象 校验是否递归
                         LinkedList<String> temp = new LinkedList<>(qualifiedNameList);
-                        if (hasContainQualifiedName(temp, iterableClass.getQualifiedName())) {
+                        if (hasContainQualifiedName(temp, iterableClass.getQualifiedName()) || temp.size() >= DEFAULT_MAX_SCHEMA_DEPTH) {
                             list.add("Object for " + iterableClass.getName());
                         } else {
                             list.add(getFieldsAndDefaultValue(iterableClass, null, temp));
@@ -596,7 +652,11 @@ public class ParamPsiUtils {
                         PsiClass valueClass = PsiUtil.resolveClassInClassTypeOnly(matValueType);
                         if (valueClass != null) {
                             LinkedList<String> temp = new LinkedList<>(qualifiedNameList);
-                            hashMap.put(matKeyType.getPresentableText(), getFieldsAndDefaultValue(valueClass, CustomPsiUtils.getGenericsMap((PsiClassType) matValueType), temp));
+                            if (hasContainQualifiedName(temp, valueClass.getQualifiedName()) || temp.size() >= DEFAULT_MAX_SCHEMA_DEPTH) {
+                                hashMap.put(matKeyType.getPresentableText(), "Object for " + valueClass.getName());
+                            } else {
+                                hashMap.put(matKeyType.getPresentableText(), getFieldsAndDefaultValue(valueClass, CustomPsiUtils.getGenericsMap((PsiClassType) matValueType), temp));
+                            }
                         }
                     }
 
@@ -613,7 +673,7 @@ public class ParamPsiUtils {
                 PsiClass classInType = PsiUtil.resolveClassInType(type);
 
                 LinkedList<String> temp = new LinkedList<>(qualifiedNameList);
-                if (classInType != null && hasContainQualifiedName(temp, classInType.getQualifiedName())) {
+                if (classInType != null && (hasContainQualifiedName(temp, classInType.getQualifiedName()) || temp.size() >= DEFAULT_MAX_SCHEMA_DEPTH)) {
                     fieldMap.put(fieldName, "Object for " + classInType.getName());
                 } else {
                     fieldMap.put(fieldName, getFieldsAndDefaultValue(PsiUtil.resolveClassInType(type), CustomPsiUtils.getGenericsMap((PsiClassType) type), temp));
@@ -632,11 +692,14 @@ public class ParamPsiUtils {
     public static Map<String, Object> getFieldsAndDefaultValueForRecord(@NotNull PsiClass psiClass,
                                                                          Map<String, PsiType> genericMap,
                                                                          @NotNull LinkedList<String> qualifiedNameList) {
+        ProgressManager.checkCanceled();
         Map<String, Object> fieldMap = new LinkedHashMap<>();
+        if (qualifiedNameList.size() >= DEFAULT_MAX_SCHEMA_DEPTH) return fieldMap;
         qualifiedNameList.add(psiClass.getQualifiedName());
 
         for (PsiRecordComponent component : psiClass.getRecordComponents()) {
-            String fieldName = DocViewUtils.fieldName(component, false);
+            ProgressManager.checkCanceled();
+                String fieldName = DocViewUtils.fieldName(component, false);
             PsiType type = replaceFieldType(genericMap, component.getType());
             String fieldTypeName = type.getPresentableText();
             JsonWireType wireType = JacksonPsiUtils.resolveJsonWireType(component, type);
@@ -669,7 +732,7 @@ public class ParamPsiUtils {
                 } else {
                     PsiClass classInType = PsiUtil.resolveClassInType(deepType);
                     LinkedList<String> temp = new LinkedList<>(qualifiedNameList);
-                    if (classInType != null && hasContainQualifiedName(temp, classInType.getQualifiedName())) {
+                    if (classInType != null && (hasContainQualifiedName(temp, classInType.getQualifiedName()) || temp.size() >= DEFAULT_MAX_SCHEMA_DEPTH)) {
                         list.add("Object for " + classInType.getName());
                     } else if (classInType != null && classInType.isRecord()) {
                         list.add(getFieldsAndDefaultValueForRecord(classInType, null, temp));
@@ -692,7 +755,7 @@ public class ParamPsiUtils {
                         list.add(elementValue);
                     } else {
                         LinkedList<String> temp = new LinkedList<>(qualifiedNameList);
-                        if (hasContainQualifiedName(temp, iterableClass.getQualifiedName())) {
+                        if (hasContainQualifiedName(temp, iterableClass.getQualifiedName()) || temp.size() >= DEFAULT_MAX_SCHEMA_DEPTH) {
                             list.add("Object for " + iterableClass.getName());
                         } else if (iterableClass.isRecord()) {
                             list.add(getFieldsAndDefaultValueForRecord(iterableClass, null, temp));
@@ -711,7 +774,9 @@ public class ParamPsiUtils {
                         PsiClass valueClass = PsiUtil.resolveClassInClassTypeOnly(matValueType);
                         if (valueClass != null) {
                             LinkedList<String> temp = new LinkedList<>(qualifiedNameList);
-                            if (valueClass.isRecord()) {
+                            if (hasContainQualifiedName(temp, valueClass.getQualifiedName()) || temp.size() >= DEFAULT_MAX_SCHEMA_DEPTH) {
+                                hashMap.put(matKeyType.getPresentableText(), "Object for " + valueClass.getName());
+                            } else if (valueClass.isRecord()) {
                                 hashMap.put(matKeyType.getPresentableText(), getFieldsAndDefaultValueForRecord(valueClass, CustomPsiUtils.getGenericsMap((PsiClassType) matValueType), temp));
                             } else {
                                 hashMap.put(matKeyType.getPresentableText(), getFieldsAndDefaultValue(valueClass, CustomPsiUtils.getGenericsMap((PsiClassType) matValueType), temp));
@@ -723,7 +788,7 @@ public class ParamPsiUtils {
             } else {
                 PsiClass classInType = PsiUtil.resolveClassInType(type);
                 LinkedList<String> temp = new LinkedList<>(qualifiedNameList);
-                if (classInType != null && hasContainQualifiedName(temp, classInType.getQualifiedName())) {
+                if (classInType != null && (hasContainQualifiedName(temp, classInType.getQualifiedName()) || temp.size() >= DEFAULT_MAX_SCHEMA_DEPTH)) {
                     fieldMap.put(fieldName, "Object for " + classInType.getName());
                 } else if (classInType != null && classInType.isRecord()) {
                     fieldMap.put(fieldName, getFieldsAndDefaultValueForRecord(classInType, type instanceof PsiClassType ? CustomPsiUtils.getGenericsMap((PsiClassType) type) : null, temp));
@@ -742,6 +807,7 @@ public class ParamPsiUtils {
         }
 
         for (String s : qualifiedNameList) {
+            ProgressManager.checkCanceled();
             if (s.equals(qualifiedName)) {
                 return true;
             }
@@ -824,22 +890,38 @@ public class ParamPsiUtils {
         return root;
     }
 
-    public static void buildBodyList(@NotNull PsiClass psiClass, Map<String, PsiType> genericMap, Body parent, boolean isProto) {
+    public static void buildBodyList(@NotNull PsiClass psiClass, Map<String, PsiType> genericMap, Body parent) {
+        buildBodyList(psiClass, genericMap, parent, ProtoUtils.isProto(PsiTypesUtil.getClassType(psiClass)));
+    }
 
+    public static void buildBodyList(@NotNull PsiClass psiClass, Map<String, PsiType> genericMap, Body parent, boolean isProto) {
+        buildBodyList(psiClass, genericMap, parent, isProto, DtoParsingContext.root(DEFAULT_MAX_SCHEMA_DEPTH));
+    }
+
+    public static void buildBodyList(@NotNull PsiClass psiClass, Map<String, PsiType> genericMap, Body parent,
+                                     DtoParsingContext context) {
+        buildBodyList(psiClass, genericMap, parent, ProtoUtils.isProto(PsiTypesUtil.getClassType(psiClass)), context);
+    }
+
+    private static void buildBodyList(@NotNull PsiClass psiClass, Map<String, PsiType> genericMap, Body parent,
+                                      boolean isProto, DtoParsingContext context) {
+        ProgressManager.checkCanceled();
         if (psiClass.isRecord()) {
             for (PsiRecordComponent component : psiClass.getRecordComponents()) {
-                buildBodyParamFromComponent(psiClass, component, genericMap, parent, new HashMap<>());
+                ProgressManager.checkCanceled();
+                buildBodyParamFromComponent(psiClass, component, genericMap, parent, new HashMap<>(), context);
             }
             return;
         }
 
         for (PsiField field : psiClass.getAllFields()) {
+            ProgressManager.checkCanceled();
 
             if (DocViewUtils.isExcludeField(field, isProto)) {
                 continue;
             }
 
-            ParamPsiUtils.buildBodyParam(psiClass, field, genericMap, parent, new HashMap<>(), isProto);
+            ParamPsiUtils.buildBodyParam(psiClass, field, genericMap, parent, new HashMap<>(), isProto, context);
         }
 
     }
@@ -847,6 +929,14 @@ public class ParamPsiUtils {
     public static void buildBodyParamFromComponent(@NotNull PsiClass parentClass, @NotNull PsiRecordComponent component,
                                                    Map<String, PsiType> genericsMap, @NotNull Body parent,
                                                    @NotNull Map<String, Boolean> parentChildPair) {
+        buildBodyParamFromComponent(parentClass, component, genericsMap, parent, parentChildPair,
+                DtoParsingContext.root(DEFAULT_MAX_SCHEMA_DEPTH));
+    }
+
+    private static void buildBodyParamFromComponent(@NotNull PsiClass parentClass, @NotNull PsiRecordComponent component,
+                                                    Map<String, PsiType> genericsMap, @NotNull Body parent,
+                                                    @NotNull Map<String, Boolean> parentChildPair, DtoParsingContext context) {
+        ProgressManager.checkCanceled();
         String parentQName = parentClass.getQualifiedName() != null ? parentClass.getQualifiedName() : "";
         String pair = parentQName + "_" + component.getName();
         if (parentChildPair.containsKey(pair)) {
@@ -860,6 +950,11 @@ public class ParamPsiUtils {
             body.setName(DocViewUtils.fieldName(component, false));
             body.setPsiElement(component);
             body.setDesc(DocViewUtils.fieldDesc(component));
+            PsiField recordField = parentClass.findFieldByName(component.getName(), false);
+            if (recordField != null) {
+                body.setSince(CustomPsiCommentUtils.tagDocComment(recordField.getDocComment(), "since"));
+                body.setVersion(CustomPsiCommentUtils.tagDocComment(recordField.getDocComment(), "version"));
+            }
 
             type = replaceFieldType(genericsMap, type);
             JsonWireType wireType = JacksonPsiUtils.resolveJsonWireType(component, type);
@@ -890,6 +985,9 @@ public class ParamPsiUtils {
                 return;
             }
 
+            String typeIdentity = typeIdentity(type, qualifiedName);
+            if (context.isDepthLimitReached() || context.hasVisited(typeIdentity)) return;
+            DtoParsingContext childContext;
             Map<String, PsiType> fieldGenericsMap;
             PsiClass childClass;
             Body parentBody;
@@ -913,13 +1011,17 @@ public class ParamPsiUtils {
                     return;
                 }
                 parentBody = buildFieldGenericsBody("element", childClass, body);
+                parentBody.setCollection(true);
+                String childIdentity = typeIdentity(iterableType, childClass.getQualifiedName());
+                if (context.hasVisited(childIdentity)) return;
+                childContext = context.descend(childIdentity);
                 fieldGenericsMap = CustomPsiUtils.getGenericsMap((PsiClassType) iterableType);
             } else if (InheritanceUtil.isInheritor(type, CommonClassNames.JAVA_UTIL_MAP)) {
                 PsiType matKeyType = PsiUtil.substituteTypeParameter(type, CommonClassNames.JAVA_UTIL_MAP, 0, false);
                 if (matKeyType == null || !FieldTypeConstant.PACKAGE_TYPE_SET.contains(matKeyType.getPresentableText())) return;
                 PsiClass matKeyClass = PsiUtil.resolveClassInClassTypeOnly(matKeyType);
                 if (matKeyClass == null) return;
-                buildFieldGenericsBody("key", matKeyClass, body);
+                buildFieldGenericsBody("key", matKeyClass, body).setMap(true);
                 PsiType matValueType = PsiUtil.substituteTypeParameter(type, CommonClassNames.JAVA_UTIL_MAP, 1, false);
                 if (ignoreField(matValueType)) return;
                 childClass = PsiUtil.resolveClassInClassTypeOnly(matValueType);
@@ -927,26 +1029,33 @@ public class ParamPsiUtils {
                 fieldGenericsMap = CustomPsiUtils.getGenericsMap((PsiClassType) matValueType);
                 parentBody = buildFieldGenericsBody("value", childClass, body);
                 parentBody.setMap(true);
+                String childIdentity = typeIdentity(matValueType, childClass.getQualifiedName());
+                if (context.hasVisited(childIdentity)) return;
+                childContext = context.descend(childIdentity);
             } else if (fieldClass == null || fieldClass.isEnum() || fieldClass.isInterface() || fieldClass.isAnnotationType()) {
                 return;
             } else {
                 fieldGenericsMap = CustomPsiUtils.getGenericsMap((PsiClassType) type);
                 parentBody = body;
                 childClass = fieldClass;
+                childContext = context.descend(typeIdentity);
             }
 
+            if (childContext.isDepthLimitReached()) return;
             if (FieldTypeConstant.FIELD_TYPE.containsKey(type.getPresentableText())) return;
 
             if (childClass.isRecord()) {
                 for (PsiRecordComponent rc : childClass.getRecordComponents()) {
-                    buildBodyParamFromComponent(childClass, rc, fieldGenericsMap, parentBody, parentChildPair);
+                    ProgressManager.checkCanceled();
+                buildBodyParamFromComponent(childClass, rc, fieldGenericsMap, parentBody, parentChildPair, childContext);
                 }
             } else {
                 Set<String> seenFieldNames = new HashSet<>();
                 for (PsiField psiField : childClass.getAllFields()) {
-                    if (!DocViewUtils.isExcludeField(psiField, false)) {
+                    ProgressManager.checkCanceled();
+                if (!DocViewUtils.isExcludeField(psiField, false)) {
                         if (!seenFieldNames.add(psiField.getName())) continue;
-                        buildBodyParam(childClass, psiField, fieldGenericsMap, parentBody, parentChildPair, false);
+                        buildBodyParam(childClass, psiField, fieldGenericsMap, parentBody, parentChildPair, false, childContext);
                     }
                 }
             }
@@ -1008,6 +1117,36 @@ public class ParamPsiUtils {
         }
 
         return "";
+    }
+
+    public static final class DtoParsingContext {
+        private final int maxDepth;
+        private final int depth;
+        private final Set<String> visitedTypes;
+
+        private DtoParsingContext(int maxDepth, int depth, Set<String> visitedTypes) {
+            this.maxDepth = maxDepth;
+            this.depth = depth;
+            this.visitedTypes = visitedTypes;
+        }
+
+        public static DtoParsingContext root(int maxDepth) {
+            return new DtoParsingContext(maxDepth, 0, new LinkedHashSet<>());
+        }
+
+        public boolean isDepthLimitReached() {
+            return depth >= maxDepth;
+        }
+
+        public boolean hasVisited(@NotNull String typeIdentity) {
+            return visitedTypes.contains(typeIdentity);
+        }
+
+        public DtoParsingContext descend(@NotNull String typeIdentity) {
+            Set<String> childVisitedTypes = new LinkedHashSet<>(visitedTypes);
+            childVisitedTypes.add(typeIdentity);
+            return new DtoParsingContext(maxDepth, depth + 1, childVisitedTypes);
+        }
     }
 
 }

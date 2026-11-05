@@ -1,6 +1,8 @@
 import org.jetbrains.changelog.Changelog
 import org.jetbrains.changelog.ChangelogSectionUrlBuilder
 import org.jetbrains.changelog.ExtensionsKt
+import org.jetbrains.intellij.platform.gradle.TestFrameworkType
+import org.jetbrains.intellij.platform.gradle.tasks.VerifyPluginTask
 
 plugins {
     id 'java'
@@ -44,8 +46,17 @@ dependencies {
 
     intellijPlatform {
         local(localIde)
+        testFramework TestFrameworkType.Platform.INSTANCE
+        testFramework TestFrameworkType.Plugin.Java.INSTANCE
 
         bundledPlugin('com.intellij.java')
+        // Java/Proto require these platform modules split into plugins in IDEA 2026.2.
+        bundledPlugin('intellij.structureView.plugin')
+        bundledPlugin('intellij.testRunner.plugin')
+        bundledPlugin('intellij.todo.plugin')
+        bundledPlugin('intellij.bookmarks.plugin')
+        bundledPlugin('intellij.structuralSearch.plugin')
+        bundledPlugin('intellij.libraries.misc.plugin')
         bundledPlugin('org.intellij.plugins.markdown')
         // JCEF 在 2026.2 拆分为独立捆绑插件（含 module intellij.platform.ui.jcef），
         // 提供 com.intellij.ui.jcef.JBCefApp / JBCefBrowser
@@ -102,7 +113,7 @@ intellijPlatform {
 
         ideaVersion {
             sinceBuild = project.pluginSinceBuild
-            untilBuild = project.pluginUntilBuild
+            untilBuild = project.pluginUntilBuild?.trim() ? project.pluginUntilBuild : provider { null }
         }
 
         description = file(project.pluginDescription).getText('UTF-8')
@@ -115,6 +126,13 @@ intellijPlatform {
         }
     }
 
+    pluginVerification {
+        failureLevel = [VerifyPluginTask.FailureLevel.COMPATIBILITY_PROBLEMS,
+                        VerifyPluginTask.FailureLevel.INTERNAL_API_USAGES,
+                        VerifyPluginTask.FailureLevel.OVERRIDE_ONLY_API_USAGES,
+                        VerifyPluginTask.FailureLevel.DEPRECATED_API_USAGES]
+        ides { local(localIde) }
+    }
     buildSearchableOptions = false
 }
 
@@ -132,4 +150,16 @@ changelog {
 tasks.withType(JavaCompile).configureEach {
     options.encoding = "UTF-8"
     options.release = 25
+}
+
+// IntelliJ's tests require the IDE's NIO filesystem and platform test runtime.
+tasks.named('test') {
+    useJUnit()
+    failOnNoDiscoveredTests = true
+    jvmArgs '--add-opens=java.base/java.lang=ALL-UNNAMED', '--add-exports=java.base/sun.nio.fs=ALL-UNNAMED'
+}
+
+// Verify against the configured local IDE without fetching unrelated Marketplace plugins.
+tasks.named('verifyPlugin', VerifyPluginTask) {
+    offline = providers.gradleProperty('pluginVerifierOffline').map { it.toBoolean() }.orElse(true)
 }

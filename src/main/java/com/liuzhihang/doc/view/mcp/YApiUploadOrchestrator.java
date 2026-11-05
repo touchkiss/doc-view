@@ -1,6 +1,9 @@
 package com.liuzhihang.doc.view.mcp;
 
 import com.intellij.openapi.application.ReadAction;
+import com.intellij.openapi.progress.ProcessCanceledException;
+import com.intellij.openapi.progress.ProgressManager;
+import com.liuzhihang.doc.view.service.IntegrationCredentialService;
 import com.intellij.openapi.project.Project;
 import com.liuzhihang.doc.view.config.YApiSettings;
 import com.liuzhihang.doc.view.dto.DocView;
@@ -31,7 +34,7 @@ public final class YApiUploadOrchestrator {
     }
 
     public YApiUploadOrchestrator(YApiFacadeService facadeService, YapiSaveFactory saveFactory) {
-        this(facadeService, YApiSettings::getInstance, saveFactory::create);
+        this(facadeService, YApiUploadOrchestrator::uploadSettings, saveFactory::create);
     }
 
     YApiUploadOrchestrator(YApiFacadeService facadeService,
@@ -43,7 +46,7 @@ public final class YApiUploadOrchestrator {
                            Function<Project, YApiSettings> settingsProvider,
                            SaveMapper saveMapper) {
         this(facadeService, settingsProvider, saveMapper,
-                computation -> ReadAction.compute(computation::get));
+                computation -> ReadAction.computeBlocking(computation::get));
     }
 
     YApiUploadOrchestrator(YApiFacadeService facadeService,
@@ -56,20 +59,36 @@ public final class YApiUploadOrchestrator {
         this.readAction = readAction;
     }
 
+    /** PasswordSafe is read outside PSI read actions and never copied into persistent settings. */
+    private static YApiSettings uploadSettings(Project project) {
+        YApiSettings persisted = YApiSettings.getInstance(project);
+        YApiSettings snapshot = new YApiSettings();
+        snapshot.setUrl(persisted.getUrl());
+        snapshot.setProjectId(persisted.getProjectId());
+        snapshot.setToken(IntegrationCredentialService.getInstance(project)
+                .readToken(IntegrationCredentialService.Provider.YAPI));
+        return snapshot;
+    }
+
     public List<UploadItemResult> upload(Project project, List<DocView> docViews) {
         YApiSettings settings = requiredSettings(project);
         List<UploadItemResult> results = new ArrayList<>();
         for (DocView docView : docViews) {
+            ProgressManager.checkCanceled();
+            if (project != null && project.isDisposed()) throw new ProcessCanceledException();
             results.add(uploadOne(settings, docView));
         }
         return results;
     }
 
     private UploadItemResult uploadOne(YApiSettings settings, DocView docView) {
-        String reference = reference(docView);
+        String reference = docView == null ? "unknown" : docView.getMethod() + " " + docView.getPath();
         final YapiSave save;
         try {
             save = createSaveInReadAction(settings, docView);
+            reference = save.getMethod() + " " + save.getPath();
+        } catch (ProcessCanceledException exception) {
+            throw exception;
         } catch (Exception exception) {
             return UploadItemResult.failure(reference, McpException.Code.DOC_GENERATION_FAILED,
                     safeSummary(exception, settings.getToken()));
@@ -78,6 +97,8 @@ public final class YApiUploadOrchestrator {
             YApiCat category = getOrAddCategory(settings, docView.getDocTitle());
             save.setCatId(category.getId());
             return uploadPreparedDocument(settings, save, reference);
+        } catch (ProcessCanceledException exception) {
+            throw exception;
         } catch (Exception exception) {
             return remoteFailure(reference, settings, exception);
         }
@@ -99,6 +120,8 @@ public final class YApiUploadOrchestrator {
             String status = existingId.isPresent() ? "updated" : "created";
             return UploadItemResult.success(reference, status,
                     YApiInterfaceUrlResolver.resolve(facadeService, save));
+        } catch (ProcessCanceledException exception) {
+            throw exception;
         } catch (Exception exception) {
             return remoteFailure(reference, settings, exception);
         }
@@ -128,18 +151,6 @@ public final class YApiUploadOrchestrator {
         category.setName(name);
         category.setToken(settings.getToken());
         return facadeService.addCat(category);
-    }
-
-    private static String reference(DocView docView) {
-        if (docView == null) {
-            return "unknown";
-        }
-        if ("Dubbo".equals(docView.getMethod())) {
-            return docView.getPsiMethod() == null
-                    ? "POST /Dubbo/unknown"
-                    : "POST /Dubbo/" + docView.getPsiMethod().getName();
-        }
-        return docView.getMethod() + " " + docView.getPath();
     }
 
     private UploadItemResult remoteFailure(String reference, YApiSettings settings, Exception exception) {

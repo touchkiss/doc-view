@@ -1,14 +1,18 @@
 package com.liuzhihang.doc.view.service.impl;
 
+import com.intellij.openapi.progress.ProgressManager;
 import com.intellij.psi.PsiClass;
 import com.intellij.psi.PsiMethod;
 import com.intellij.psi.PsiParameter;
 import com.intellij.psi.PsiType;
+import com.liuzhihang.doc.view.dto.Body;
 import com.liuzhihang.doc.view.dto.DocView;
 import com.liuzhihang.doc.view.enums.ContentTypeEnum;
 import com.liuzhihang.doc.view.enums.FrameworkEnum;
+import com.liuzhihang.doc.view.service.DtoSchemaCacheService;
 import com.liuzhihang.doc.view.service.DocViewService;
 import com.liuzhihang.doc.view.utils.DocViewUtils;
+import com.liuzhihang.doc.view.utils.CustomPsiCommentUtils;
 import com.liuzhihang.doc.view.utils.ParamPsiUtils;
 import com.liuzhihang.doc.view.utils.SpringPsiUtils;
 import com.liuzhihang.doc.view.utils.UrlRewriteUtils;
@@ -17,6 +21,7 @@ import org.jetbrains.annotations.NotNull;
 import java.util.Collections;
 import java.util.LinkedList;
 import java.util.List;
+import java.util.function.Supplier;
 
 import static com.intellij.java.syntax.parser.JavaKeywords.VOID;
 
@@ -38,6 +43,7 @@ public class SpringDocViewServiceImpl implements DocViewService {
         List<DocView> docViewList = new LinkedList<>();
 
         for (PsiMethod method : psiClass.getMethods()) {
+            ProgressManager.checkCanceled();
 
             if (!SpringPsiUtils.isSpringMethod(method)) {
                 continue;
@@ -53,6 +59,7 @@ public class SpringDocViewServiceImpl implements DocViewService {
     @NotNull
     @Override
     public DocView buildClassMethodDoc(PsiClass psiClass, @NotNull PsiMethod psiMethod) {
+        ProgressManager.checkCanceled();
 
         DocView docView = new DocView();
         docView.setPsiClass(psiClass);
@@ -60,6 +67,8 @@ public class SpringDocViewServiceImpl implements DocViewService {
         docView.setDocTitle(DocViewUtils.getTitle(psiClass));
         docView.setName(DocViewUtils.getName(psiMethod));
         docView.setDesc(DocViewUtils.getMethodDesc(psiMethod));
+        docView.setSince(CustomPsiCommentUtils.tagDocComment(psiMethod.getDocComment(), "since"));
+        docView.setVersion(CustomPsiCommentUtils.tagDocComment(psiMethod.getDocComment(), "version"));
         docView.setPath(UrlRewriteUtils.rewrite(psiClass.getProject(), SpringPsiUtils.path(psiClass, psiMethod)));
         docView.setMethod(SpringPsiUtils.method(psiMethod));
         docView.setDomain(Collections.emptyList());
@@ -79,7 +88,8 @@ public class SpringDocViewServiceImpl implements DocViewService {
                 // JSON 请求可能会有 body
                 PsiParameter requestBodyParam = SpringPsiUtils.requestBodyParam(psiMethod);
                 if (requestBodyParam != null) {
-                    docView.setReqBody(SpringPsiUtils.buildBody(requestBodyParam));
+                    docView.setReqBody(cachedBody(psiClass, requestCacheRole(psiClass, psiMethod, requestBodyParam), requestBodyParam.getType(),
+                            () -> SpringPsiUtils.buildBody(requestBodyParam)));
                     docView.setReqBodyExample(SpringPsiUtils.reqBodyJson(requestBodyParam));
                 }
             }
@@ -91,10 +101,34 @@ public class SpringDocViewServiceImpl implements DocViewService {
 
         PsiType returnType = psiMethod.getReturnType();
         if (returnType != null && returnType.isValid() && !returnType.equalsToText(VOID)) {
-            docView.setRespBody(ParamPsiUtils.buildRespBody(returnType));
+            docView.setRespBody(cachedBody(psiClass, "spring-response-body", returnType,
+                    () -> ParamPsiUtils.buildRespBody(returnType)));
             docView.setRespExample(ParamPsiUtils.getRespBodyJson(returnType));
         }
         return docView;
+    }
+
+    /** Scalar request bodies contain parameter metadata, so their identity cannot be just the type. */
+    private static String requestCacheRole(PsiClass psiClass, PsiMethod method, PsiParameter parameter) {
+        var file = psiClass.getContainingFile();
+        var virtualFile = file == null ? null : file.getVirtualFile();
+        String source = virtualFile == null
+                ? String.valueOf(psiClass.getQualifiedName()) + ":memory:" + System.identityHashCode(method)
+                : virtualFile.getUrl();
+        return "spring-request-body:" + source + ":" + method.getTextOffset() + ":" + parameter.getName();
+    }
+
+    private Body cachedBody(@NotNull PsiClass psiClass, @NotNull String role, @NotNull PsiType type,
+                            @NotNull Supplier<Body> bodySupplier) {
+        DtoSchemaCacheService cacheService = DtoSchemaCacheService.getInstance(psiClass.getProject());
+        DtoSchemaCacheService.DtoSchemaCacheKey key = cacheService.key(role, type.getCanonicalText());
+        Body cachedBody = cacheService.getBody(key);
+        if (cachedBody != null) {
+            return cachedBody;
+        }
+        Body body = bodySupplier.get();
+        cacheService.putBody(key, body);
+        return body;
     }
 
 }

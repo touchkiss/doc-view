@@ -26,6 +26,7 @@ public class ApplicationSettings implements PersistentStateComponent<Application
     public static final int DEFAULT_MCP_SERVER_PORT = 12333;
 
     private String pluginVersion = "0.0.1";
+    private boolean showUpdateNotification = true;
     private Boolean mcpServerEnabled = true;
     private int mcpServerPort = DEFAULT_MCP_SERVER_PORT;
 

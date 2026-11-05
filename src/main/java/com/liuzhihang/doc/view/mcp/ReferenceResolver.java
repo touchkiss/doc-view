@@ -26,7 +26,7 @@ public final class ReferenceResolver {
         this((project, fqcn) -> JavaPsiFacade.getInstance(project)
                         .findClass(fqcn, GlobalSearchScope.projectScope(project)),
                 (project, psiClass) -> DocViewService.getInstance(project, psiClass),
-                ReadAction::compute);
+                ReadAction::computeBlocking);
     }
 
     ReferenceResolver(ClassLookup classLookup, DocViewServiceProvider docViewServiceProvider,

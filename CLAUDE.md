@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Doc View is an IntelliJ IDEA plugin (plugin ID: 15305) that generates Markdown API documentation from Java source code. It supports Spring MVC controllers, Dubbo services, and plain POJOs, with upload integration to YApi, ShowDoc, and YuQue.
 
-Platform target: IntelliJ Ultimate 2026.1.1+ (`platformType=IU`, `platformVersion=2026.1.1`). Java 17.
+Platform target: IntelliJ Ultimate 2026.2, built against the local IDEA installation. Java 25.
 
 ## Commands
 
@@ -24,7 +24,7 @@ Platform target: IntelliJ Ultimate 2026.1.1+ (`platformType=IU`, `platformVersio
 ./gradlew clean
 ```
 
-No automated test suite exists. Files under `src/test/java/` are manual Swing UI exploratory tests run directly via `main()`.
+Automated unit/PSI/UI/transport contract tests run with `./gradlew test`. Separate `constantValueTest` and `contentUsingTest` tasks cover fork parser regressions. Some older Swing main programs remain manual exploratory tools. Use a locally installed JDK 25; do not hardcode a personal JDK path in Gradle properties.
 
 Plugin version is pinned to `1.4.99` in `gradle.properties` to prevent marketplace auto-update from overwriting local builds.
 

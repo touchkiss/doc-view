@@ -24,6 +24,29 @@ import static org.junit.Assert.assertTrue;
 
 public class YApiUploadOrchestratorTest {
 
+    @Test(expected = com.intellij.openapi.progress.ProcessCanceledException.class)
+    public void cancellationDuringMappingStopsBatch() {
+        FakeFacade facade = new FakeFacade();
+        new YApiUploadOrchestrator(facade, project -> settings(),
+                (settings, category, doc) -> { throw new com.intellij.openapi.progress.ProcessCanceledException(); },
+                computation -> computation.get()).upload(null, List.of(document("GET", "/cancelled")));
+    }
+
+    @Test(expected = com.intellij.openapi.progress.ProcessCanceledException.class)
+    public void cancellationDuringLookupStopsBatch() {
+        FakeFacade facade = new FakeFacade();
+        facade.lookupFailures.put("GET /cancelled", new com.intellij.openapi.progress.ProcessCanceledException());
+        upload(facade, document("GET", "/cancelled"), document("GET", "/must-not-upload"));
+    }
+
+    @Test(expected = com.intellij.openapi.progress.ProcessCanceledException.class)
+    public void cancellationDuringDetailLookupNeverBecomesSuccessWithCategoryLink() {
+        FakeFacade facade = new FakeFacade();
+        facade.detailLookupFailures.put("GET /cancelled", new com.intellij.openapi.progress.ProcessCanceledException());
+        upload(facade, document("GET", "/cancelled"));
+    }
+
+
     @Test
     public void returnsCreatedResultForNewInterface() {
         FakeFacade facade = new FakeFacade();

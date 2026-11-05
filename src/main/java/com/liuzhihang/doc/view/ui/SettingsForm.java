@@ -1,136 +1,161 @@
 package com.liuzhihang.doc.view.ui;
 
-import com.intellij.icons.AllIcons;
 import com.intellij.openapi.project.Project;
-import com.intellij.ui.IdeBorderFactory;
+import com.intellij.ui.ContextHelpLabel;
 import com.intellij.ui.ToolbarDecorator;
 import com.intellij.ui.components.JBTextField;
-import com.intellij.ui.components.labels.LinkLabel;
 import com.intellij.ui.table.TableView;
 import com.intellij.util.ui.ColumnInfo;
-import com.intellij.util.ui.JBUI;
 import com.intellij.util.ui.ListTableModel;
-import com.liuzhihang.doc.view.DocViewBundle;
-import com.liuzhihang.doc.view.config.Settings;
 import com.liuzhihang.doc.view.config.UrlRewriteRule;
-import lombok.Getter;
-import org.jetbrains.annotations.NotNull;
-
-import javax.swing.*;
-import javax.swing.border.TitledBorder;
-import java.awt.BorderLayout;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
+import javax.swing.JTable;
+import javax.swing.JLabel;
+import java.awt.GridLayout;
+import com.intellij.ui.components.JBTextArea;
+import com.intellij.util.ui.JBUI;
+import com.liuzhihang.doc.view.DocViewBundle;
+import com.liuzhihang.doc.view.config.Settings;
+import org.jetbrains.annotations.NotNull;
+
+import javax.swing.JButton;
+import javax.swing.JCheckBox;
+import javax.swing.JPanel;
+import javax.swing.BoxLayout;
+import java.awt.BorderLayout;
+import java.awt.Component;
+import java.awt.FlowLayout;
 
 /**
- * @author liuzhihang
- * @date 2020/2/26 19:17
+ * The project-wide behavior settings shown on the Doc View root page.
  */
-public class SettingsForm {
-
-    private static final TitledBorder titleTitleBorder = IdeBorderFactory.createTitledBorder(DocViewBundle.message("settings.doc.title"));
-    private static final TitledBorder nameTitleBorder = IdeBorderFactory.createTitledBorder(DocViewBundle.message("settings.doc.name"));
-    private static final TitledBorder descTitleBorder = IdeBorderFactory.createTitledBorder(DocViewBundle.message("settings.doc.desc"));
-    private static final TitledBorder requiredTitleBorder = IdeBorderFactory.createTitledBorder(DocViewBundle.message("settings.doc.required"));
-    private static final TitledBorder exportTitleBorder = IdeBorderFactory.createTitledBorder(DocViewBundle.message("settings.doc.export"));
-    private static final TitledBorder lineMarkerTitleBorder = IdeBorderFactory.createTitledBorder(DocViewBundle.message("settings.doc.setting"));
-    private static final TitledBorder otherTitleBorder = IdeBorderFactory.createTitledBorder(DocViewBundle.message("settings.doc.other"));
-    private static final TitledBorder previewTitleBorder = IdeBorderFactory.createTitledBorder(DocViewBundle.message("settings.preview"));
-    private static final TitledBorder urlRewriteTitleBorder = IdeBorderFactory.createTitledBorder("URL Rewrite");
-    private static final TitledBorder curlHostTitleBorder = IdeBorderFactory.createTitledBorder(DocViewBundle.message("settings.curl.host"));
+public final class SettingsForm {
 
     private final Project project;
+    private final JPanel rootPanel = new JPanel(new BorderLayout());
+    private final JCheckBox lineMarkerCheckBox = new JCheckBox();
+    private final JCheckBox includeNormalInterfaceCheckBox = new JCheckBox();
 
-    @Getter
-    private JPanel rootPanel;
-
-    private LinkLabel<String> supportLinkLabel;
-
-    private JPanel titlePanel;
-    private JCheckBox titleCommentTagCheckBox;
-    private JCheckBox titleFullClassNameCheckBox;
-    private JCheckBox titleSimpleClassNameCheckBox;
-    private JCheckBox titleClassCommentCheckBox;
-
-    private JPanel namePanel;
-    private JCheckBox nameSwagger3CheckBox;
-    private JCheckBox nameSwaggerCheckBox;
-    private JCheckBox nameCommentTagCheckBox;
-    private JCheckBox nameMethodCommentCheckBox;
-
-    private JPanel docDescPanel;
-    private JCheckBox descSwagger3CheckBox;
-    private JCheckBox descSwaggerCheckBox;
-
-    private JPanel requirePanel;
-    private JCheckBox requireCommentTagCheckBox;
-    /**
-     * 字段名称是否取 JsonProperty 注解 checkBox
-     */
-    private JCheckBox fieldNameJsonPropertyCheckBox;
-    /**
-     * 当没有JsonProperty注解时，是否使用驼峰命名
-     */
-    private JCheckBox fieldNameSnakeCase;
-
-    private JPanel exportPanel;
-    private JCheckBox mergeExportCheckBox;
-
-    private JPanel previewPane;
-    private JCheckBox hideLeftCheckBox;
-
-    private JPanel lineMarkerPanel;
-    private JCheckBox lineMarkerCheckBox;
-    private JCheckBox includeNormalInterfaceCheckBox;
-    private JPanel otherPanel;
-    private JBTextField prefixSymbol1TextField;
-    private JBTextField prefixSymbol2TextField;
-    private JCheckBox separateParamCheckBox;
-
-    /**
-     * cURL 域名配置: Copy cURL 与生成文档各自独立
-     */
-    private JPanel curlHostPanel;
-    private JBTextField curlCopyHostTextField;
-    private JBTextField curlDocHostTextField;
-    private JBTextField grpcCurlHostTextField;
-
-    /**
-     * URL 重写规则表格容器, 由 Settings.form 绑定, 内容在代码中动态构建
-     */
-    private JPanel urlRewritePanel;
+    private final JBTextField curlCopyHostTextField = new JBTextField();
+    private final JBTextField curlDocHostTextField = new JBTextField();
+    private final JBTextField grpcCurlHostTextField = new JBTextField();
+    private final JPanel urlRewritePanel = new JPanel(new BorderLayout());
     private ListTableModel<UrlRewriteRule> urlRewriteTableModel;
+    private TableView<UrlRewriteRule> urlRewriteTable;
 
     public SettingsForm(@NotNull Project project) {
-
         this.project = project;
+        rootPanel.setAlignmentX(Component.LEFT_ALIGNMENT);
 
-        supportLinkLabel.setBorder(JBUI.Borders.emptyTop(20));
-        supportLinkLabel.setIcon(AllIcons.Actions.Find);
+        lineMarkerCheckBox.setName("lineMarkerCheckBox");
+        lineMarkerCheckBox.setText(DocViewBundle.message("settings.doc.setting.line.marker.show"));
+        lineMarkerCheckBox.setToolTipText(DocViewBundle.message("settings.doc.setting.line.marker.show.tip"));
 
-        supportLinkLabel.setListener((source, data) -> new SupportForm(project).show(), null);
+        includeNormalInterfaceCheckBox.setName("includeNormalInterfaceCheckBox");
+        includeNormalInterfaceCheckBox.setText(DocViewBundle.message("settings.doc.setting.include.normal.interface"));
+        includeNormalInterfaceCheckBox.setToolTipText(DocViewBundle.message("settings.doc.setting.include.normal.interface.tip"));
 
-        initTitleBorder();
+        JPanel content = new JPanel();
+        content.setLayout(new BoxLayout(content, BoxLayout.Y_AXIS));
+        content.setBorder(JBUI.Borders.empty(8, 12));
+        content.setAlignmentX(Component.LEFT_ALIGNMENT);
+
+        JPanel behaviorPanel = new JPanel();
+        behaviorPanel.setLayout(new BoxLayout(behaviorPanel, BoxLayout.Y_AXIS));
+        behaviorPanel.setBorder(JBUI.Borders.emptyBottom(8));
+        behaviorPanel.setAlignmentX(Component.LEFT_ALIGNMENT);
+
+        JPanel heading = new JPanel(new BorderLayout());
+        heading.setOpaque(false);
+        heading.setAlignmentX(Component.LEFT_ALIGNMENT);
+        com.intellij.ui.TitledSeparator separator = new com.intellij.ui.TitledSeparator(
+                DocViewBundle.message("settings.page.behavior"));
+        separator.setName("settingsBehaviorSeparator");
+        ContextHelpLabel guide = SettingsGuideHelp.create(project, "settingsGuideHelpIcon",
+                "settings.help.description", "settings.help.open", "/docs/user-guide/settings.md");
+        heading.add(separator, BorderLayout.CENTER);
+        heading.add(guide, BorderLayout.EAST);
+        behaviorPanel.add(heading);
+        behaviorPanel.add(lineMarkerCheckBox);
+        lineMarkerCheckBox.setAlignmentX(Component.LEFT_ALIGNMENT);
+        behaviorPanel.add(wrappingHelp(DocViewBundle.message("settings.doc.setting.line.marker.show.tip"),
+                "settingsLineMarkerDescription"));
+        JPanel interfaceOption = new JPanel(new BorderLayout());
+        interfaceOption.setBorder(JBUI.Borders.emptyBottom(8));
+        interfaceOption.setAlignmentX(Component.LEFT_ALIGNMENT);
+        includeNormalInterfaceCheckBox.setAlignmentX(Component.LEFT_ALIGNMENT);
+        interfaceOption.add(includeNormalInterfaceCheckBox, BorderLayout.WEST);
+        behaviorPanel.add(interfaceOption);
+        behaviorPanel.add(wrappingHelp(DocViewBundle.message("settings.doc.setting.include.normal.interface.tip"),
+                "settingsNormalInterfaceDescription"));
+        content.add(behaviorPanel);
+
+        JPanel curlHostPanel = new JPanel(new GridLayout(0, 2, JBUI.scale(8), JBUI.scale(6)));
+        curlHostPanel.setAlignmentX(Component.LEFT_ALIGNMENT);
+        curlHostPanel.setBorder(com.intellij.ui.IdeBorderFactory.createTitledBorder(
+                DocViewBundle.message("settings.curl.host")));
+        addHostSetting(curlHostPanel, curlCopyHostTextField, "curlCopyHostTextField",
+                "settings.curl.host.copy", "settings.curl.host.copy.tip");
+        addHostSetting(curlHostPanel, curlDocHostTextField, "curlDocHostTextField",
+                "settings.curl.host.doc", "settings.curl.host.doc.tip");
+        addHostSetting(curlHostPanel, grpcCurlHostTextField, "grpcCurlHostTextField",
+                "settings.curl.host.grpc", "settings.curl.host.grpc.tip");
+        content.add(curlHostPanel);
+        urlRewritePanel.setName("urlRewritePanel");
+        urlRewritePanel.setAlignmentX(Component.LEFT_ALIGNMENT);
+        urlRewritePanel.setBorder(com.intellij.ui.IdeBorderFactory.createTitledBorder("URL Rewrite"));
         initUrlRewriteTable();
+        content.add(urlRewritePanel);
+
+        JPanel links = new JPanel(new FlowLayout(FlowLayout.LEFT, 0, JBUI.scale(8)));
+        links.setAlignmentX(Component.LEFT_ALIGNMENT);
+        JButton supportButton = new JButton(DocViewBundle.message("support.start"));
+        supportButton.addActionListener(event -> new SupportForm(project).show());
+        links.add(supportButton);
+        content.add(links);
+
+        rootPanel.add(content, BorderLayout.NORTH);
     }
 
-    private void initTitleBorder() {
-        titlePanel.setBorder(titleTitleBorder);
-        namePanel.setBorder(nameTitleBorder);
-        docDescPanel.setBorder(descTitleBorder);
-        requirePanel.setBorder(requiredTitleBorder);
-        exportPanel.setBorder(exportTitleBorder);
-        lineMarkerPanel.setBorder(lineMarkerTitleBorder);
-        otherPanel.setBorder(otherTitleBorder);
-        previewPane.setBorder(previewTitleBorder);
-        urlRewritePanel.setBorder(urlRewriteTitleBorder);
-        curlHostPanel.setBorder(curlHostTitleBorder);
+    public JPanel getRootPanel() {
+        return rootPanel;
     }
 
-    /**
-     * 构建 URL 重写规则表格 (启用 / 正则 / 替换), 支持增删行.
-     */
+    public boolean isModified() {
+        Settings settings = Settings.getInstance(project);
+        return lineMarkerCheckBox.isSelected() != settings.getLineMarker()
+                || includeNormalInterfaceCheckBox.isSelected() != settings.getIncludeNormalInterface()
+                || !Objects.equals(curlCopyHostTextField.getText().trim(), settings.getCurlCopyHost())
+                || !Objects.equals(curlDocHostTextField.getText().trim(), settings.getCurlDocHost())
+                || !Objects.equals(grpcCurlHostTextField.getText().trim(), settings.getGrpcCurlHost())
+                || urlRewriteRulesModified(settings);
+    }
+
+    public void apply() {
+        Settings settings = Settings.getInstance(project);
+        settings.setLineMarker(lineMarkerCheckBox.isSelected());
+        settings.setIncludeNormalInterface(includeNormalInterfaceCheckBox.isSelected());
+        settings.setCurlCopyHost(curlCopyHostTextField.getText().trim());
+        settings.setCurlDocHost(curlDocHostTextField.getText().trim());
+        settings.setGrpcCurlHost(grpcCurlHostTextField.getText().trim());
+        stopEditing(urlRewriteTable);
+        settings.setUrlRewriteRules(copyRules(urlRewriteTableModel.getItems()));
+    }
+
+    public void reset() {
+        Settings settings = Settings.getInstance(project);
+        lineMarkerCheckBox.setSelected(settings.getLineMarker());
+        includeNormalInterfaceCheckBox.setSelected(settings.getIncludeNormalInterface());
+        includeNormalInterfaceCheckBox.setEnabled(true);
+        curlCopyHostTextField.setText(settings.getCurlCopyHost());
+        curlDocHostTextField.setText(settings.getCurlDocHost());
+        grpcCurlHostTextField.setText(settings.getGrpcCurlHost());
+        stopEditing(urlRewriteTable);
+        urlRewriteTableModel.setItems(copyRules(settings.getUrlRewriteRules()));
+    }
+
     private void initUrlRewriteTable() {
 
         ColumnInfo<UrlRewriteRule, Boolean> enabledColumn = new ColumnInfo<>("Enabled") {
@@ -198,6 +223,8 @@ public class SettingsForm {
         urlRewriteTableModel.setItems(copyRules(Settings.getInstance(project).getUrlRewriteRules()));
 
         TableView<UrlRewriteRule> tableView = new TableView<>(urlRewriteTableModel);
+        urlRewriteTable = tableView;
+        tableView.setName("urlRewriteTable");
         tableView.getEmptyText().setText("No URL rewrite rules");
 
         JPanel decorated = ToolbarDecorator.createDecorator(tableView)
@@ -254,109 +281,26 @@ public class SettingsForm {
         return false;
     }
 
-    /**
-     * 判断是否修改，来确定右下角按钮是否亮起
-     *
-     * @return 是否发生配置变更
-     */
-    public boolean isModified() {
-        Settings settings = Settings.getInstance(project);
-        includeNormalInterfaceCheckBox.setEnabled(lineMarkerCheckBox.isSelected());
-        return titleCommentTagCheckBox.isSelected() != settings.getTitleUseCommentTag()
-                || titleFullClassNameCheckBox.isSelected() != settings.getTitleUseFullClassName()
-                || titleSimpleClassNameCheckBox.isSelected() != settings.getTitleUseSimpleClassName()
-                || titleClassCommentCheckBox.isSelected() != settings.getTitleClassComment()
-                || nameSwagger3CheckBox.isSelected() != settings.getNameUseSwagger3()
-                || nameSwaggerCheckBox.isSelected() != settings.getNameUseSwagger()
-                || nameCommentTagCheckBox.isSelected() != settings.getNameUseCommentTag()
-                || nameMethodCommentCheckBox.isSelected() != settings.getNameMethodComment()
-                || descSwagger3CheckBox.isSelected() != settings.getDescUseSwagger3()
-                || descSwaggerCheckBox.isSelected() != settings.getDescUseSwagger()
-                || requireCommentTagCheckBox.isSelected() != settings.getRequiredUseCommentTag()
-                || fieldNameJsonPropertyCheckBox.isSelected() != settings.getFieldNameJsonProperty()
-                || fieldNameSnakeCase.isSelected() != settings.getFieldNameCaseType()
-                || mergeExportCheckBox.isSelected() != settings.getMergeExport()
-                || hideLeftCheckBox.isSelected() != settings.getHideLeft()
-                || lineMarkerCheckBox.isSelected() != settings.getLineMarker()
-                || includeNormalInterfaceCheckBox.isSelected() != settings.getIncludeNormalInterface()
-                || !prefixSymbol1TextField.getText().trim().equals(settings.getPrefixSymbol1())
-                || !prefixSymbol2TextField.getText().trim().equals(settings.getPrefixSymbol2())
-                || separateParamCheckBox.isSelected() != settings.getSeparateParam()
-                || !curlCopyHostTextField.getText().trim().equals(settings.getCurlCopyHost())
-                || !curlDocHostTextField.getText().trim().equals(settings.getCurlDocHost())
-                || !grpcCurlHostTextField.getText().trim().equals(settings.getGrpcCurlHost())
-                || urlRewriteRulesModified(settings)
-                ;
+    private static void addHostSetting(JPanel panel, JBTextField field, String name,
+                                       String labelKey, String tipKey) {
+        field.setName(name);
+        field.setToolTipText(DocViewBundle.message(tipKey));
+        JLabel label = new JLabel(DocViewBundle.message(labelKey));
+        label.setLabelFor(field);
+        panel.add(label);
+        panel.add(field);
     }
 
-    /**
-     * 点击 apply 时的动作
-     */
-    public void apply() {
-        Settings settings = Settings.getInstance(project);
-        settings.setTitleUseCommentTag(titleCommentTagCheckBox.isSelected());
-        settings.setTitleUseFullClassName(titleFullClassNameCheckBox.isSelected());
-        settings.setTitleUseSimpleClassName(titleSimpleClassNameCheckBox.isSelected());
-        settings.setTitleClassComment(titleClassCommentCheckBox.isSelected());
-        settings.setNameUseSwagger3(nameSwagger3CheckBox.isSelected());
-        settings.setNameUseSwagger(nameSwaggerCheckBox.isSelected());
-        settings.setNameUseCommentTag(nameCommentTagCheckBox.isSelected());
-        settings.setNameMethodComment(nameMethodCommentCheckBox.isSelected());
-        settings.setDescUseSwagger3(descSwagger3CheckBox.isSelected());
-        settings.setDescUseSwagger(descSwaggerCheckBox.isSelected());
-        settings.setRequiredUseCommentTag(requireCommentTagCheckBox.isSelected());
-        settings.setFieldNameJsonProperty(fieldNameJsonPropertyCheckBox.isSelected());
-        settings.setFieldNameCaseType(fieldNameSnakeCase.isSelected());
-        settings.setMergeExport(mergeExportCheckBox.isSelected());
-        settings.setHideLeft(hideLeftCheckBox.isSelected());
-        settings.setLineMarker(lineMarkerCheckBox.isSelected());
-        settings.setIncludeNormalInterface(includeNormalInterfaceCheckBox.isSelected());
-        settings.setPrefixSymbol1(prefixSymbol1TextField.getText().trim());
-        settings.setPrefixSymbol2(prefixSymbol2TextField.getText().trim());
-        settings.setSeparateParam(separateParamCheckBox.isSelected());
-        settings.setCurlCopyHost(curlCopyHostTextField.getText().trim());
-        settings.setCurlDocHost(curlDocHostTextField.getText().trim());
-        settings.setGrpcCurlHost(grpcCurlHostTextField.getText().trim());
-        settings.setUrlRewriteRules(copyRules(urlRewriteTableModel.getItems()));
-
-
-        includeNormalInterfaceCheckBox.setEnabled(lineMarkerCheckBox.isSelected());
-
-
+    private static JBTextArea wrappingHelp(String text, String name) {
+        JBTextArea help = new JBTextArea(text);
+        help.setName(name);
+        help.setEditable(false);
+        help.setFocusable(false);
+        help.setOpaque(false);
+        help.setLineWrap(true);
+        help.setWrapStyleWord(true);
+        help.setAlignmentX(Component.LEFT_ALIGNMENT);
+        help.setBorder(JBUI.Borders.empty(2, 0));
+        return help;
     }
-
-    /**
-     * 点击重置时的动作
-     */
-    public void reset() {
-        Settings settings = Settings.getInstance(project);
-        titleCommentTagCheckBox.setSelected(settings.getTitleUseCommentTag());
-        titleClassCommentCheckBox.setSelected(settings.getTitleClassComment());
-        titleFullClassNameCheckBox.setSelected(settings.getTitleUseFullClassName());
-        titleSimpleClassNameCheckBox.setSelected(settings.getTitleUseSimpleClassName());
-        nameSwagger3CheckBox.setSelected(settings.getNameUseSwagger3());
-        nameSwaggerCheckBox.setSelected(settings.getNameUseSwagger());
-        nameCommentTagCheckBox.setSelected(settings.getNameUseCommentTag());
-        nameMethodCommentCheckBox.setSelected(settings.getNameMethodComment());
-        descSwagger3CheckBox.setSelected(settings.getDescUseSwagger3());
-        descSwaggerCheckBox.setSelected(settings.getDescUseSwagger());
-        requireCommentTagCheckBox.setSelected(settings.getRequiredUseCommentTag());
-        fieldNameJsonPropertyCheckBox.setSelected(settings.getFieldNameJsonProperty());
-        fieldNameSnakeCase.setSelected(settings.getFieldNameCaseType());
-        mergeExportCheckBox.setSelected(settings.getMergeExport());
-        hideLeftCheckBox.setSelected(settings.getHideLeft());
-        lineMarkerCheckBox.setSelected(settings.getLineMarker());
-        includeNormalInterfaceCheckBox.setSelected(settings.getIncludeNormalInterface());
-
-        includeNormalInterfaceCheckBox.setEnabled(lineMarkerCheckBox.isSelected());
-        prefixSymbol1TextField.setText(settings.getPrefixSymbol1());
-        prefixSymbol2TextField.setText(settings.getPrefixSymbol2());
-        separateParamCheckBox.setSelected(settings.getSeparateParam());
-        curlCopyHostTextField.setText(settings.getCurlCopyHost());
-        curlDocHostTextField.setText(settings.getCurlDocHost());
-        grpcCurlHostTextField.setText(settings.getGrpcCurlHost());
-        urlRewriteTableModel.setItems(copyRules(settings.getUrlRewriteRules()));
-
-    }
-
 }

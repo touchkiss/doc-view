@@ -9,16 +9,19 @@ import com.liuzhihang.doc.view.integration.YApiFacadeService;
 import com.liuzhihang.doc.view.integration.YApiRemoteException;
 import com.liuzhihang.doc.view.integration.dto.*;
 import com.liuzhihang.doc.view.utils.HttpUtils;
-import lombok.extern.slf4j.Slf4j;
+import com.intellij.openapi.progress.ProcessCanceledException;
+import com.intellij.openapi.progress.ProgressManager;
+import org.apache.http.client.utils.URIBuilder;
 import org.apache.commons.lang3.StringUtils;
 
 import java.lang.reflect.Type;
 import java.util.List;
+import java.util.Set;
+import java.util.HashSet;
 import java.util.Objects;
 import java.util.Optional;
 
 /** HTTP-backed YApi facade with explicit transport and response failure categories. */
-@Slf4j
 public class YApiFacadeServiceImpl implements YApiFacadeService {
 
     private static final Gson GSON = new GsonBuilder().serializeNulls().create();
@@ -60,22 +63,35 @@ public class YApiFacadeServiceImpl implements YApiFacadeService {
 
     @Override
     public List<YApiCat> getCatMenu(String yapiUrl, Long projectId, String token) throws Exception {
-        String url = yapiUrl + "/api/interface/getCatMenu"
-                + "?project_id=" + projectId + "&token=" + token;
+        String url = new URIBuilder(yapiUrl + "/api/interface/getCatMenu")
+                .addParameter("project_id", String.valueOf(projectId)).addParameter("token", token).build().toString();
         Type type = new TypeToken<YApiResponse<List<YApiCat>>>() { }.getType();
         YApiResponse<List<YApiCat>> response = parseResponse(get(url), type, "读取分类");
         requireSuccess(response, "读取分类");
-        return response.getData() == null ? List.of() : response.getData();
+        if (response.getData() == null || response.getData().stream().anyMatch(cat -> cat == null || cat.getId() == null || cat.getId() <= 0)) {
+            throw YApiRemoteException.responseInvalid("读取分类响应缺少有效 data/id");
+        }
+        return response.getData();
     }
 
     @Override
     public Optional<Long> findInterfaceId(String yapiUrl, Long projectId, String token,
                                           Long catId, String method, String path) throws Exception {
+        Set<Long> seenIds = new HashSet<>();
         for (int page = 1; ; page++) {
-            String url = yapiUrl + "/api/interface/list"
-                    + "?project_id=" + projectId + "&token=" + token
-                    + "&page=" + page + "&limit=" + INTERFACE_PAGE_SIZE;
+            ProgressManager.checkCanceled();
+            String url = new URIBuilder(yapiUrl + "/api/interface/list")
+                    .addParameter("project_id", String.valueOf(projectId)).addParameter("token", token)
+                    .addParameter("page", String.valueOf(page)).addParameter("limit", String.valueOf(INTERFACE_PAGE_SIZE))
+                    .build().toString();
             List<YApiInterfaceSummary> interfaces = parseInterfaceList(get(url));
+            if (!interfaces.isEmpty()) {
+                Set<Long> pageIds = new HashSet<>();
+                for (YApiInterfaceSummary item : interfaces) pageIds.add(item.getId());
+                if (pageIds.size() != interfaces.size() || !seenIds.addAll(pageIds)) {
+                    throw YApiRemoteException.responseInvalid("读取接口列表返回重复分页");
+                }
+            }
             Optional<Long> match = interfaces.stream()
                     .filter(item -> catId.equals(item.getCatId()))
                     .filter(item -> item.getMethod() != null && method.equalsIgnoreCase(item.getMethod()))
@@ -106,16 +122,35 @@ public class YApiFacadeServiceImpl implements YApiFacadeService {
     }
 
     private List<YApiInterfaceSummary> parseInterfaceList(String body) throws Exception {
-        Type type = new TypeToken<YApiResponse<YApiListRespData>>() { }.getType();
-        YApiResponse<YApiListRespData> response = parseResponse(body, type, "读取接口列表");
+        JsonObject response = parseObject(body, "读取接口列表");
         requireSuccess(response, "读取接口列表");
-        return response.getData() == null ? List.of() : response.getData().getList();
+        try {
+            var data = response.get("data");
+            if (data == null || data.isJsonNull()) throw YApiRemoteException.responseInvalid("读取接口列表响应缺少 data");
+            // YApi deployments return either a direct array or a paginated object.
+            var list = data.isJsonArray() ? data : data.getAsJsonObject().get("list");
+            if (list == null || !list.isJsonArray()) throw YApiRemoteException.responseInvalid("读取接口列表响应缺少 list");
+            List<YApiInterfaceSummary> items = GSON.fromJson(list,
+                    new TypeToken<List<YApiInterfaceSummary>>() { }.getType());
+            if (items.stream().anyMatch(item -> item == null || item.getId() == null || item.getId() <= 0
+                    || item.getCatId() == null || item.getCatId() <= 0
+                    || StringUtils.isBlank(item.getMethod()) || StringUtils.isBlank(item.getPath()))) {
+                throw YApiRemoteException.responseInvalid("读取接口列表响应包含无效接口");
+            }
+            return items;
+        } catch (YApiRemoteException invalid) {
+            throw invalid;
+        } catch (RuntimeException invalid) {
+            throw YApiRemoteException.responseInvalid("读取接口列表响应不是有效 JSON");
+        }
     }
 
     private String get(String url) throws Exception {
         try {
             return getRequester.get(url);
         } catch (YApiRemoteException exception) {
+            throw exception;
+        } catch (ProcessCanceledException exception) {
             throw exception;
         } catch (Exception exception) {
             throw YApiRemoteException.requestFailed(exception);
@@ -126,6 +161,8 @@ public class YApiFacadeServiceImpl implements YApiFacadeService {
         try {
             return postRequester.post(url, body);
         } catch (YApiRemoteException exception) {
+            throw exception;
+        } catch (ProcessCanceledException exception) {
             throw exception;
         } catch (Exception exception) {
             throw YApiRemoteException.requestFailed(exception);
@@ -145,7 +182,6 @@ public class YApiFacadeServiceImpl implements YApiFacadeService {
         } catch (YApiRemoteException exception) {
             throw exception;
         } catch (RuntimeException exception) {
-            log.error("解析响应失败，响应内容：{}", body, exception);
             throw YApiRemoteException.responseInvalid(operation + "响应不是有效 JSON");
         }
     }
@@ -164,7 +200,6 @@ public class YApiFacadeServiceImpl implements YApiFacadeService {
         } catch (YApiRemoteException exception) {
             throw exception;
         } catch (RuntimeException exception) {
-            log.error("解析响应失败，响应内容：{}", body, exception);
             throw YApiRemoteException.responseInvalid(operation + "响应不是有效 JSON");
         }
     }

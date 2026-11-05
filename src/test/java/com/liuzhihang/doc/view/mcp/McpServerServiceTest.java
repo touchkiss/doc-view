@@ -137,7 +137,13 @@ public class McpServerServiceTest {
 
     @Test
     public void realListenerValidatesMcpHttpRequestsAndReleasesItsPort() throws Exception {
-        McpServerService service = new McpServerService();
+        // Exercise the actual listener on an OS-assigned port without competing with the user's IDE.
+        McpServerService service = new McpServerService(() -> {
+            Class<?> type = Class.forName(McpServerService.class.getName() + "$SdkMcpTransport");
+            var constructor = type.getDeclaredConstructor(McpToolHandler.class);
+            constructor.setAccessible(true);
+            return (McpServerService.McpTransport) constructor.newInstance(new McpToolHandler());
+        });
         service.start();
         URI endpoint = service.getEndpoint();
 

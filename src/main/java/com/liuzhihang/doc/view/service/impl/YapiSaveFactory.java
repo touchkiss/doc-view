@@ -94,85 +94,155 @@ public final class YapiSaveFactory {
 
     private void buildProperties(List<String> requiredList, Map<String, Object> properties, List<Body> bodyList) {
         for (Body body : bodyList) {
-            Map<String, Object> innerProperties = new LinkedHashMap<>();
-            String schemaType = toYapiSchemaType(body);
-            if ("array".equals(schemaType)) {
-                innerProperties.put("type", "array");
-                innerProperties.put("description", body.getDesc());
-                innerProperties.put("items", buildArrayItemsSchema(body));
-            } else if ("object".equals(schemaType)) {
-                List<String> objectRequiredList = new LinkedList<>();
-                Map<String, Object> objectProperties = new LinkedHashMap<>();
-                buildProperties(objectRequiredList, objectProperties, body.getChildList());
-                innerProperties.put("type", "object");
-                innerProperties.put("required", objectRequiredList);
-                innerProperties.put("description", body.getDesc());
-                innerProperties.put("properties", objectProperties);
-            } else {
-                innerProperties.put("type", schemaType);
-                innerProperties.put("description", body.getDesc());
-                innerProperties.put("default", body.getExample());
+            // Synthetic containers are parser structure, never user-defined JSON property names.
+            // Real fields named element/key/value have no synthetic marker and remain untouched.
+            if (body.isSyntheticContainerNode()) {
+                buildProperties(requiredList, properties, body.getChildList());
+                continue;
             }
             if (Boolean.TRUE.equals(body.getRequired())) {
                 requiredList.add(body.getName());
             }
-            properties.put(body.getName(), innerProperties);
+            properties.put(body.getName(), buildValueSchema(body));
         }
     }
 
+    private Map<String, Object> buildValueSchema(@NotNull Body body) {
+        Map<String, Object> schema = new LinkedHashMap<>();
+        String schemaType = toYapiSchemaType(body);
+        schema.put("type", schemaType);
+        schema.put("description", body.getDesc());
+        if ("array".equals(schemaType)) {
+            schema.put("items", buildArrayItemsSchema(body));
+        } else if ("object".equals(schemaType) && isMapBody(body)) {
+            // A Java Map has dynamic keys; its synthetic key/value nodes describe the generic
+            // types, rather than literal JSON fields. Preserve real key/value fields in each value.
+            Body value = schemaValueBody(body, syntheticChild(body, "value"), mapValueType(body.getType()));
+            schema.put("additionalProperties", buildValueSchema(value));
+        } else if ("object".equals(schemaType)) {
+            List<String> required = new LinkedList<>();
+            Map<String, Object> properties = new LinkedHashMap<>();
+            buildProperties(required, properties, body.getChildList());
+            schema.put("required", required);
+            schema.put("properties", properties);
+        } else {
+            schema.put("default", body.getExample());
+        }
+        return schema;
+    }
+
     private static String toYapiSchemaType(@NotNull Body body) {
-        if (body.isCollection()) return "array";
-        if (body.isMap()) return "object";
-        String type = body.getType();
+        if (body.isCollection() || isCollectionType(body.getType())) return "array";
+        if (body.isMap() || isMapBody(body)) return "object";
+        String type = rawType(body.getType());
         if (StringUtils.isBlank(type)) return "object";
         if ("byte".equals(type) || "short".equals(type) || "int".equals(type) || "long".equals(type)
                 || "float".equals(type) || "double".equals(type) || "Byte".equals(type)
                 || "Short".equals(type) || "Integer".equals(type) || "Long".equals(type)
-                || "Float".equals(type) || "Double".equals(type) || "BigDecimal".equals(type)) return "number";
+                || "Float".equals(type) || "Double".equals(type) || "BigDecimal".equals(type)
+                || "BigInteger".equals(type) || "Number".equals(type)) return "number";
         if ("boolean".equals(type) || "Boolean".equals(type)) return "boolean";
-        if (type.endsWith("[]")) return "array";
         if (FieldTypeConstant.FIELD_TYPE.containsKey(type) || CommonClassNames.JAVA_LANG_STRING_SHORT.equals(type)) return "string";
         return "object";
     }
 
     private Map<String, Object> buildArrayItemsSchema(@NotNull Body body) {
-        Map<String, Object> items = new LinkedHashMap<>();
-        if (CollectionUtils.isNotEmpty(body.getChildList())) {
-            List<String> itemRequiredList = new LinkedList<>();
-            Map<String, Object> itemProperties = new LinkedHashMap<>();
-            buildProperties(itemRequiredList, itemProperties, body.getChildList());
-            items.put("type", "object");
-            items.put("required", itemRequiredList);
-            items.put("description", body.getDesc());
-            items.put("properties", itemProperties);
-            return items;
+        Body element = syntheticChild(body, "element");
+        Body item = schemaValueBody(body, element, extractCollectionItemType(body.getType()));
+        // Older/flat parser paths already hold item fields directly. Only unwrap marked nodes.
+        if (element == null) item.setChildList(body.getChildList());
+        return buildValueSchema(item);
+    }
+
+    private static Body schemaValueBody(Body container, Body synthetic, String declaredType) {
+        String type = StringUtils.isNotBlank(declaredType) ? declaredType
+                : synthetic == null ? "Object" : synthetic.getType();
+        Body value = new Body();
+        value.setType(type);
+        value.setDesc(container.getDesc());
+        value.setExample(container.getExample());
+        if (synthetic != null) {
+            value.setChildList(synthetic.getChildList());
+            if (synthetic.getExample() != null) value.setExample(synthetic.getExample());
         }
-        String itemSchemaType = toYapiSchemaType(simpleBodyForType(extractCollectionItemType(body.getType())));
-        items.put("type", itemSchemaType);
-        items.put("description", body.getDesc());
-        if ("object".equals(itemSchemaType)) items.put("properties", new LinkedHashMap<>());
-        return items;
+        // Do not copy collection/map flags from a synthetic node: they describe its container,
+        // not the value's JSON shape. Infer nested containers from the actual generic type.
+        value.setCollection(isCollectionType(type));
+        value.setMap(isMapType(type));
+        return value;
+    }
+
+    private static Body syntheticChild(Body body, String name) {
+        for (Body child : body.getChildList()) {
+            if (child.isSyntheticContainerNode() && name.equals(child.getName())) return child;
+        }
+        return null;
+    }
+
+    private static boolean isMapBody(Body body) {
+        return isMapType(body.getType()) || body.isMap()
+                || syntheticChild(body, "key") != null || syntheticChild(body, "value") != null;
+    }
+
+    private static boolean isCollectionType(String type) {
+        if (type != null && type.trim().endsWith("[]")) return true;
+        return switch (rawType(type)) {
+            case "Iterable", "Collection", "List", "Set", "SortedSet", "NavigableSet", "ArrayList", "LinkedList",
+                    "HashSet", "LinkedHashSet", "TreeSet", "Vector", "Queue", "Deque", "ArrayDeque" -> true;
+            default -> false;
+        };
+    }
+
+    private static boolean isMapType(String type) {
+        return switch (rawType(type)) {
+            case "Map", "SortedMap", "NavigableMap", "HashMap", "LinkedHashMap", "TreeMap",
+                    "ConcurrentMap", "ConcurrentHashMap", "Hashtable", "EnumMap" -> true;
+            default -> false;
+        };
+    }
+
+    private static String rawType(String type) {
+        if (type == null) return "";
+        String raw = type.trim();
+        int genericStart = raw.indexOf('<');
+        if (genericStart >= 0) raw = raw.substring(0, genericStart);
+        int packageEnd = raw.lastIndexOf('.');
+        return packageEnd < 0 ? raw : raw.substring(packageEnd + 1);
     }
 
     private static String extractCollectionItemType(String type) {
-        if (StringUtils.isBlank(type)) return type;
-        int lt = type.indexOf('<');
-        int gt = type.lastIndexOf('>');
-        if (lt < 0 || gt < 0 || gt <= lt) return type;
-        String inner = type.substring(lt + 1, gt).trim();
-        int comma = inner.indexOf(',');
-        return comma > -1 ? inner.substring(0, comma).trim() : inner;
+        if (type != null && type.trim().endsWith("[]")) {
+            return type.trim().substring(0, type.trim().length() - 2);
+        }
+        List<String> arguments = genericArguments(type);
+        return arguments.isEmpty() ? null : arguments.get(0);
     }
 
-    private static Body simpleBodyForType(String type) {
-        Body body = new Body();
-        body.setType(type);
-        body.setCollection(false);
-        body.setMap(false);
-        body.setRequired(false);
-        body.setName("");
-        body.setDesc("");
-        return body;
+    private static String mapValueType(String type) {
+        List<String> arguments = genericArguments(type);
+        return arguments.size() < 2 ? null : arguments.get(1);
+    }
+
+    /** Splits top-level Java generic arguments without breaking Map<String, List<Value>>. */
+    private static List<String> genericArguments(String type) {
+        if (type == null) return List.of();
+        int start = type.indexOf('<');
+        int end = type.lastIndexOf('>');
+        if (start < 0 || end <= start) return List.of();
+        List<String> result = new ArrayList<>();
+        int depth = 0;
+        int itemStart = start + 1;
+        for (int i = itemStart; i < end; i++) {
+            char current = type.charAt(i);
+            if (current == '<') depth++;
+            else if (current == '>') depth--;
+            else if (current == ',' && depth == 0) {
+                result.add(type.substring(itemStart, i).trim());
+                itemStart = i + 1;
+            }
+        }
+        result.add(type.substring(itemStart, end).trim());
+        return result;
     }
 
     private List<YApiQuery> buildReqQuery(List<Param> paramList) {

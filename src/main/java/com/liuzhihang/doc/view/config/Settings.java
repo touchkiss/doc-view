@@ -82,11 +82,6 @@ public class Settings implements PersistentStateComponent<Settings> {
     private Boolean mergeExport = true;
 
     /**
-     * 隐藏左侧目录
-     */
-    private Boolean hideLeft = true;
-
-    /**
      * 是否显示边栏标记
      */
     private Boolean lineMarker = true;
@@ -120,16 +115,6 @@ public class Settings implements PersistentStateComponent<Settings> {
         add(SpringConstant.DATA);
     }};
 
-
-    /**
-     * 排除参数
-     */
-    private Set<String> excludeParamTypes = new HashSet<>() {{
-        add("HttpServletRequest");
-        add("ServletRequest");
-        add("HttpServletResponse");
-        add("ServletResponse");
-    }};
 
     /**
      * 字段必填注解

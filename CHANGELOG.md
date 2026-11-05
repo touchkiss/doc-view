@@ -1,5 +1,14 @@
 ## [Unreleased]
 
+### Upstream integration — 2026-11-05
+
+- 整合上游 master `877f0c9` 的文档正确性、模板/配置生命周期、后台预览/目录、DTO 缓存、字段表复制、项目文档导出、平台凭据与 HTTP 加固及 IDE API 清理。
+- 保留 fork 的 MCP/YApi upsert/详情链接、JSON5、独立 cURL 域名、URL 重写、Proto/gRPC、record、Jackson/contentUsing、Jakarta/javax 和 POJO 模板；不引入欢迎页、双语 UI、图标改版或上游维护流程。
+- 平台凭据改用 PasswordSafe，旧 XML 不自动迁移或删除，升级后需重新填写一次；不再将 token 保存到项目 XML。
+- 修复合成集合节点与真实业务字段混淆、无 PSI 缓存转换、snake_case 缓存失效、基础请求体缓存跨端点串用及取消被吞；HTTP 活动读取支持取消和完整请求 30 秒时限。
+- YApi 保留直接数组与分页对象响应，拒绝缺字段和重复满页，避免误创建和无限翻页。
+
+
 ### Added
 
 - 新增本地 MCP 工具 `upload_yapi_api_doc`：按已打开项目中的 Java Controller 类或方法引用上传 API 文档到

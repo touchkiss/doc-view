@@ -16,6 +16,50 @@ import static org.junit.Assert.assertTrue;
 
 public class YApiFacadeServiceImplTest {
 
+    @Test(expected = YApiRemoteException.class)
+    public void rejectsIncompleteInterfaceRowsInsteadOfAssumingAnInterfaceDoesNotExist() throws Exception {
+        new YApiFacadeServiceImpl(url -> "{\"errcode\":0,\"data\":[{}]}")
+                .findInterfaceId("http://yapi.example", 299L, "token", 1L, "GET", "/target");
+    }
+
+    @Test
+    public void repeatedFullPageStopsWithInvalidResponseInsteadOfLooping() throws Exception {
+        AtomicInteger calls = new AtomicInteger();
+        YApiFacadeServiceImpl service = new YApiFacadeServiceImpl(url ->
+                calls.incrementAndGet() <= 2 ? fullNonMatchingPage() : "{\"errcode\":0,\"data\":[]}");
+        try {
+            service.findInterfaceId("http://yapi.example", 299L, "token", 1L, "GET", "/target");
+            throw new AssertionError("Repeated pages must not be treated as successful absence");
+        } catch (YApiRemoteException invalid) {
+            assertEquals(YApiRemoteException.Kind.RESPONSE_INVALID, invalid.getKind());
+            assertEquals(2, calls.get());
+        }
+    }
+
+
+    @Test
+    public void preservesSpecialTokenCharactersForCategoryAndInterfaceLookup() throws Exception {
+        List<String> urls = new ArrayList<>();
+        YApiFacadeServiceImpl service = new YApiFacadeServiceImpl(url -> {
+            urls.add(url);
+            return "{\"errcode\":0,\"data\":[]}";
+        });
+        String token = "a&b+c /中文";
+        service.getCatMenu("http://yapi.example", 299L, token);
+        service.findInterfaceId("http://yapi.example", 299L, token, 1L, "GET", "/target");
+        for (String url : urls) {
+            var params = new org.apache.http.client.utils.URIBuilder(url).getQueryParams();
+            assertEquals(token, params.stream().filter(v -> v.getName().equals("token")).findFirst().orElseThrow().getValue());
+        }
+    }
+
+    @Test(expected = com.intellij.openapi.progress.ProcessCanceledException.class)
+    public void neverConvertsCancellationToRemoteFailure() throws Exception {
+        new YApiFacadeServiceImpl(url -> { throw new com.intellij.openapi.progress.ProcessCanceledException(); })
+                .getCatMenu("http://yapi.example", 299L, "token");
+    }
+
+
     @Test
     public void findsMatchingInterfaceOnFirstPage() throws Exception {
         YApiFacadeServiceImpl service = new YApiFacadeServiceImpl(url -> {
@@ -200,7 +244,7 @@ public class YApiFacadeServiceImplTest {
     }
 
     private static String fullNonMatchingPage() {
-        String entries = LongStream.range(0, 100)
+        String entries = LongStream.range(1, 101)
                 .mapToObj(id -> "{\"_id\":" + id
                         + ",\"catid\":1376,\"path\":\"/other/" + id
                         + "\",\"method\":\"GET\"}")

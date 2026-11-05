@@ -83,4 +83,7 @@ public class DocViewParamData {
      * 是否是 map
      */
     private boolean isMap = false;
+
+    /** True only for parser-created element/key/value container nodes. */
+    private boolean syntheticContainerNode;
 }

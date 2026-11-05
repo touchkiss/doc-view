@@ -13,6 +13,7 @@ import com.intellij.protobuf.lang.psi.PbOneofDefinition;
 import com.intellij.protobuf.lang.psi.PbSimpleField;
 import com.intellij.protobuf.lang.psi.PbSymbol;
 import com.intellij.protobuf.lang.psi.PbTypeName;
+import com.intellij.protobuf.lang.util.BuiltInType;
 import com.intellij.psi.PsiClass;
 import com.intellij.psi.PsiComment;
 import com.intellij.psi.PsiElement;
@@ -23,6 +24,7 @@ import com.intellij.psi.PsiReference;
 import com.intellij.psi.util.PsiTreeUtil;
 import com.liuzhihang.doc.view.config.Settings;
 import org.apache.commons.lang3.StringUtils;
+import org.apache.commons.lang3.Strings;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
@@ -261,13 +263,14 @@ public final class ProtoToPsiClassConverter {
                         ProtoJavaTypeMapper.unresolvedDesc(null));
             }
 
-            // 标量类型
-            if (typeName.isBuiltInType()) {
-                return new ResolvedType(ProtoJavaTypeMapper.javaTypeOf(typeName.getBuiltInType()),
-                        ProtoJavaTypeMapper.scalarDesc(typeName.getBuiltInType()));
-            }
-
             String referenceString = typeName.getReferenceString();
+            // BuiltInType's public exact-name lookup accepts only unqualified scalar keywords.
+            // Qualified names and user-defined identifiers continue through normal PSI resolution.
+            BuiltInType scalarType = BuiltInType.getType(referenceString);
+            if (scalarType != null) {
+                return new ResolvedType(ProtoJavaTypeMapper.javaTypeOf(scalarType),
+                        ProtoJavaTypeMapper.scalarDesc(scalarType));
+            }
 
             // well-known types 先按书写的名称判断, well-known 描述文件无法解析时也能命中
             String wellKnown = ProtoJavaTypeMapper.wellKnownJavaType(normalizeReference(referenceString));
@@ -418,7 +421,7 @@ public final class ProtoToPsiClassConverter {
             // 逐行去掉 JavaDoc 风格的前导 *
             StringJoiner joiner = new StringJoiner(" ");
             for (String line : cleaned.split("\\R")) {
-                String trimmed = StringUtils.removeStart(line.trim(), "*").trim();
+                String trimmed = Strings.CS.removeStart(line.trim(), "*").trim();
                 if (StringUtils.isNotBlank(trimmed)) {
                     joiner.add(trimmed);
                 }
@@ -460,7 +463,7 @@ public final class ProtoToPsiClassConverter {
                 return null;
             }
             String escaped = desc.replace("*/", "*").replaceAll("\\R", " ").trim();
-            return StringUtils.removeStart(escaped, "@");
+            return Strings.CS.removeStart(escaped, "@");
         }
 
         /**
@@ -487,7 +490,7 @@ public final class ProtoToPsiClassConverter {
          */
         @Nullable
         private String normalizeReference(@Nullable String reference) {
-            return reference == null ? null : StringUtils.removeStart(reference.trim(), ".");
+            return reference == null ? null : Strings.CS.removeStart(reference.trim(), ".");
         }
     }
 

@@ -8,7 +8,6 @@ import com.liuzhihang.doc.view.utils.CurlHostUtils;
 import com.liuzhihang.doc.view.utils.CurlUtils;
 import com.liuzhihang.doc.view.utils.VelocityUtils;
 import lombok.Data;
-import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.collections4.CollectionUtils;
 import org.apache.commons.lang3.StringUtils;
 import org.jetbrains.annotations.Contract;
@@ -27,7 +26,6 @@ import java.util.stream.Collectors;
  * @author liuzhihang
  * @date 2020/11/21 16:39
  */
-@Slf4j
 @Data
 public class DocViewData {
 
@@ -40,6 +38,10 @@ public class DocViewData {
      * 文档描述
      */
     private final String desc;
+
+    private final String since;
+
+    private final String version;
 
     /**
      * 环境地址
@@ -111,11 +113,17 @@ public class DocViewData {
     private final String type;
 
     public DocViewData(DocView docView) {
+        this(docView.getPsiClass().getProject(), docView);
+    }
 
-        Settings settings = Settings.getInstance(docView.getPsiClass().getProject());
+    /** Builds template data for a project, including PSI-free preview samples. */
+    public DocViewData(Project project, DocView docView) {
+        Settings settings = Settings.getInstance(project);
 
         this.name = docView.getName();
         this.desc = docView.getDesc();
+        this.since = StringUtils.defaultString(docView.getSince());
+        this.version = StringUtils.defaultString(docView.getVersion());
         this.path = docView.getPath();
         this.method = docView.getMethod();
         this.type = docView.getType().toString();
@@ -126,27 +134,34 @@ public class DocViewData {
         this.requestParamDataList = paramDataList(docView.getReqParamList());
         this.requestParam = paramMarkdown(requestParamDataList);
 
-        this.requestBodyDataList = buildBodyDataList(docView.getReqBody().getChildList());
-        this.requestBody = settings.getSeparateParam() ? separateParamMarkdown(requestBodyDataList) : paramMarkdown(requestBodyDataList);
-         this.requestJson5 = buildJson5(requestBodyDataList);
+        this.requestBodyDataList = buildBodyDataList(project, docView.getReqBody().getChildList());
+        this.requestBody = bodyMarkdown(requestBodyDataList, settings.getSeparateParam());
+        this.requestJson5 = buildJson5(requestBodyDataList);
         this.requestExample = requestExample(docView);
 
-        this.responseParamDataList = buildBodyDataList(docView.getRespBody().getChildList());
-        this.responseParam = settings.getSeparateParam() ? separateParamMarkdown(responseParamDataList) : paramMarkdown(responseParamDataList);
+        this.responseParamDataList = buildBodyDataList(project, docView.getRespBody().getChildList());
+        this.responseParam = bodyMarkdown(responseParamDataList, settings.getSeparateParam());
         this.responseExample = respBodyExample(docView.getRespExample());
 
         this.responseJson5 = buildJson5(responseParamDataList);
-        this.curlExample = docView.getType() == FrameworkEnum.SPRING ? curlMarkdown(docView) : "";
-        log.info("responseJson5:{}", responseJson5);
+        this.curlExample = docView.getType() == FrameworkEnum.SPRING ? curlMarkdown(project, docView) : "";
     }
 
     public static String curlMarkdown(DocView docView) {
+        // Keep empty/non-HTTP documents independent of PSI, as before the explicit-project overload.
+        if (StringUtils.isBlank(CurlUtils.build(docView))) {
+            return "";
+        }
+        return curlMarkdown(docView.getPsiClass().getProject(), docView);
+    }
+
+    public static String curlMarkdown(Project project, DocView docView) {
         String curl = CurlUtils.build(docView);
         if (StringUtils.isBlank(curl)) {
             return "";
         }
         // 文档中的 curl 示例使用独立的域名配置, 默认为 {{host}} 即保持占位符不变
-        curl = CurlHostUtils.applyDocHost(docView.getPsiClass().getProject(), curl);
+        curl = CurlHostUtils.applyDocHost(project, curl);
         return "```bash\n" + curl + "\n```\n\n";
     }
 
@@ -184,7 +199,8 @@ public class DocViewData {
                     builder.append("{");
                     addDesc(data, builder, tab);
                 }
-                if (data.getChildList().size() == 1 && "element".equals(data.getChildList().get(0).getName())) {
+                if (data.getChildList().size() == 1 && data.getChildList().get(0).isSyntheticContainerNode()
+                        && "element".equals(data.getChildList().get(0).getName())) {
                     builder.append(buildJsonWithDescContent(data.getChildList().get(0).getChildList()));
                 } else {
                     builder.append(buildJsonWithDescContent(data.getChildList()));
@@ -279,7 +295,7 @@ public class DocViewData {
 
     public static String markdownText(Project project, DocView docView) {
 
-        DocViewData docViewData = new DocViewData(docView);
+        DocViewData docViewData = new DocViewData(project, docView);
 
         if (docView.getType() == FrameworkEnum.DUBBO) {
             return VelocityUtils.convert(TemplateSettings.getInstance(project).getDubboTemplate(), docViewData);
@@ -292,6 +308,14 @@ public class DocViewData {
     }
 
     /**
+     * Renders the current field values without changing the editor/custom-template tree.
+     */
+    public static String bodyMarkdown(List<DocViewParamData> dataList, boolean separate) {
+        List<DocViewParamData> tableData = BodyTableData.project(dataList);
+        return separate ? separateParamMarkdown(tableData) : paramMarkdown(tableData);
+    }
+
+    /**
      * dataList 转为 Markdown 文本
      *
      * @param dataList
@@ -300,7 +324,7 @@ public class DocViewData {
     @NotNull
     private static String paramMarkdown(List<DocViewParamData> dataList) {
 
-        if (CollectionUtils.isEmpty(dataList)) {
+        if (dataList == null || dataList.isEmpty()) {
             return "";
         }
 
@@ -313,7 +337,7 @@ public class DocViewData {
      * 切分多个展示
      */
     private static String separateParamMarkdown(List<DocViewParamData> dataList) {
-        if (CollectionUtils.isEmpty(dataList)) {
+        if (dataList == null || dataList.isEmpty()) {
             return "";
         }
         List<DocViewParamData> paramDataList = new ArrayList<>();
@@ -329,7 +353,7 @@ public class DocViewData {
                     .append("|").append(markdownBr(data.getDesc()))
                     .append("|").append(Arrays.stream(new String[]{data.getSince(), data.getVersion()}).filter(StringUtils::isNotBlank).collect(Collectors.joining("-")))
                     .append("|").append("\n");
-            if (CollectionUtils.isNotEmpty(data.getChildList())) {
+            if (data.getChildList() != null && !data.getChildList().isEmpty()) {
                 paramDataList.add(data);
             }
         }
@@ -341,34 +365,12 @@ public class DocViewData {
      * 构造子的参数 Markdown 实体
      */
     private static String separateSubParamMarkdown(List<DocViewParamData> dataList) {
-        if (CollectionUtils.isEmpty(dataList)) {
+        if (dataList == null || dataList.isEmpty()) {
             return "";
         }
 
         StringBuilder builder = new StringBuilder();
         for (DocViewParamData data : dataList) {
-            List<DocViewParamData> childList = data.getChildList();
-
-            if (CollectionUtils.isNotEmpty(childList)) {
-                if (childList.size() == 1) {
-                    DocViewParamData docViewParamData = childList.get(0);
-                    if (docViewParamData.isCollection()) {
-                        builder.append("\n- ").append(docViewParamData.getType()).append(" ").append(docViewParamData.getName()).append("\n\n");
-                        builder.append(separateParamMarkdown(docViewParamData.getChildList()));
-                        continue;
-                    }
-                }
-                if (childList.size() == 2) {
-                    DocViewParamData docViewParamData = childList.get(1);
-                    if (docViewParamData.isMap()) {
-                        builder.append("\n- ").append(docViewParamData.getType()).append(" ").append(docViewParamData.getName()).append("\n\n");
-                        builder.append(separateParamMarkdown(docViewParamData.getChildList()));
-                        continue;
-                    }
-                }
-            }
-
-
             builder.append("\n- ").append(data.getType()).append(" ").append(data.getName()).append("\n\n");
             builder.append(separateParamMarkdown(data.getChildList()));
         }
@@ -392,7 +394,7 @@ public class DocViewData {
                     .append("|").append(markdownBr(data.getDesc()))
                     .append("|").append(Arrays.stream(new String[]{data.getSince(), data.getVersion()}).filter(StringUtils::isNotBlank).collect(Collectors.joining("-")))
                     .append("|").append("\n");
-            if (CollectionUtils.isNotEmpty(data.getChildList())) {
+            if (data.getChildList() != null && !data.getChildList().isEmpty()) {
                 builder.append(paramMarkdownContent(data.getChildList()));
             }
         }
@@ -410,7 +412,7 @@ public class DocViewData {
     @NotNull
     private static String headerMarkdown(List<DocViewParamData> dataList) {
 
-        if (CollectionUtils.isEmpty(dataList)) {
+        if (dataList == null || dataList.isEmpty()) {
             return "";
         }
 
@@ -432,7 +434,7 @@ public class DocViewData {
 
     private List<DocViewParamData> headerDataList(List<Header> headerList) {
 
-        if (CollectionUtils.isEmpty(headerList)) {
+        if (headerList == null || headerList.isEmpty()) {
             return new ArrayList<>();
         }
 
@@ -450,7 +452,7 @@ public class DocViewData {
     }
 
     private List<DocViewParamData> paramDataList(List<Param> reqParamList) {
-        if (CollectionUtils.isEmpty(reqParamList)) {
+        if (reqParamList == null || reqParamList.isEmpty()) {
             return new ArrayList<>();
         }
 
@@ -466,12 +468,6 @@ public class DocViewData {
 
             data.setVersion(param.getVersion());
             data.setSince(param.getSince());
-            if (StringUtils.isNotBlank(data.getDesc())) {
-                if (data.getDesc().contains("@since") || data.getDesc().contains("@version")) {
-                    data.setSince("");
-                    data.setDesc("");
-                }
-            }
 
             return data;
         }).collect(Collectors.toList());
@@ -486,11 +482,18 @@ public class DocViewData {
     @NotNull
     public static List<DocViewParamData> buildBodyDataList(List<Body> bodyList) {
 
-        if (CollectionUtils.isEmpty(bodyList)) {
+        if (bodyList == null || bodyList.isEmpty()) {
             return new ArrayList<>();
         }
 
-        return buildBodyDataList(bodyList, "", "", 1);
+        return buildBodyDataList(null, bodyList, "", "", 1);
+    }
+
+    public static List<DocViewParamData> buildBodyDataList(Project project, List<Body> bodyList) {
+        if (bodyList == null || bodyList.isEmpty()) {
+            return new ArrayList<>();
+        }
+        return buildBodyDataList(project, bodyList, "", "", 1);
     }
 
     /**
@@ -499,10 +502,11 @@ public class DocViewData {
      * @param prefixSymbol1,
      * @param bodyList
      * @param prefixSymbol2
-     * @param i
+     * @param tabCount JSON5 indentation depth
      */
     @NotNull
-    private static List<DocViewParamData> buildBodyDataList(@NotNull List<Body> bodyList, String prefixSymbol1, String prefixSymbol2, int tabCount) {
+    private static List<DocViewParamData> buildBodyDataList(Project project, @NotNull List<Body> bodyList,
+                                                            String prefixSymbol1, String prefixSymbol2, int tabCount) {
 
         List<DocViewParamData> dataList = new ArrayList<>();
 
@@ -518,25 +522,22 @@ public class DocViewData {
 
             data.setVersion(body.getVersion());
             data.setSince(body.getSince());
-            if (StringUtils.isNotBlank(data.getDesc())) {
-                if (data.getDesc().contains("@since") || data.getDesc().contains("@version")) {
-                    data.setSince("");
-                    data.setDesc("");
-                }
-            }
 
             data.setPrefixSymbol1(prefixSymbol1);
             data.setPrefixSymbol2(prefixSymbol2);
             data.setTabCount(tabCount);
             data.setCollection(body.isCollection());
             data.setMap(body.isMap());
+            data.setSyntheticContainerNode(body.isSyntheticContainerNode());
 
-            if (CollectionUtils.isNotEmpty(body.getChildList())) {
+            if (body.getChildList() != null && !body.getChildList().isEmpty()) {
 
-                Settings settings = Settings.getInstance(body.getPsiElement().getProject());
+                Project settingsProject = project == null ? body.getPsiElement().getProject() : project;
+                Settings settings = Settings.getInstance(settingsProject);
 
                 data.setChildList(
-                        buildBodyDataList(body.getChildList(), settings.getPrefixSymbol1(), prefixSymbol2 + settings.getPrefixSymbol2(), tabCount + 1));
+                        buildBodyDataList(settingsProject, body.getChildList(), settings.getPrefixSymbol1(),
+                                prefixSymbol2 + settings.getPrefixSymbol2(), tabCount + 1));
             }
             dataList.add(data);
         }

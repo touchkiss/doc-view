@@ -12,6 +12,7 @@ import com.intellij.psi.search.GlobalSearchScope;
 import com.intellij.psi.search.PsiShortNamesCache;
 import com.liuzhihang.doc.view.constant.FieldTypeConstant;
 import org.apache.commons.lang3.StringUtils;
+import org.apache.commons.lang3.Strings;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
@@ -19,6 +20,8 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import java.util.Arrays;
+import java.util.stream.Collectors;
 
 /**
  * 从注释中解析注解的工具类
@@ -45,15 +48,12 @@ public class CustomPsiCommentUtils {
                 return comment;
             }
 
-            for (PsiElement element : docComment.getChildren()) {
-
-                // 不是 tagName 则继续查找
-                if (!("PsiDocTag:@" + tagName).equalsIgnoreCase(element.toString())) {
+            for (PsiDocTag tag : docComment.getTags()) {
+                if (!tagName.equalsIgnoreCase(tag.getName())) {
                     continue;
                 }
-
-                return element.getText().replace(("@" + tagName), StringUtils.EMPTY).trim();
-
+                return Arrays.stream(tag.getDataElements()).map(PsiElement::getText)
+                        .collect(Collectors.joining(" ")).replaceAll("\\s+", " ").trim();
             }
 
             return "";
@@ -71,40 +71,20 @@ public class CustomPsiCommentUtils {
      */
     @NotNull
     public static String paramDocComment(PsiDocComment docComment, @NotNull PsiParameter parameter) {
-
         return ApplicationManager.getApplication().runReadAction((Computable<String>) () -> {
-
-            String comment = "";
-
             if (docComment == null) {
-                return comment;
+                return "";
             }
-
-            for (PsiElement element : docComment.getChildren()) {
-
-                // 不是当前字段则继续循环
-                if (!("PsiDocTag:@param").equalsIgnoreCase(element.toString())) {
-                    continue;
-                }
-
-                // 在注释中定位到该参数
-                if (element.getText().startsWith("@param " + parameter.getName())) {
-
-                    String paramWithComment = element.getText();
-
-                    if (paramWithComment.contains("\n")) {
-                        // 该字段后面还有注释
-                        comment = paramWithComment.substring(("@param " + parameter.getName()).length(), element.getText().indexOf("\n"));
-                    } else {
-                        // 该字段后面没有其他注释, 只有 */
-                        comment = paramWithComment.substring(("@param " + parameter.getName()).length());
-                    }
+            for (PsiDocTag tag : docComment.findTagsByName("param")) {
+                PsiDocTagValue value = tag.getValueElement();
+                if (value != null && parameter.getName().equals(value.getText())) {
+                    return Arrays.stream(tag.getDataElements()).skip(1)
+                            .map(PsiElement::getText).collect(Collectors.joining(" "))
+                            .replaceAll("\\s+", " ").trim();
                 }
             }
-            // 移除前后的空格
-            return comment.trim();
+            return "";
         });
-
     }
 
     /**
@@ -393,6 +373,8 @@ public class CustomPsiCommentUtils {
             PsiClass[] classes = PsiShortNamesCache.getInstance(project)
                     .getClassesByName(className, GlobalSearchScope.allScope(project));
             return classes.length > 0 ? classes[0] : null;
+        } catch (com.intellij.openapi.progress.ProcessCanceledException canceled) {
+            throw canceled;
         } catch (Exception e) {
             return null;
         }
@@ -583,7 +565,7 @@ public class CustomPsiCommentUtils {
 
             if (elementType.toLowerCase().contains("@link")) {
                 String linkText = element.getText().replaceFirst("(?i)^\\{@link\\s*", "");
-                linkText = StringUtils.removeEnd(linkText, "}");
+                linkText = Strings.CS.removeEnd(linkText, "}");
                 addReference(references, extractFirstReferenceToken(linkText));
             }
         }

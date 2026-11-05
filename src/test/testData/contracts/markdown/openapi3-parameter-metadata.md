@@ -1,0 +1,11 @@
+|参数名|参数值|必填|描述|版本|
+|:-----|:-----|:-----|:-----|:-----|
+|Content-Type|application/x-www-form-urlencoded|Y|||
+|X-Trace|trace-1|Y|追踪请求||
+---PARAMS---|参数名|类型|必填|默认值|描述|版本|
+|:-----|:-----|:-----|:-----|:-----|:-----|
+|user|String|Y|alice|用户账号||
+|manual|String|N|selected|手动参数||
+---REQUEST---```Form
+user=alice&manual=selected
+```

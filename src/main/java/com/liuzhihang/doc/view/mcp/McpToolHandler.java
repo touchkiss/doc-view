@@ -2,6 +2,7 @@ package com.liuzhihang.doc.view.mcp;
 
 import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.application.ReadAction;
+import com.intellij.openapi.progress.ProcessCanceledException;
 import com.intellij.openapi.project.Project;
 import com.intellij.psi.PsiClass;
 import com.intellij.psi.PsiMethod;
@@ -72,6 +73,8 @@ public final class McpToolHandler {
         final Project project;
         try {
             project = projectResolver.resolve(projectPath);
+        } catch (ProcessCanceledException canceled) {
+            throw canceled;
         } catch (Exception exception) {
             return failure(projectPath, reference, exception, McpException.Code.PROJECT_NOT_OPEN);
         }
@@ -79,6 +82,8 @@ public final class McpToolHandler {
         final List<UploadTarget> targets;
         try {
             targets = referenceResolver.resolve(project, reference);
+        } catch (ProcessCanceledException canceled) {
+            throw canceled;
         } catch (Exception exception) {
             return failure(projectPath, reference, exception, McpException.Code.REFERENCE_NOT_FOUND);
         }
@@ -86,6 +91,8 @@ public final class McpToolHandler {
         final GeneratedDocs generated;
         try {
             generated = documentGenerator.generate(project, targets);
+        } catch (ProcessCanceledException canceled) {
+            throw canceled;
         } catch (Exception exception) {
             return failure(projectPath, reference, exception, McpException.Code.DOC_GENERATION_FAILED);
         }
@@ -94,6 +101,8 @@ public final class McpToolHandler {
         try {
             uploaded = generated.documents().isEmpty()
                     ? List.of() : uploadExecutor.upload(project, generated.documents());
+        } catch (ProcessCanceledException canceled) {
+            throw canceled;
         } catch (Exception exception) {
             return failure(projectPath, reference, exception, McpException.Code.YAPI_REQUEST_FAILED);
         }
@@ -131,7 +140,7 @@ public final class McpToolHandler {
         List<McpResult.Item> failed = new ArrayList<>();
         for (UploadTarget target : targets) {
             try {
-                List<DocView> generated = ReadAction.compute(() -> freezeForUpload(DocViewService
+                List<DocView> generated = ReadAction.computeBlocking(() -> freezeForUpload(DocViewService
                         .getInstance(project, target.psiClass())
                         .buildDoc(target.psiClass(), target.psiMethod())));
                 if (generated.isEmpty()) {
@@ -139,7 +148,9 @@ public final class McpToolHandler {
                 } else {
                     documents.addAll(generated);
                 }
-            } catch (Exception exception) {
+            } catch (ProcessCanceledException canceled) {
+            throw canceled;
+        } catch (Exception exception) {
                 failed.add(McpResult.Item.failed(target.reference(), McpException.Code.DOC_GENERATION_FAILED.name(),
                         exception.getMessage() == null ? exception.getClass().getSimpleName() : exception.getMessage()));
             }
@@ -150,7 +161,7 @@ public final class McpToolHandler {
     private static List<UploadTarget> resolveDefaultTargets(Project project, String reference) {
         return new ReferenceResolver().resolveForUpload(project, reference).stream()
                 .map(resolved -> materializeUploadTarget(resolved.getPsiClass(),
-                        resolved.getPsiMethod().orElse(null), computation -> ReadAction.compute(computation::get)))
+                        resolved.getPsiMethod().orElse(null), computation -> ReadAction.computeBlocking(computation::get)))
                 .toList();
     }
 

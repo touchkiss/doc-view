@@ -2,6 +2,7 @@ package com.liuzhihang.doc.view.utils;
 
 import com.intellij.codeInsight.AnnotationUtil;
 import com.intellij.openapi.module.Module;
+import com.intellij.openapi.progress.ProgressManager;
 import com.intellij.psi.PsiAnnotation;
 import com.intellij.psi.PsiClass;
 import com.intellij.psi.PsiElement;
@@ -11,7 +12,6 @@ import com.intellij.psi.search.GlobalSearchScope;
 import com.liuzhihang.doc.view.constant.SpringConstant;
 import org.jetbrains.annotations.NotNull;
 
-import java.util.Collection;
 import java.util.LinkedList;
 import java.util.List;
 
@@ -35,11 +35,10 @@ public class FeignPsiUtil {
 
     public static List<PsiClass> findDocViewFromModule(Module module) {
 
-        Collection<PsiAnnotation> psiAnnotations = JavaAnnotationIndex.getInstance().get("FeignClient", module.getProject(), GlobalSearchScope.moduleScope(module));
-
         List<PsiClass> psiClasses = new LinkedList<>();
 
-        for (PsiAnnotation psiAnnotation : psiAnnotations) {
+        for (PsiAnnotation psiAnnotation : JavaAnnotationIndex.getInstance().getAnnotations("FeignClient", module.getProject(), GlobalSearchScope.moduleScope(module))) {
+            ProgressManager.checkCanceled();
             PsiModifierList psiModifierList = (PsiModifierList) psiAnnotation.getParent();
             PsiElement psiElement = psiModifierList.getParent();
 

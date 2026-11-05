@@ -1,8 +1,5 @@
 package com.liuzhihang.doc.view.utils;
 
-import com.intellij.ide.plugins.PluginManagerCore;
-import com.intellij.openapi.extensions.PluginId;
-
 /**
  * Protocol Buffers 插件 (idea.plugin.protoeditor) 可用性判断。
  * <p>
@@ -13,11 +10,6 @@ import com.intellij.openapi.extensions.PluginId;
  * @author liuzhihang
  */
 public final class ProtoPluginSupport {
-
-    /**
-     * Protocol Buffers 插件 id
-     */
-    private static final String PROTO_PLUGIN_ID = "idea.plugin.protoeditor";
 
     /**
      * 插件是否可用, 一个 IDE 进程内不会变化, 缓存结果
@@ -38,9 +30,10 @@ public final class ProtoPluginSupport {
             synchronized (ProtoPluginSupport.class) {
                 result = available;
                 if (result == null) {
-                    result = PluginManagerCore.getPlugin(PluginId.getId(PROTO_PLUGIN_ID)) != null
-                            && PluginManagerCore.isPluginInstalled(PluginId.getId(PROTO_PLUGIN_ID))
-                            && isClassLoadable();
+                    // The optional dependency is attached to this plugin's classloader only
+                    // when Protocol Buffers is enabled. Loading the actual PSI API therefore
+                    // checks usability without relying on internal plugin-manager APIs.
+                    result = isClassLoadable();
                     available = result;
                 }
             }
@@ -50,14 +43,14 @@ public final class ProtoPluginSupport {
 
     /**
      * 兜底判断: protobuf PSI 类是否真的能加载。
-     * 插件被禁用或版本差异导致类缺失时, getPlugin 仍可能返回非 null。
+     * 通过插件自身类加载器验证可选依赖；未启用或 PSI API 缺失时返回 false。
      */
     private static boolean isClassLoadable() {
         try {
             Class.forName("com.intellij.protobuf.lang.psi.PbFile", false,
                     ProtoPluginSupport.class.getClassLoader());
             return true;
-        } catch (Throwable e) {
+        } catch (ClassNotFoundException | LinkageError e) {
             return false;
         }
     }
