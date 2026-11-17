@@ -11,6 +11,8 @@
 
 ### Added
 
+- 合入原生 HTTP Client JSON5 增强：`.http` / `.rest` 无标记编辑、单条运行、Run All、Convert to cURL and Copy；随 Doc View 安装，HTTP Client 未启用时不加载增强。构建目标更新为 IDEA 2026.3（263）。
+
 - 新增本地 MCP 工具 `upload_yapi_api_doc`：按已打开项目中的 Java Controller 类或方法引用上传 API 文档到
   YApi，按 HTTP 方法和路径更新已有接口或创建缺失接口；该工具仅支持 YApi，不支持 ShowDoc 或其他文档平台。
 - 新增项目级 cURL 域名配置（Settings → Doc View → cURL 域名），Copy cURL 与生成文档相互独立：

@@ -208,12 +208,21 @@ public final class ProtoGrpcUtils {
 
         // Parse fields
         String[] lines = messageBody.split("\n");
+        String pendingComment = "";
         for (String line : lines) {
+            String trimmed = line.trim();
+            if (trimmed.startsWith("//")) {
+                pendingComment = (pendingComment + " " + trimmed.substring(2).trim()).trim();
+                continue;
+            }
             Matcher fieldMatcher = FIELD_PATTERN.matcher(line);
             if (fieldMatcher.find()) {
                 String fieldType = fieldMatcher.group(1);
                 String fieldName = fieldMatcher.group(2);
-                fields.add(new String[]{fieldName, fieldType});
+                int commentStart = line.indexOf("//", fieldMatcher.end());
+                String comment = commentStart >= 0 ? line.substring(commentStart + 2).trim() : pendingComment;
+                fields.add(new String[]{fieldName, fieldType, comment});
+                pendingComment = "";
             }
         }
 

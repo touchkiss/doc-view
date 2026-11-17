@@ -14,6 +14,8 @@ group = project.pluginGroup
 version = project.pluginVersion
 
 def localIde = file('/Applications/IntelliJ IDEA.app')
+def localProtoPlugin = providers.gradleProperty('protoPluginPath').orElse(
+        providers.systemProperty('user.home').map { "$it/Library/Application Support/JetBrains/IntelliJIdea2026.3/plugins/protoeditor".toString() })
 
 java {
     toolchain {
@@ -23,8 +25,8 @@ java {
 
 repositories {
     mavenLocal()
-    maven { url "https://maven.aliyun.com/repository/public" }
     mavenCentral()
+    maven { url "https://maven.aliyun.com/repository/public" }
 
     intellijPlatform {
         defaultRepositories()
@@ -33,9 +35,14 @@ repositories {
 
 dependencies {
     testImplementation group: 'junit', name: 'junit', version: '4.13.2'
+    // Retained manual Swing example and PasswordSafe fixture dependencies formerly exposed by the IDE.
+    testImplementation 'org.swinglabs.swingx:swingx-all:1.6.5-1'
+    testImplementation files(new File(localIde, 'Contents/lib/intellij.platform.credentialStore.impl.jar'))
+    testRuntimeOnly files(new File(localIde, 'Contents/plugins/java/lib/idea_rt.jar'))
 
     compileOnly group: 'org.projectlombok', name: 'lombok', version: '1.18.42'
-    compileOnly group: 'org.commonmark', name: 'commonmark', version: '0.29.0'
+    implementation group: 'org.commonmark', name: 'commonmark', version: '0.29.0'
+    implementation 'de.marhali:json5-java:3.0.0'
     implementation group: 'org.apache.commons', name: 'commons-collections4', version: '4.5.0'
     implementation('io.modelcontextprotocol.sdk:mcp-core:2.0.0') {
         exclude group: 'jakarta.servlet', module: 'jakarta.servlet-api'
@@ -46,24 +53,33 @@ dependencies {
 
     intellijPlatform {
         local(localIde)
+        pluginVerifier('1.411')
         testFramework TestFrameworkType.Platform.INSTANCE
         testFramework TestFrameworkType.Plugin.Java.INSTANCE
 
         bundledPlugin('com.intellij.java')
-        // Java/Proto require these platform modules split into plugins in IDEA 2026.2.
-        bundledPlugin('intellij.structureView.plugin')
-        bundledPlugin('intellij.testRunner.plugin')
-        bundledPlugin('intellij.todo.plugin')
-        bundledPlugin('intellij.bookmarks.plugin')
-        bundledPlugin('intellij.structuralSearch.plugin')
-        bundledPlugin('intellij.libraries.misc.plugin')
+        bundledPlugin('com.intellij.xml')
+        bundledPlugin('intellij.java.aetherDependencyResolver.plugin')
+        // Java/Proto and native HTTP Client platform modules in IDEA 2026.3.
+        bundledPlugin('com.intellij.structureView')
+        bundledPlugin('com.intellij.platform.testRunner')
+        bundledPlugin('com.intellij.todo')
+        bundledPlugin('com.intellij.bookmarks')
+        bundledPlugin('com.intellij.structuralSearch')
         bundledPlugin('org.intellij.plugins.markdown')
         // JCEF 在 2026.2 拆分为独立捆绑插件（含 module intellij.platform.ui.jcef），
         // 提供 com.intellij.ui.jcef.JBCefApp / JBCefBrowser
         bundledPlugin('com.intellij.modules.jcef')
         // Protocol Buffers 插件，提供 com.intellij.protobuf.lang.psi.* (PbFile/PbMessageType/PbField)
         // 用于解析 .proto 中的 message 结构；plugin.xml 中声明为 optional depends
-        bundledPlugin('idea.plugin.protoeditor')
+        // Proto is installed separately in IDEA 2026.3; reuse the local compatible plugin.
+        localPlugin(localProtoPlugin)
+        bundledPlugin('com.jetbrains.restClient')
+        bundledPlugin('com.intellij.modules.json')
+        bundledModule('org.intellij.intelliLang')
+        bundledPlugin('com.intellij.platform.serviceView')
+        bundledPlugin('com.intellij.navbar')
+        bundledPlugin('com.intellij.platform.vcs')
     }
 }
 
@@ -127,6 +143,9 @@ intellijPlatform {
     }
 
     pluginVerification {
+        if (providers.gradleProperty('pluginVerifierCli').isPresent()) {
+            cliPath = file(providers.gradleProperty('pluginVerifierCli').get())
+        }
         failureLevel = [VerifyPluginTask.FailureLevel.COMPATIBILITY_PROBLEMS,
                         VerifyPluginTask.FailureLevel.INTERNAL_API_USAGES,
                         VerifyPluginTask.FailureLevel.OVERRIDE_ONLY_API_USAGES,
@@ -156,10 +175,53 @@ tasks.withType(JavaCompile).configureEach {
 tasks.named('test') {
     useJUnit()
     failOnNoDiscoveredTests = true
+    systemProperty 'java.awt.headless', 'true'
+    maxHeapSize = '2g'
+    jvmArgs '--add-modules=jdk.httpserver'
     jvmArgs '--add-opens=java.base/java.lang=ALL-UNNAMED', '--add-exports=java.base/sun.nio.fs=ALL-UNNAMED'
+}
+
+// Give the verifier the same optional Proto dependency used for compilation and tests.
+tasks.register('prepareVerifierDependencies', Zip) {
+    from(localProtoPlugin.map { new File(it) }) { into 'protoeditor' }
+    archiveFileName = 'doc-view-protoeditor-local.zip'
+    // Verifier 1.411 reads offline plugin dependencies from its loaded-plugins cache.
+    destinationDirectory = layout.dir(providers.systemProperty('plugin.verifier.home.dir')
+            .orElse(providers.systemProperty('user.home').map { "$it/.pluginVerifier".toString() })
+            .map { new File("$it/loaded-plugins".toString()) })
 }
 
 // Verify against the configured local IDE without fetching unrelated Marketplace plugins.
 tasks.named('verifyPlugin', VerifyPluginTask) {
+    dependsOn tasks.named('prepareVerifierDependencies')
     offline = providers.gradleProperty('pluginVerifierOffline').map { it.toBoolean() }.orElse(true)
+}
+
+// Prove the optional integration does not make Doc View depend on an enabled HTTP Client.
+intellijPlatformTesting {
+    testIde.register('httpClientDisabled') {
+        localPath = localIde
+        testFramework TestFrameworkType.Platform.INSTANCE
+        testFramework TestFrameworkType.Plugin.Java.INSTANCE
+        plugins {
+            ['com.intellij.java', 'intellij.java.aetherDependencyResolver.plugin',
+             'com.intellij.structureView', 'com.intellij.platform.testRunner', 'com.intellij.todo',
+             'com.intellij.bookmarks', 'com.intellij.structuralSearch', 'com.intellij.xml', 'org.intellij.plugins.markdown',
+             'com.intellij.modules.jcef', 'com.intellij.platform.serviceView', 'com.intellij.navbar',
+             'com.intellij.platform.vcs'].each { bundledPlugin(it) }
+            disablePlugin('com.jetbrains.restClient')
+        }
+        task {
+            testClassesDirs = sourceSets.test.output.classesDirs
+            classpath += sourceSets.test.runtimeClasspath
+            useJUnit()
+            maxHeapSize = '2g'
+            jvmArgs '--add-opens=java.base/java.lang=ALL-UNNAMED', '--add-exports=java.base/sun.nio.fs=ALL-UNNAMED'
+            systemProperty 'java.awt.headless', 'true'
+            systemProperty 'docview.test.http.disabled', 'true'
+            filter {
+                includeTestsMatching 'com.liuzhihang.doc.view.httpclient.idea.DocViewHttpClientAvailabilityTest'
+            }
+        }
+    }
 }

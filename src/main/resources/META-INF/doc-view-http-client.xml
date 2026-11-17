@@ -1,0 +1,12 @@
+<idea-plugin>
+    <depends>com.intellij.modules.json</depends>
+    <depends>org.intellij.intelliLang</depends>
+    <extensions defaultExtensionNs="com.intellij">
+        <multiHostInjector implementation="com.liuzhihang.doc.view.httpclient.idea.Json5BodyInjector" order="first"/>
+        <applicationService serviceImplementation="com.liuzhihang.doc.view.httpclient.idea.RuntimeInstaller"/>
+        <postStartupActivity implementation="com.liuzhihang.doc.view.httpclient.idea.ProjectStartup"/>
+    </extensions>
+    <actions>
+        <action id="HTTPClientConvertToCurlAndCopy" class="com.liuzhihang.doc.view.httpclient.idea.Json5CopyAsCurlAction" overrides="true"/>
+    </actions>
+</idea-plugin>

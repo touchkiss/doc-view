@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Doc View is an IntelliJ IDEA plugin (plugin ID: 15305) that generates Markdown API documentation from Java source code. It supports Spring MVC controllers, Dubbo services, and plain POJOs, with upload integration to YApi, ShowDoc, and YuQue.
 
-Platform target: IntelliJ Ultimate 2026.2, built against the local IDEA installation. Java 25.
+Platform target: IntelliJ Ultimate 2026.3, built against the local IDEA installation. Java 25.
 
 ## Commands
 
@@ -26,7 +26,7 @@ Platform target: IntelliJ Ultimate 2026.2, built against the local IDEA installa
 
 Automated unit/PSI/UI/transport contract tests run with `./gradlew test`. Separate `constantValueTest` and `contentUsingTest` tasks cover fork parser regressions. Some older Swing main programs remain manual exploratory tools. Use a locally installed JDK 25; do not hardcode a personal JDK path in Gradle properties.
 
-Plugin version is pinned to `1.4.99` in `gradle.properties` to prevent marketplace auto-update from overwriting local builds.
+Plugin version is pinned to `1.99.99` in `gradle.properties` to prevent marketplace auto-update from overwriting local builds.
 
 ## Architecture
 
@@ -107,3 +107,8 @@ Two scopes:
 - **Project-level** (`Settings`, `TemplateSettings`, `YApiSettings`, etc.): per-project, stored in `.idea/`
 
 Each settings class has a paired `*Configurable` (UI) and `*Form` (Swing form) class.
+
+
+### Native HTTP Client JSON5
+
+`com.liuzhihang.doc.view.httpclient` contains the merged HTTP JSON5 support. `META-INF/doc-view-http-client.xml` is loaded through an optional `com.jetbrains.restClient` dependency. Preserve Doc View's main plugin ID. JSON5 conversion is shared by native Run/Run All and the native toolbar cURL action; it never rewrites HTTP source documents. The feature is validated on IDEA 2026.3 only. See `docs/user-guide/http-json5.md` for limits and tests.

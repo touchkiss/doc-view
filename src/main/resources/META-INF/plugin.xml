@@ -10,12 +10,15 @@
          on how to target different products -->
     <depends>com.intellij.modules.platform</depends>
     <depends>com.intellij.modules.java</depends>
+    <depends>com.intellij.xml</depends>
     <!-- 暂时不打开预览 -->
     <depends>org.intellij.plugins.markdown</depends>
     <!-- JCEF 嵌入式浏览器（2026.2 起为独立捆绑插件），用于 HTML 文档预览 -->
     <depends>com.intellij.modules.jcef</depends>
     <!-- Protocol Buffers 插件，用于解析 .proto message 结构；缺失时插件仍可正常加载 -->
     <depends optional="true" config-file="doc-view-protobuf.xml">idea.plugin.protoeditor</depends>
+    <!-- Native HTTP enhancement is part of Doc View, activated only when HTTP Client is enabled. -->
+    <depends optional="true" config-file="doc-view-http-client.xml">com.jetbrains.restClient</depends>
 
     <extensions defaultExtensionNs="com.intellij">
         <!-- Add your extensions here -->
@@ -135,8 +138,15 @@
             <action id="liuzhihang.doc.view" class="com.liuzhihang.doc.view.action.PreviewAction" text="Doc View"/>
             <action id="liuzhihang.doc.editor" class="com.liuzhihang.doc.view.action.EditorAction" text="Doc Editor"
                     description="Edit and copy documentation drafts without changing source"/>
-            <action id="liuzhihang.doc.copy.curl" class="com.liuzhihang.doc.view.action.CopyCurlAction" text="Copy cURL"/>
-            <action id="liuzhihang.doc.grpc.copy.curl" class="com.liuzhihang.doc.view.action.ProtoGrpcCopyCurlAction" text="Copy gRPC cURL"/>
+            <group id="liuzhihang.doc.copy.rest" text="Copy As" popup="true" compact="true">
+                <action id="liuzhihang.doc.copy.curl" class="com.liuzhihang.doc.view.action.CopyCurlAction" text="cURL"/>
+                <action id="liuzhihang.doc.copy.rest.json" class="com.liuzhihang.doc.view.action.CopyRestRequestAction$Json" text="REST Request (JSON)"/>
+                <action id="liuzhihang.doc.copy.rest.json5" class="com.liuzhihang.doc.view.action.CopyRestRequestAction$Json5" text="REST Request (JSON5)"/>
+                <action id="liuzhihang.doc.copy.postman" class="com.liuzhihang.doc.view.action.CopyPostmanAction" text="Postman"/>
+                <action id="liuzhihang.doc.grpc.copy.curl" class="com.liuzhihang.doc.view.action.ProtoGrpcCopyCurlAction" text="cURL"/>
+                <action id="liuzhihang.doc.grpc.copy.rest.json" class="com.liuzhihang.doc.view.action.ProtoGrpcCopyRestAction$Json" text="REST Request (JSON)"/>
+                <action id="liuzhihang.doc.grpc.copy.rest.json5" class="com.liuzhihang.doc.view.action.ProtoGrpcCopyRestAction$Json5" text="REST Request (with field comments)"/>
+            </group>
         </group>
 
         <group id="liuzhihang.doc.upload" text="Doc Upload" popup="true">

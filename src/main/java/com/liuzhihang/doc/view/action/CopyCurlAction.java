@@ -33,7 +33,7 @@ public class CopyCurlAction extends AbstractAction {
 
     @Override
     public void actionPerformed(@NotNull AnActionEvent e) {
-        super.actionPerformed(e);
+        validateContext(e);
 
         if (project == null || targetClass == null || targetMethod == null) {
             return;
@@ -65,6 +65,10 @@ public class CopyCurlAction extends AbstractAction {
 
         DocViewNotification.notifyInfo(project,
                 DocViewBundle.message("notify.copy.curl.success", targetMethod.getName()));
+    }
+
+    protected final void validateContext(@NotNull AnActionEvent e) {
+        super.actionPerformed(e);
     }
 
     @Override

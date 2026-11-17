@@ -56,7 +56,7 @@ public class ConstantValueTest {
                     @Override protected boolean hasAnyAnnotationsRoots() { return false; }
                 });
         environment.getProject().registerService(com.intellij.codeInsight.InferredAnnotationsManager.class,
-                new com.intellij.java.frontend.codeInsight.annotations.DummyInferredAnnotationsManager());
+                new com.intellij.java.frontend.split.base.codeInsight.DummyInferredAnnotationsManager());
         Settings settings = new Settings();
         settings.setFieldNameCaseType(false);
         environment.getProject().registerService(Settings.class, settings);
