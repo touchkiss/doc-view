@@ -90,7 +90,7 @@ Three-layer separation: Action → Service → Facade:
   → YApiFacadeServiceImpl / ShowDocFacadeServiceImpl / YuQueFacadeServiceImpl  (HTTP calls)
 ```
 
-Platform credentials live in project-scoped `YApiSettings`, `ShowDocSettings`, `YuQueSettings`.
+Platform credentials live in project-scoped `YApiSettings`, `ShowDocSettings`, `YuQueSettings` and persist to their existing `.idea` XML files. Do not use PasswordSafe or migrate from the OS credential store. Password fields are masked, Reset reloads saved values, and applying an empty field clears it.
 
 ### Tool Window
 

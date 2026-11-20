@@ -4,7 +4,7 @@
 
 - 整合上游 master `877f0c9` 的文档正确性、模板/配置生命周期、后台预览/目录、DTO 缓存、字段表复制、项目文档导出、平台凭据与 HTTP 加固及 IDE API 清理。
 - 保留 fork 的 MCP/YApi upsert/详情链接、JSON5、独立 cURL 域名、URL 重写、Proto/gRPC、record、Jackson/contentUsing、Jakarta/javax 和 POJO 模板；不引入欢迎页、双语 UI、图标改版或上游维护流程。
-- 平台凭据改用 PasswordSafe，旧 XML 不自动迁移或删除，升级后需重新填写一次；不再将 token 保存到项目 XML。
+- 平台凭据恢复为项目 XML 配置保存，不再访问 PasswordSafe；旧 XML 可直接读取，仅存于 PasswordSafe 的凭据需重新填写一次。
 - 修复合成集合节点与真实业务字段混淆、无 PSI 缓存转换、snake_case 缓存失效、基础请求体缓存跨端点串用及取消被吞；HTTP 活动读取支持取消和完整请求 30 秒时限。
 - YApi 保留直接数组与分页对象响应，拒绝缺字段和重复满页，避免误创建和无限翻页。
 
@@ -34,6 +34,8 @@
 - 移除 Doc Editor 源码写回及自动保存业务文件；编辑只作用于文档草稿，复制/导出/上传保留。Proto2 必填改用内存模型元数据，不生成标签。
 
 ### Fixed
+
+- YApi、ShowDoc、语雀凭据恢复到项目配置文件，移除 PasswordSafe 授权及凭据状态/保存弹窗；设置页直接保存、重置和清空，MCP 上传使用同一项目配置。
 
 - 标准必填注解回归覆盖 `javax/jakarta` 的 `@NotNull/@NotEmpty/@NotBlank`；补齐 Dubbo 顶层参数识别，并修复字段/record 数组解析的类型强转异常，保持业务源码只读；数组 JSON5 示例保留维度与数字/布尔类型。
 

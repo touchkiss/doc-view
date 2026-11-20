@@ -15,7 +15,6 @@ import com.liuzhihang.doc.view.integration.impl.YApiFacadeServiceImpl;
 import com.liuzhihang.doc.view.mcp.YApiUploadOrchestrator;
 import com.liuzhihang.doc.view.notification.DocViewNotification;
 import com.liuzhihang.doc.view.service.DocViewUploadService;
-import com.liuzhihang.doc.view.service.IntegrationCredentialService;
 import com.liuzhihang.doc.view.utils.DocViewBackgroundTasks;
 import org.apache.commons.lang3.StringUtils;
 import org.jetbrains.annotations.NotNull;
@@ -30,8 +29,7 @@ public final class YApiServiceImpl implements DocViewUploadService {
     public boolean checkSettings(@NotNull Project project) {
         YApiSettings settings = YApiSettings.getInstance(project);
         if (StringUtils.isBlank(settings.getUrl()) || settings.getProjectId() == null
-                || !IntegrationCredentialService.getInstance(project)
-                .readStatus(IntegrationCredentialService.Provider.YAPI).apiTokenConfigured()) {
+                || StringUtils.isBlank(settings.getToken())) {
             DocViewBackgroundTasks.invokeLater(project, () -> {
                 DocViewNotification.notifyError(project, DocViewBundle.message("notify.yapi.info.settings"));
                 ShowSettingsUtil.getInstance().showSettingsDialog(project, YApiSettingsConfigurable.class);

@@ -18,7 +18,6 @@ import com.liuzhihang.doc.view.integration.dto.YuQueUpdate;
 import com.liuzhihang.doc.view.integration.impl.YuQueFacadeServiceImpl;
 import com.liuzhihang.doc.view.notification.DocViewNotification;
 import com.liuzhihang.doc.view.service.DocViewUploadService;
-import com.liuzhihang.doc.view.service.IntegrationCredentialService;
 import com.liuzhihang.doc.view.utils.DocViewBackgroundTasks;
 import org.apache.commons.lang3.StringUtils;
 import org.jetbrains.annotations.NotNull;
@@ -44,9 +43,7 @@ public final class YuQueServiceImpl implements DocViewUploadService {
             showConfiguration(project);
             return false;
         }
-        boolean credentialConfigured = IntegrationCredentialService.getInstance(project)
-                .readStatus(IntegrationCredentialService.Provider.YUQUE).apiTokenConfigured();
-        if (!credentialConfigured) {
+        if (StringUtils.isBlank(apiSettings.getToken())) {
             showConfiguration(project);
             return false;
         }
@@ -67,7 +64,7 @@ public final class YuQueServiceImpl implements DocViewUploadService {
             ProgressManager.checkCanceled();
             if (project.isDisposed()) throw new ProcessCanceledException();
             YuQueSettings settings = YuQueSettings.getInstance(project);
-            String token = IntegrationCredentialService.getInstance(project).readToken(IntegrationCredentialService.Provider.YUQUE);
+            String token = settings.getToken();
             YuQueFacadeService facadeService = ApplicationManager.getApplication().getService(YuQueFacadeServiceImpl.class);
             String slug;
             if (docView.getPath().startsWith("/")) {

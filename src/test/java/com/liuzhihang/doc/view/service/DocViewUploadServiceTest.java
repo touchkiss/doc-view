@@ -6,9 +6,16 @@ import com.intellij.testFramework.ServiceContainerUtil;
 import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.progress.ProgressManager;
 import com.intellij.openapi.progress.ProcessCanceledException;
+import com.intellij.openapi.project.Project;
+import com.liuzhihang.doc.view.config.YApiSettings;
+import com.liuzhihang.doc.view.config.ShowDocSettings;
+import java.lang.reflect.Proxy;
+import java.lang.reflect.InvocationTargetException;
+import com.intellij.util.xmlb.XmlSerializer;
+import com.liuzhihang.doc.view.config.YuQueSettings;
+import org.jdom.Element;
 import com.intellij.notification.Notification;
 import com.intellij.notification.Notifications;
-import com.intellij.credentialStore.CredentialAttributes;
 import com.liuzhihang.doc.view.service.impl.YApiServiceImpl;
 import com.liuzhihang.doc.view.service.impl.YuQueServiceImpl;
 import com.liuzhihang.doc.view.service.impl.ShowDocServiceImpl;
@@ -28,6 +35,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 public final class DocViewUploadServiceTest extends LightJavaCodeInsightFixtureTestCase {
+    private final java.util.List<String> observedNotificationText = java.util.Collections.synchronizedList(new java.util.ArrayList<>());
 
     public void testUploadPlatformRoutingUsesStableIdentifiersInsteadOfLocalizedLabels() {
         assertEquals(List.of(UploadPlatform.values()), DocViewUploadService.UPLOAD_OPTIONS);
@@ -89,44 +97,56 @@ public final class DocViewUploadServiceTest extends LightJavaCodeInsightFixtureT
 
     public void testPlatformServicesPropagateCancellationWithoutErrorNotification() throws Exception {
         AtomicInteger notifications = trackNotifications();
-        AtomicInteger reads = new AtomicInteger();
-        IntegrationCredentialService credentials = new IntegrationCredentialService(getProject(),
-                new IntegrationCredentialService.SecretStore() {
-                    @Override public String get(CredentialAttributes attributes) {
-                        reads.incrementAndGet();
-                        throw new ProcessCanceledException();
-                    }
-                    @Override public void set(CredentialAttributes attributes, String value) {
-                        throw new AssertionError("An upload must not write credentials");
-                    }
-                });
-        ServiceContainerUtil.replaceService(getProject(), IntegrationCredentialService.class, credentials, getTestRootDisposable());
+        AtomicInteger settingsReads = new AtomicInteger();
+        Project delegate = getProject();
         for (DocViewUploadService service : List.of(new YApiServiceImpl(), new ShowDocServiceImpl(), new YuQueServiceImpl())) {
-            assertTrue(ApplicationManager.getApplication().executeOnPooledThread(() -> {
-                try { service.doUpload(getProject(), new DocView("synthetic")); return false; }
-                catch (ProcessCanceledException expected) { return true; }
-            }).get(10, TimeUnit.SECONDS));
+            ProcessCanceledException cancellation = new ProcessCanceledException();
+            Project canceledReadProject = (Project) Proxy.newProxyInstance(Project.class.getClassLoader(),
+                    new Class<?>[]{Project.class}, (proxy, method, args) -> {
+                        if (method.getName().equals("isDisposed")) return false;
+                        if (method.getName().equals("getService") && args != null && args.length == 1
+                                && (args[0] == YApiSettings.class || args[0] == ShowDocSettings.class
+                                || args[0] == YuQueSettings.class)) {
+                            settingsReads.incrementAndGet();
+                            // Inject cancellation at the configuration-read boundary, independent of
+                            // the IDE test runner's non-cancellable progress/coroutine context.
+                            throw cancellation;
+                        }
+                        try {
+                            return method.invoke(delegate, args);
+                        } catch (InvocationTargetException exception) {
+                            throw exception.getCause();
+                        }
+                    });
+            Throwable propagated = ApplicationManager.getApplication().executeOnPooledThread(() -> {
+                try {
+                    service.doUpload(canceledReadProject, new DocView("synthetic"));
+                    return null;
+                } catch (ProcessCanceledException actual) {
+                    return actual;
+                }
+            }).get(10, TimeUnit.SECONDS);
+            assertSame("Each platform must propagate the original cancellation unchanged", cancellation, propagated);
         }
         EdtTestUtil.runInEdtAndWait(PlatformTestUtil::dispatchAllInvocationEventsInIdeEventQueue);
-        assertEquals(3, reads.get());
-        assertEquals(0, notifications.get());
+        assertEquals("All three platform entry points must reach the cancellable configuration read", 3, settingsReads.get());
+        assertEquals("Cancellation must never be reported as a failed upload", 0, notifications.get());
     }
 
     public void testYuQueQueryFailureNeverCreatesOrUpdatesDocument() throws Exception {
         AtomicInteger notifications = trackNotifications();
         AtomicInteger queries = new AtomicInteger();
         AtomicInteger writes = new AtomicInteger();
-        IntegrationCredentialService credentials = new IntegrationCredentialService(getProject(),
-                new IntegrationCredentialService.SecretStore() {
-                    @Override public String get(CredentialAttributes attributes) { return "synthetic-token"; }
-                    @Override public void set(CredentialAttributes attributes, String value) { throw new AssertionError(); }
-                });
-        ServiceContainerUtil.replaceService(getProject(), IntegrationCredentialService.class, credentials, getTestRootDisposable());
+        YuQueSettings settings = YuQueSettings.getInstance(getProject());
+        Element originalSettings = XmlSerializer.serialize(settings.getState());
+        settings.loadState(XmlSerializer.deserialize(ProjectCredentialPersistenceTest.state(
+                "token", "synthetic-sensitive-token", "login", "synthetic-owner", "repos", "synthetic-repo"), YuQueSettings.class));
         ServiceContainerUtil.replaceService(ApplicationManager.getApplication(), YuQueFacadeServiceImpl.class,
                 new YuQueFacadeServiceImpl() {
                     @Override public YuQueResponse getDoc(String url, String token, String namespace, String slug) throws Exception {
                         queries.incrementAndGet();
-                        throw new Exception("Synthetic query failure");
+                        assertEquals("Uploads must read the saved project credential directly", "synthetic-sensitive-token", token);
+                        throw new Exception("token=synthetic-sensitive-token at https://private.example.test with private-document-body");
                     }
                     @Override public YuQueResponse create(String url, String token, String namespace, YuQueCreate input) {
                         writes.incrementAndGet(); throw new AssertionError("Query failure must stop creation");
@@ -135,20 +155,32 @@ public final class DocViewUploadServiceTest extends LightJavaCodeInsightFixtureT
                         writes.incrementAndGet(); throw new AssertionError("Query failure must stop update");
                     }
                 }, getTestRootDisposable());
-        DocView document = new DocView("synthetic"); document.setPath("/test");
-        ApplicationManager.getApplication().executeOnPooledThread(() ->
-                new YuQueServiceImpl().doUpload(getProject(), document)).get(10, TimeUnit.SECONDS);
-        EdtTestUtil.runInEdtAndWait(PlatformTestUtil::dispatchAllInvocationEventsInIdeEventQueue);
-        assertEquals(1, queries.get());
-        assertEquals(0, writes.get());
-        assertTrue("The failed upload should report a platform error", notifications.get() > 0);
+        try {
+            DocView document = new DocView("synthetic"); document.setPath("/test");
+            ApplicationManager.getApplication().executeOnPooledThread(() ->
+                    new YuQueServiceImpl().doUpload(getProject(), document)).get(10, TimeUnit.SECONDS);
+            EdtTestUtil.runInEdtAndWait(PlatformTestUtil::dispatchAllInvocationEventsInIdeEventQueue);
+            assertEquals(1, queries.get());
+            assertEquals(0, writes.get());
+            assertTrue("The failed upload should report a platform error", notifications.get() > 0);
+            for (String text : observedNotificationText) {
+                assertFalse("Credentials must not leak into upload errors", text.contains("synthetic-sensitive-token"));
+                assertFalse("Remote response/address details must stay out of notifications", text.contains("private.example.test"));
+                assertFalse("Document content must stay out of notifications", text.contains("private-document-body"));
+            }
+        } finally {
+            settings.loadState(XmlSerializer.deserialize(originalSettings, YuQueSettings.class));
+        }
     }
 
     private AtomicInteger trackNotifications() {
         AtomicInteger count = new AtomicInteger();
         Notifications listener = new Notifications() {
             @Override public void notify(Notification notification) {
-                if ("doc-view.NotificationGroup".equals(notification.getGroupId())) count.incrementAndGet();
+                if ("doc-view.NotificationGroup".equals(notification.getGroupId())) {
+                    count.incrementAndGet();
+                    observedNotificationText.add(notification.getTitle() + " " + notification.getContent());
+                }
             }
         };
         ApplicationManager.getApplication().getMessageBus().connect(getTestRootDisposable()).subscribe(Notifications.TOPIC, listener);

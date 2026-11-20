@@ -116,7 +116,7 @@ docs/doc-view/
 | ShowDoc | 服务地址、API Key、API Token |
 | 语雀 | 站点地址、API 地址、团队或用户标识、知识库标识、Token |
 
-集成凭据使用 IDE 的 Password Safe 保存。密码输入框留空会保留已保存的凭据；需要删除时，勾选 **Clear saved credentials** 后 Apply。其他设置按项目保存。
+集成凭据与其他设置一起保存在当前项目的 `.idea/DocViewYApiSettings.xml`、`DocViewShowDocSettings.xml`、`DocViewYuQueSettings.xml` 中，不使用 PasswordSafe。密码框保留掩码；Reset 读取已保存值，留空后 Apply 即清除，取消不保存草稿。旧 XML 中的字段可直接读取；仅存于 PasswordSafe 的凭据需重新填写一次。
 
 ## 本地 MCP 接入
 

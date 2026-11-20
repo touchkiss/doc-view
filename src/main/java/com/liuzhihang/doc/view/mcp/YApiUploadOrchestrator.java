@@ -3,7 +3,6 @@ package com.liuzhihang.doc.view.mcp;
 import com.intellij.openapi.application.ReadAction;
 import com.intellij.openapi.progress.ProcessCanceledException;
 import com.intellij.openapi.progress.ProgressManager;
-import com.liuzhihang.doc.view.service.IntegrationCredentialService;
 import com.intellij.openapi.project.Project;
 import com.liuzhihang.doc.view.config.YApiSettings;
 import com.liuzhihang.doc.view.dto.DocView;
@@ -59,14 +58,13 @@ public final class YApiUploadOrchestrator {
         this.readAction = readAction;
     }
 
-    /** PasswordSafe is read outside PSI read actions and never copied into persistent settings. */
+    /** Freeze the current project configuration for this upload batch. */
     private static YApiSettings uploadSettings(Project project) {
         YApiSettings persisted = YApiSettings.getInstance(project);
         YApiSettings snapshot = new YApiSettings();
         snapshot.setUrl(persisted.getUrl());
         snapshot.setProjectId(persisted.getProjectId());
-        snapshot.setToken(IntegrationCredentialService.getInstance(project)
-                .readToken(IntegrationCredentialService.Provider.YAPI));
+        snapshot.setToken(persisted.getToken());
         return snapshot;
     }
 

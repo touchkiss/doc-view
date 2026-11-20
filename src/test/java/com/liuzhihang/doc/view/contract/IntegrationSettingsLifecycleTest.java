@@ -4,6 +4,11 @@ import com.intellij.openapi.options.ConfigurationException;
 import com.intellij.testFramework.EdtTestUtil;
 import com.intellij.testFramework.fixtures.LightJavaCodeInsightFixtureTestCase;
 import com.intellij.ui.components.JBTextField;
+import com.intellij.ui.components.JBPasswordField;
+import com.intellij.openapi.components.PersistentStateComponent;
+import com.intellij.util.xmlb.XmlSerializer;
+import org.jdom.Element;
+import java.util.Arrays;
 import com.liuzhihang.doc.view.config.ShowDocSettings;
 import com.liuzhihang.doc.view.config.YApiSettings;
 import com.liuzhihang.doc.view.config.YApiSettingsConfigurable;
@@ -31,6 +36,9 @@ public final class IntegrationSettingsLifecycleTest extends LightJavaCodeInsight
     private String originalYuQueApiUrl;
     private String originalYuQueLogin;
     private String originalYuQueRepos;
+    private Element originalShowDocState;
+    private Element originalYApiState;
+    private Element originalYuQueState;
 
     @Override
     protected void setUp() throws Exception {
@@ -39,6 +47,9 @@ public final class IntegrationSettingsLifecycleTest extends LightJavaCodeInsight
         yApiSettings = YApiSettings.getInstance(getProject());
         yuQueSettings = YuQueSettings.getInstance(getProject());
 
+        originalShowDocState = XmlSerializer.serialize(showDocSettings.getState());
+        originalYApiState = XmlSerializer.serialize(yApiSettings.getState());
+        originalYuQueState = XmlSerializer.serialize(yuQueSettings.getState());
         originalShowDocUrl = showDocSettings.getUrl();
         originalYApiUrl = yApiSettings.getUrl();
         originalYApiProjectId = yApiSettings.getProjectId();
@@ -60,9 +71,125 @@ public final class IntegrationSettingsLifecycleTest extends LightJavaCodeInsight
             yuQueSettings.setApiUrl(originalYuQueApiUrl);
             yuQueSettings.setLogin(originalYuQueLogin);
             yuQueSettings.setRepos(originalYuQueRepos);
+            showDocSettings.loadState(XmlSerializer.deserialize(originalShowDocState, ShowDocSettings.class));
+            yApiSettings.loadState(XmlSerializer.deserialize(originalYApiState, YApiSettings.class));
+            yuQueSettings.loadState(XmlSerializer.deserialize(originalYuQueState, YuQueSettings.class));
         } finally {
             super.tearDown();
         }
+    }
+
+    public void testCredentialResetReadsSavedXmlAndDiscardsUnappliedDrafts() {
+        loadCredential(showDocSettings, "apiKey", "saved-key");
+        loadCredential(showDocSettings, "apiToken", "saved-showdoc-token");
+        loadCredential(yApiSettings, "token", "saved-yapi-token");
+        loadCredential(yuQueSettings, "token", "saved-yuque-token");
+        EdtTestUtil.runInEdtAndWait(() -> {
+            ShowDocSettingForm showDoc = new ShowDocSettingForm(getProject());
+            YApiSettingForm yapi = new YApiSettingForm(getProject());
+            YuQueSettingForm yuque = new YuQueSettingForm(getProject());
+            try {
+                showDoc.reset();
+                yapi.reset();
+                yuque.reset();
+                assertEquals("saved-key", secret(showDoc, "apiKeyTextField"));
+                assertEquals("saved-showdoc-token", secret(showDoc, "apiTokenTextField"));
+                assertEquals("saved-yapi-token", secret(yapi, "tokenTextField"));
+                assertEquals("saved-yuque-token", secret(yuque, "tokenTextField"));
+                assertFalse(showDoc.isModified());
+                assertFalse(yapi.isModified());
+                assertFalse(yuque.isModified());
+                setSecret(showDoc, "apiKeyTextField", "unapplied-key");
+                setSecret(showDoc, "apiTokenTextField", "unapplied-token");
+                setSecret(yapi, "tokenTextField", "unapplied-token");
+                setSecret(yuque, "tokenTextField", "unapplied-token");
+                assertTrue(showDoc.isModified());
+                assertTrue(yapi.isModified());
+                assertTrue(yuque.isModified());
+                assertSavedCredential(showDocSettings, "apiKey", "saved-key");
+                assertSavedCredential(showDocSettings, "apiToken", "saved-showdoc-token");
+                assertSavedCredential(yApiSettings, "token", "saved-yapi-token");
+                assertSavedCredential(yuQueSettings, "token", "saved-yuque-token");
+                showDoc.reset();
+                yapi.reset();
+                yuque.reset();
+                assertEquals("saved-key", secret(showDoc, "apiKeyTextField"));
+                assertEquals("saved-showdoc-token", secret(showDoc, "apiTokenTextField"));
+                assertEquals("saved-yapi-token", secret(yapi, "tokenTextField"));
+                assertEquals("saved-yuque-token", secret(yuque, "tokenTextField"));
+                assertFalse(showDoc.isModified());
+                assertFalse(yapi.isModified());
+                assertFalse(yuque.isModified());
+            } finally {
+                showDoc.dispose();
+                yapi.dispose();
+                yuque.dispose();
+            }
+            assertSavedCredential(showDocSettings, "apiKey", "saved-key");
+            assertSavedCredential(yApiSettings, "token", "saved-yapi-token");
+            assertSavedCredential(yuQueSettings, "token", "saved-yuque-token");
+        });
+    }
+
+    public void testCredentialApplyKeepsExactValuesAndEmptyApplyClears() {
+        EdtTestUtil.runInEdtAndWait(() -> {
+            ShowDocSettingForm showDoc = new ShowDocSettingForm(getProject());
+            YApiSettingForm yapi = new YApiSettingForm(getProject());
+            YuQueSettingForm yuque = new YuQueSettingForm(getProject());
+            try {
+                showDoc.reset();
+                yapi.reset();
+                yuque.reset();
+                String key = " key+&=中文 ";
+                String token = " token+&=中文 ";
+                setSecret(showDoc, "apiKeyTextField", key);
+                setSecret(showDoc, "apiTokenTextField", token);
+                setSecret(yapi, "tokenTextField", token);
+                setSecret(yuque, "tokenTextField", token);
+                apply(showDoc);
+                apply(yapi);
+                apply(yuque);
+                assertSavedCredential(showDocSettings, "apiKey", key);
+                assertSavedCredential(showDocSettings, "apiToken", token);
+                assertSavedCredential(yApiSettings, "token", token);
+                assertSavedCredential(yuQueSettings, "token", token);
+                assertEquals(key, secret(showDoc, "apiKeyTextField"));
+                assertEquals(token, secret(showDoc, "apiTokenTextField"));
+                assertEquals(token, secret(yapi, "tokenTextField"));
+                assertEquals(token, secret(yuque, "tokenTextField"));
+                assertFalse(showDoc.isModified());
+                assertFalse(yapi.isModified());
+                assertFalse(yuque.isModified());
+                setSecret(showDoc, "apiKeyTextField", "");
+                setSecret(showDoc, "apiTokenTextField", "");
+                setSecret(yapi, "tokenTextField", "");
+                setSecret(yuque, "tokenTextField", "");
+                assertTrue(showDoc.isModified());
+                assertTrue(yapi.isModified());
+                assertTrue(yuque.isModified());
+                apply(showDoc);
+                apply(yapi);
+                apply(yuque);
+                assertSavedCredential(showDocSettings, "apiKey", "");
+                assertSavedCredential(showDocSettings, "apiToken", "");
+                assertSavedCredential(yApiSettings, "token", "");
+                assertSavedCredential(yuQueSettings, "token", "");
+                showDoc.reset();
+                yapi.reset();
+                yuque.reset();
+                assertEquals("", secret(showDoc, "apiKeyTextField"));
+                assertEquals("", secret(showDoc, "apiTokenTextField"));
+                assertEquals("", secret(yapi, "tokenTextField"));
+                assertEquals("", secret(yuque, "tokenTextField"));
+                assertFalse(showDoc.isModified());
+                assertFalse(yapi.isModified());
+                assertFalse(yuque.isModified());
+            } finally {
+                showDoc.dispose();
+                yapi.dispose();
+                yuque.dispose();
+            }
+        });
     }
 
     public void testShowDocNullValuesAreNotModified() throws Exception {
@@ -257,10 +384,12 @@ public final class IntegrationSettingsLifecycleTest extends LightJavaCodeInsight
     private void assertYApiRejectedAtomically(String projectId) throws Exception {
         yApiSettings.setUrl("https://saved.yapi.test");
         yApiSettings.setProjectId(17L);
+        loadCredential(yApiSettings, "token", "saved-atomic-token");
 
         EdtTestUtil.runInEdtAndWait(() -> {
             YApiSettingForm form = new YApiSettingForm(getProject());
             form.reset();
+            setSecret(form, "tokenTextField", "draft-atomic-token");
             setText(form, "urlTextField", " https://draft.yapi.test/// ");
             setText(form, "projectIdTextField", projectId);
             boolean rejected = false;
@@ -274,10 +403,17 @@ public final class IntegrationSettingsLifecycleTest extends LightJavaCodeInsight
             assertEquals("https://saved.yapi.test", yApiSettings.getUrl());
             assertEquals(Long.valueOf(17L), yApiSettings.getProjectId());
             assertEquals(projectId, text(form, "projectIdTextField"));
+            assertSavedCredential(yApiSettings, "token", "saved-atomic-token");
+            assertEquals("draft-atomic-token", secret(form, "tokenTextField"));
+            form.dispose();
         });
     }
 
     private void clearSettings() {
+        loadCredential(showDocSettings, "apiKey", "");
+        loadCredential(showDocSettings, "apiToken", "");
+        loadCredential(yApiSettings, "token", "");
+        loadCredential(yuQueSettings, "token", "");
         showDocSettings.setUrl(null);
         yApiSettings.setUrl(null);
         yApiSettings.setProjectId(null);
@@ -308,6 +444,38 @@ public final class IntegrationSettingsLifecycleTest extends LightJavaCodeInsight
             form.apply();
         } catch (ConfigurationException exception) {
             throw new AssertionError("Applying YuQue settings should succeed", exception);
+        }
+    }
+
+    @SuppressWarnings({"rawtypes", "unchecked"})
+    private static void loadCredential(PersistentStateComponent model, String name, String value) {
+        Element state = XmlSerializer.serialize(model.getState());
+        for (Element option : java.util.List.copyOf(state.getChildren("option"))) {
+            if (name.equals(option.getAttributeValue("name"))) state.removeContent(option);
+        }
+        state.addContent(new Element("option").setAttribute("name", name).setAttribute("value", value));
+        model.loadState(XmlSerializer.deserialize(state, model.getClass()));
+    }
+
+    private static void assertSavedCredential(PersistentStateComponent<?> model, String name, String expected) {
+        Element state = XmlSerializer.serialize(model.getState());
+        String actual = null;
+        for (Element option : state.getChildren("option")) {
+            if (name.equals(option.getAttributeValue("name"))) actual = option.getAttributeValue("value");
+        }
+        assertEquals("Project XML must contain the saved " + name, expected, actual);
+    }
+
+    private static void setSecret(Object form, String name, String value) {
+        field(form, name, JBPasswordField.class).setText(value);
+    }
+
+    private static String secret(Object form, String name) {
+        char[] value = field(form, name, JBPasswordField.class).getPassword();
+        try {
+            return new String(value);
+        } finally {
+            Arrays.fill(value, '\0');
         }
     }
 

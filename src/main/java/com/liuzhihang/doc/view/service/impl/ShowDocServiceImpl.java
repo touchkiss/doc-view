@@ -19,7 +19,6 @@ import com.liuzhihang.doc.view.notification.DocViewNotification;
 import com.liuzhihang.doc.view.service.DocViewUploadService;
 import org.apache.commons.lang3.StringUtils;
 import org.jetbrains.annotations.NotNull;
-import com.liuzhihang.doc.view.service.IntegrationCredentialService;
 import com.liuzhihang.doc.view.utils.DocViewBackgroundTasks;
 
 /**
@@ -37,9 +36,7 @@ public final class ShowDocServiceImpl implements DocViewUploadService {
             showConfiguration(project);
             return false;
         }
-        IntegrationCredentialService.CredentialStatus credentials = IntegrationCredentialService.getInstance(project)
-                .readStatus(IntegrationCredentialService.Provider.SHOWDOC);
-        if (!credentials.apiKeyConfigured() || !credentials.apiTokenConfigured()) {
+        if (StringUtils.isBlank(apiSettings.getApiKey()) || StringUtils.isBlank(apiSettings.getApiToken())) {
             // 说明没有配置 ShowDoc 上传地址, 跳转到配置页面
             showConfiguration(project);
             return false;
@@ -61,13 +58,10 @@ public final class ShowDocServiceImpl implements DocViewUploadService {
             ProgressManager.checkCanceled();
             if (project.isDisposed()) throw new ProcessCanceledException();
             ShowDocSettings settings = ShowDocSettings.getInstance(project);
-            IntegrationCredentialService.ShowDocCredentials credentials = IntegrationCredentialService.getInstance(project)
-                    .readShowDocCredentials();
-
             ShowDocUpdateRequest request = new ShowDocUpdateRequest();
             request.setShowDocUrl(settings.getUrl());
-            request.setApiKey(credentials.apiKey());
-            request.setApiToken(credentials.apiToken());
+            request.setApiKey(settings.getApiKey());
+            request.setApiToken(settings.getApiToken());
             request.setCatName(docView.getDocTitle());
             request.setPageTitle(docView.getName());
             request.setPageContent(DocViewData.markdownText(project, docView));

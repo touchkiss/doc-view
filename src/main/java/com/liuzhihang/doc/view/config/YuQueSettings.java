@@ -26,6 +26,9 @@ public class YuQueSettings implements PersistentStateComponent<YuQueSettings> {
 
     private String repos;
 
+    @lombok.ToString.Exclude
+    private String token;
+
 
     public static YuQueSettings getInstance(@NotNull Project project) {
         return project.getService(YuQueSettings.class);

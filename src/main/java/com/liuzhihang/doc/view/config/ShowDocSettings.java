@@ -21,6 +21,12 @@ public class ShowDocSettings implements PersistentStateComponent<ShowDocSettings
 
     private String url;
 
+    @lombok.ToString.Exclude
+    private String apiKey;
+
+    @lombok.ToString.Exclude
+    private String apiToken;
+
 
     public static ShowDocSettings getInstance(@NotNull Project project) {
         return project.getService(ShowDocSettings.class);

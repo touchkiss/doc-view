@@ -23,14 +23,8 @@ public class YApiSettings implements PersistentStateComponent<YApiSettings> {
 
     private Long projectId;
 
-    /** Upload snapshot only. Never serialized or loaded from project XML. */
-    @com.intellij.util.xmlb.annotations.Transient
-    private transient String token;
-
-    @com.intellij.util.xmlb.annotations.Transient
-    public String getToken() { return token; }
-
-    public void setToken(String token) { this.token = token; }
+    @lombok.ToString.Exclude
+    private String token;
 
     public static YApiSettings getInstance(@NotNull Project project) {
         return project.getService(YApiSettings.class);

@@ -1,7 +1,6 @@
 package com.liuzhihang.doc.view.contract;
 
 import com.intellij.openapi.options.Configurable;
-import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.testFramework.EdtTestUtil;
 import com.intellij.testFramework.fixtures.LightJavaCodeInsightFixtureTestCase;
 import com.intellij.ui.ContextHelpLabel;
@@ -14,7 +13,6 @@ import com.liuzhihang.doc.view.config.YApiSettings;
 import com.liuzhihang.doc.view.config.YApiSettingsConfigurable;
 import com.liuzhihang.doc.view.config.YuQueSettings;
 import com.liuzhihang.doc.view.config.YuQueSettingsConfigurable;
-import com.liuzhihang.doc.view.service.IntegrationCredentialService;
 import com.liuzhihang.doc.view.ui.ShowDocSettingForm;
 import com.liuzhihang.doc.view.ui.YApiSettingForm;
 import com.liuzhihang.doc.view.ui.YuQueSettingForm;
@@ -26,77 +24,43 @@ import java.awt.Component;
 import java.awt.Container;
 import java.lang.reflect.Field;
 import java.util.List;
-import java.util.concurrent.FutureTask;
 
 public final class IntegrationCredentialLifecycleTest extends LightJavaCodeInsightFixtureTestCase {
 
-    public void testFatalCredentialStorageErrorPropagates() throws Exception {
-        IntegrationCredentialService service = IntegrationCredentialService.getInstance(getProject());
-        AssertionError fatal = new AssertionError("synthetic fatal storage failure");
-        FutureTask<Throwable> update = new FutureTask<>(() -> {
-            try {
-                service.runCredentialUpdate("synthetic", () -> {
-                    throw fatal;
-                });
-                return null;
-            } catch (Throwable actual) {
-                return actual;
-            }
-        });
-        ApplicationManager.getApplication().executeOnPooledThread(update);
-        assertSame(fatal, update.get());
-    }
-
-    public void testFatalCredentialStorageErrorPropagatesAfterModalTaskCleanup() throws Exception {
-        IntegrationCredentialService service = IntegrationCredentialService.getInstance(getProject());
-        AssertionError fatal = new AssertionError("synthetic fatal storage failure");
-        java.util.concurrent.atomic.AtomicReference<AssertionError> observed = new java.util.concurrent.atomic.AtomicReference<>();
-
-        EdtTestUtil.runInEdtAndWait(() -> {
-            try {
-                service.runCredentialUpdate("synthetic", () -> {
-                    throw fatal;
-                });
-                fail("Fatal errors must propagate to the caller");
-            } catch (AssertionError actual) {
-                if (actual != fatal) {
-                    throw actual;
-                }
-                observed.set(actual);
-            } catch (com.intellij.openapi.options.ConfigurationException exception) {
-                throw new AssertionError("Fatal errors must not be converted to a settings error", exception);
-            }
-        });
-
-        assertSame(fatal, observed.get());
-    }
-
-    public void testSerializedSettingsKeepOrdinaryFieldsAndOmitCredentials() {
-        ShowDocSettings showDoc = new ShowDocSettings();
-        showDoc.setUrl("https://showdoc.example.test");
+    public void testSerializedSettingsKeepOrdinaryAndCredentialFields() {
+        ShowDocSettings showDoc = XmlSerializer.deserialize(state("url", "https://showdoc.example.test",
+                "apiKey", "synthetic-showdoc-key", "apiToken", "synthetic-showdoc-token"), ShowDocSettings.class);
         Element showDocXml = XmlSerializer.serialize(showDoc.getState());
         assertChildPresent(showDocXml, "url");
-        assertChildAbsent(showDocXml, "apiKey");
-        assertChildAbsent(showDocXml, "apiToken");
+        assertChildValue(showDocXml, "apiKey", "synthetic-showdoc-key");
+        assertChildValue(showDocXml, "apiToken", "synthetic-showdoc-token");
 
-        YApiSettings yapi = new YApiSettings();
-        yapi.setUrl("https://yapi.example.test");
-        yapi.setProjectId(42L);
-        yapi.setToken("ephemeral-upload-secret");
+        YApiSettings yapi = XmlSerializer.deserialize(state("url", "https://yapi.example.test",
+                "projectId", "42", "token", "synthetic-yapi-token"), YApiSettings.class);
         Element yapiXml = XmlSerializer.serialize(yapi.getState());
         assertChildPresent(yapiXml, "url");
         assertChildPresent(yapiXml, "projectId");
-        assertChildAbsent(yapiXml, "token");
+        assertChildValue(yapiXml, "token", "synthetic-yapi-token");
 
-        YuQueSettings yuque = new YuQueSettings();
-        yuque.setLogin("owner");
-        yuque.setRepos("docs");
+        YuQueSettings yuque = XmlSerializer.deserialize(state("login", "owner", "repos", "docs",
+                "token", "synthetic-yuque-token"), YuQueSettings.class);
         Element yuqueXml = XmlSerializer.serialize(yuque.getState());
         assertChildPresent(yuqueXml, "url");
         assertChildPresent(yuqueXml, "apiUrl");
         assertChildPresent(yuqueXml, "login");
         assertChildPresent(yuqueXml, "repos");
-        assertChildAbsent(yuqueXml, "token");
+        assertChildValue(yuqueXml, "token", "synthetic-yuque-token");
+    }
+
+    public void testCredentialFormsHaveNoSecretStoreStatusOrClearControls() {
+        for (Class<?> type : List.of(ShowDocSettingForm.class, YApiSettingForm.class, YuQueSettingForm.class)) {
+            for (Field field : type.getDeclaredFields()) {
+                assertFalse("Direct project settings must not expose a PasswordSafe status control",
+                        field.getName().equals("credentialStatusLabel"));
+                assertFalse("Blank Apply directly clears a saved project value",
+                        field.getName().startsWith("clear") && field.getName().endsWith("CheckBox"));
+            }
+        }
     }
 
     public void testAllIntegrationSecretInputsArePasswordFields() throws Exception {
@@ -122,32 +86,54 @@ public final class IntegrationCredentialLifecycleTest extends LightJavaCodeInsig
         });
     }
 
-    public void testResetAndDisposeDiscardSecretDrafts() throws Exception {
-        EdtTestUtil.runInEdtAndWait(() -> {
-            ShowDocSettingForm showDoc = new ShowDocSettingForm(getProject());
-            passwordField(showDoc, "apiKeyTextField").setText("synthetic-showdoc-key");
-            showDoc.reset();
-            assertPasswordEmpty(passwordField(showDoc, "apiKeyTextField"));
-            passwordField(showDoc, "apiTokenTextField").setText("synthetic-showdoc-token");
-            showDoc.dispose();
-            assertPasswordEmpty(passwordField(showDoc, "apiTokenTextField"));
-
-            YApiSettingForm yapi = new YApiSettingForm(getProject());
-            passwordField(yapi, "tokenTextField").setText("synthetic-yapi-token");
-            yapi.reset();
-            assertPasswordEmpty(passwordField(yapi, "tokenTextField"));
-            passwordField(yapi, "tokenTextField").setText("synthetic-yapi-draft");
-            yapi.dispose();
-            assertPasswordEmpty(passwordField(yapi, "tokenTextField"));
-
-            YuQueSettingForm yuque = new YuQueSettingForm(getProject());
-            passwordField(yuque, "tokenTextField").setText("synthetic-yuque-token");
-            yuque.reset();
-            assertPasswordEmpty(passwordField(yuque, "tokenTextField"));
-            passwordField(yuque, "tokenTextField").setText("synthetic-yuque-draft");
-            yuque.dispose();
-            assertPasswordEmpty(passwordField(yuque, "tokenTextField"));
-        });
+    public void testResetShowsSavedCredentialsAndDisposeDiscardsOnlyDrafts() {
+        ShowDocSettings showSettings = ShowDocSettings.getInstance(getProject());
+        YApiSettings yapiSettings = YApiSettings.getInstance(getProject());
+        YuQueSettings yuqueSettings = YuQueSettings.getInstance(getProject());
+        Element originalShow = XmlSerializer.serialize(showSettings.getState());
+        Element originalYapi = XmlSerializer.serialize(yapiSettings.getState());
+        Element originalYuque = XmlSerializer.serialize(yuqueSettings.getState());
+        showSettings.loadState(XmlSerializer.deserialize(state("apiKey", "synthetic-saved-key",
+                "apiToken", "synthetic-saved-show-token"), ShowDocSettings.class));
+        yapiSettings.loadState(XmlSerializer.deserialize(state("token", "synthetic-saved-yapi"), YApiSettings.class));
+        yuqueSettings.loadState(XmlSerializer.deserialize(state("token", "synthetic-saved-yuque"), YuQueSettings.class));
+        try {
+            EdtTestUtil.runInEdtAndWait(() -> {
+                ShowDocSettingForm showDoc = new ShowDocSettingForm(getProject());
+                YApiSettingForm yapi = new YApiSettingForm(getProject());
+                YuQueSettingForm yuque = new YuQueSettingForm(getProject());
+                try {
+                    passwordField(showDoc, "apiKeyTextField").setText("synthetic-draft-key");
+                    showDoc.reset();
+                    assertPasswordValue("synthetic-saved-key", passwordField(showDoc, "apiKeyTextField"));
+                    passwordField(showDoc, "apiTokenTextField").setText("synthetic-show-draft");
+                    passwordField(yapi, "tokenTextField").setText("synthetic-yapi-draft");
+                    yapi.reset();
+                    assertPasswordValue("synthetic-saved-yapi", passwordField(yapi, "tokenTextField"));
+                    passwordField(yapi, "tokenTextField").setText("synthetic-yapi-draft");
+                    passwordField(yuque, "tokenTextField").setText("synthetic-yuque-draft");
+                    yuque.reset();
+                    assertPasswordValue("synthetic-saved-yuque", passwordField(yuque, "tokenTextField"));
+                    passwordField(yuque, "tokenTextField").setText("synthetic-yuque-draft");
+                } finally {
+                    showDoc.dispose();
+                    yapi.dispose();
+                    yuque.dispose();
+                }
+                assertPasswordEmpty(passwordField(showDoc, "apiKeyTextField"));
+                assertPasswordEmpty(passwordField(showDoc, "apiTokenTextField"));
+                assertPasswordEmpty(passwordField(yapi, "tokenTextField"));
+                assertPasswordEmpty(passwordField(yuque, "tokenTextField"));
+                assertChildValue(XmlSerializer.serialize(showSettings.getState()), "apiKey", "synthetic-saved-key");
+                assertChildValue(XmlSerializer.serialize(showSettings.getState()), "apiToken", "synthetic-saved-show-token");
+                assertChildValue(XmlSerializer.serialize(yapiSettings.getState()), "token", "synthetic-saved-yapi");
+                assertChildValue(XmlSerializer.serialize(yuqueSettings.getState()), "token", "synthetic-saved-yuque");
+            });
+        } finally {
+            showSettings.loadState(XmlSerializer.deserialize(originalShow, ShowDocSettings.class));
+            yapiSettings.loadState(XmlSerializer.deserialize(originalYapi, YApiSettings.class));
+            yuqueSettings.loadState(XmlSerializer.deserialize(originalYuque, YuQueSettings.class));
+        }
     }
 
     public void testIntegrationPagesUseGuideIconsAndClarifyYuQueFields() throws Exception {
@@ -157,6 +143,8 @@ public final class IntegrationCredentialLifecycleTest extends LightJavaCodeInsig
             YuQueSettingForm yuque = new YuQueSettingForm(getProject());
             try {
                 for (Object form : List.of(showDoc, yapi, yuque)) {
+                    assertEquals(DocViewBundle.message("integration.credentials.project.config"),
+                            field(form, "credentialStorageHint", JLabel.class).getText());
                     JPanel helpContainer = field(form, "integrationHelpContainer", JPanel.class);
                     assertEquals("Each integration form should show one compact help icon",
                             1, helpContainer.getComponentCount());
@@ -221,6 +209,30 @@ public final class IntegrationCredentialLifecycleTest extends LightJavaCodeInsig
         return false;
     }
 
+    private void assertPasswordValue(String expected, JBPasswordField field) {
+        char[] value = field.getPassword();
+        try {
+            assertEquals(expected, new String(value));
+        } finally {
+            java.util.Arrays.fill(value, '\0');
+        }
+    }
+
+    private static Element state(String... fields) {
+        Element state = new Element("component");
+        for (int i = 0; i < fields.length; i += 2) {
+            state.addContent(new Element("option").setAttribute("name", fields[i]).setAttribute("value", fields[i + 1]));
+        }
+        return state;
+    }
+
+    private void assertChildValue(Element state, String name, String value) {
+        Element option = state.getChildren("option").stream()
+                .filter(child -> name.equals(child.getAttributeValue("name"))).findFirst().orElse(null);
+        assertNotNull("Expected saved project field " + name, option);
+        assertEquals(value, option.getAttributeValue("value"));
+    }
+
     private void assertPasswordEmpty(JBPasswordField field) {
         char[] value = field.getPassword();
         try {
@@ -232,10 +244,6 @@ public final class IntegrationCredentialLifecycleTest extends LightJavaCodeInsig
 
     private void assertChildPresent(Element element, String name) {
         assertTrue("Expected serialized field " + name, hasChild(element, name));
-    }
-
-    private void assertChildAbsent(Element element, String name) {
-        assertFalse("Unexpected serialized field " + name, hasChild(element, name));
     }
 
     private static boolean hasChild(Element element, String name) {
