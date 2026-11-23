@@ -159,7 +159,7 @@ public final class YapiSaveFactory {
                 : synthetic == null ? "Object" : synthetic.getType();
         Body value = new Body();
         value.setType(type);
-        value.setDesc(container.getDesc());
+        value.setDescription(container.getDescription());
         value.setExample(container.getExample());
         if (synthetic != null) {
             value.setChildList(synthetic.getChildList());

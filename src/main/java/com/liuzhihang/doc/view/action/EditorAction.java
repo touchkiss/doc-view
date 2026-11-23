@@ -15,7 +15,7 @@ import com.liuzhihang.doc.view.utils.DocViewUtils;
 import org.jetbrains.annotations.NotNull;
 
 /**
- * 编辑和复制文档字段草稿，不修改业务源码
+ * 编辑和复制文档字段，并可显式确认将说明写回源码
  *
  * @author liuzhihang
  * @date 2020/2/26 21:57

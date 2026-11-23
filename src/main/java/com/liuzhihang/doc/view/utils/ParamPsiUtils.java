@@ -8,6 +8,8 @@ import com.intellij.psi.util.PsiTypesUtil;
 import com.intellij.psi.util.PsiUtil;
 import com.liuzhihang.doc.view.constant.FieldTypeConstant;
 import com.liuzhihang.doc.view.dto.Body;
+import com.liuzhihang.doc.view.dto.DocDescription;
+import com.liuzhihang.doc.view.dto.DocDescription.Source;
 import com.liuzhihang.doc.view.dto.JsonWireType;
 import org.apache.commons.lang3.StringUtils;
 import org.jetbrains.annotations.NotNull;
@@ -125,8 +127,12 @@ public class ParamPsiUtils {
                         .replaceAll("(?i)(&#64;|@)see\\s*[\\w.#$()]*", "")
                         .trim();
 //                proto getter 注释中携带 @see/@link 指向枚举时, 沿引用拼接枚举约束信息
-                methodDesc = CustomPsiCommentUtils.appendEnumInfoFromSeeTag(method.getDocComment(), methodDesc);
-                body.setDesc(methodDesc);
+                var description = DocDescription.EMPTY.with(Source.PROTO_GETTER, methodDesc);
+                if (method.getDocComment() != null) {
+                    description = description.with(Source.ENUM_REFERENCE,
+                            CustomPsiCommentUtils.resolveEnumInfoFromSeeTag(method.getDocComment()));
+                }
+                body.setDescription(description);
                 parseProtoFieldDesc = true;
             }
         }
@@ -142,7 +148,7 @@ public class ParamPsiUtils {
         }
         if (!parseProtoFieldDesc) {
             body.setType(type.getPresentableText());
-            body.setDesc(DocViewUtils.fieldDesc(field));
+            body.setDescription(DocViewUtils.fieldDescription(field));
 
             // 提前替换字段比如 T -> UserDTO   List<T> -> List<UserDTO>
             // 如果是泛型, 且泛型字段是当前字段, 将当前字段类型替换為泛型類型, 替換完之後重新設置 body 的 type
@@ -968,7 +974,7 @@ public class ParamPsiUtils {
             body.setRequired(DocViewUtils.isRequired(component));
             body.setName(DocViewUtils.fieldName(component, false));
             body.setPsiElement(component);
-            body.setDesc(DocViewUtils.fieldDesc(component));
+            body.setDescription(DocViewUtils.fieldDescription(component));
             PsiField recordField = parentClass.findFieldByName(component.getName(), false);
             if (recordField != null) {
                 body.setSince(CustomPsiCommentUtils.tagDocComment(recordField.getDocComment(), "since"));

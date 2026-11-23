@@ -1,6 +1,7 @@
 package com.liuzhihang.doc.view.utils;
 
 import com.liuzhihang.doc.view.constant.HeaderConstant;
+import com.liuzhihang.doc.view.dto.DocDescription;
 import com.liuzhihang.doc.view.dto.Header;
 import org.jetbrains.annotations.NotNull;
 
@@ -17,7 +18,7 @@ public class SpringHeaderUtils {
         header.setRequired(true);
         header.setName("Content-Type");
         header.setValue(HeaderConstant.APPLICATION_JSON);
-        header.setDesc(HeaderConstant.APPLICATION_JSON);
+        header.setDescription(DocDescription.EMPTY.with(DocDescription.Source.GENERATED, HeaderConstant.APPLICATION_JSON));
 
 
         return header;
@@ -30,7 +31,7 @@ public class SpringHeaderUtils {
         header.setRequired(true);
         header.setName("Content-Type");
         header.setValue(HeaderConstant.APPLICATION_FORM);
-        header.setDesc(HeaderConstant.APPLICATION_FORM);
+        header.setDescription(DocDescription.EMPTY.with(DocDescription.Source.GENERATED, HeaderConstant.APPLICATION_FORM));
 
 
         return header;

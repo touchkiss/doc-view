@@ -6,13 +6,16 @@ import com.intellij.psi.PsiDocumentManager;
 import com.intellij.psi.PsiJavaFile;
 import com.intellij.testFramework.fixtures.LightJavaCodeInsightFixtureTestCase;
 import com.liuzhihang.doc.view.dto.Body;
+import com.liuzhihang.doc.view.dto.DocDescription;
+import com.liuzhihang.doc.view.dto.DocViewData;
 import com.liuzhihang.doc.view.dto.DocView;
 import com.liuzhihang.doc.view.enums.FrameworkEnum;
 import com.liuzhihang.doc.view.dto.Param;
 import com.liuzhihang.doc.view.utils.CustomPsiCommentUtils;
+import com.liuzhihang.doc.view.utils.DocViewUtils;
 
-import com.star.easydoc.common.Consts;
-import com.star.easydoc.config.EasyDocConfigComponent;
+import com.liuzhihang.doc.view.common.Consts;
+import com.liuzhihang.doc.view.config.EasyDocConfigComponent;
 import com.sun.net.httpserver.HttpServer;
 
 import java.net.InetSocketAddress;
@@ -82,6 +85,34 @@ public class SourceDescriptionServiceTest extends LightJavaCodeInsightFixtureTes
         assertTrue(text, text.contains("@param count Number of tickets."));
     }
 
+    public void testClassBatchCombinesRecordChangesThatShareOneJavadoc() {
+        var type = myFixture.addClass("""
+                /**
+                 * Ticket details.
+                 * @param count Original count.
+                 * @param region Original region.
+                 * @since 2.0
+                 */
+                record Ticket(int count, String region) { static int code; }
+                """);
+        var count = SourceDescriptionService.fieldTarget("count", null, type.getRecordComponents()[0]);
+        var region = SourceDescriptionService.fieldTarget("region", null, type.getRecordComponents()[1]);
+        var description = SourceDescriptionService.classTarget(type);
+        var codeField = type.findFieldByName("code", false);
+        var code = SourceDescriptionService.fieldTarget("code", null, codeField);
+        assertTrue(SourceDescriptionService.applyBatch(List.of(
+                new SourceDescriptionService.Edit(SourceDescriptionService.capture(description), "Ticket summary."),
+                new SourceDescriptionService.Edit(SourceDescriptionService.capture(count), "Number of tickets."),
+                new SourceDescriptionService.Edit(SourceDescriptionService.capture(region), "Routing region."),
+                new SourceDescriptionService.Edit(SourceDescriptionService.capture(code), "Ticket code."))));
+        String text = type.getDocComment().getText();
+        assertTrue(text, text.contains("Ticket summary."));
+        assertTrue(text, text.contains("@param count Number of tickets."));
+        assertTrue(text, text.contains("@param region Routing region."));
+        assertTrue(text, text.contains("@since 2.0"));
+        assertTrue(codeField.getDocComment().getText().contains("Ticket code."));
+    }
+
     public void testDubboArgumentWritesParamTagInsteadOfDtoClassComment() {
         var dto = myFixture.addClass("/** Keep DTO documentation. */ class OrderData {}");
         var service = myFixture.addClass("class Orders { void load(OrderData order) {} }");
@@ -146,6 +177,70 @@ public class SourceDescriptionServiceTest extends LightJavaCodeInsightFixtureTes
             settings.setOpenAiApiKey(oldKey);
             server.stop(0);
         }
+    }
+
+    public void testOpenApiAndEnumProvenanceSurviveCopiesAndSourceRewrite() {
+        myFixture.addClass("package io.swagger.v3.oas.annotations.media; public @interface Schema { String description(); }");
+        var type = myFixture.addClass("""
+                import io.swagger.v3.oas.annotations.media.Schema;
+                class OrderStateDto {
+                    enum State {
+                        /** Pending payment. */
+                        PENDING
+                    }
+
+                    /**
+                     * Original state {@link State}.
+                     * @see State
+                     */
+                    @Schema(description = "Published state.")
+                    State state;
+                }
+                """);
+        var field = type.getFields()[0];
+        var description = DocViewUtils.fieldDescription(field);
+        assertEquals("Original state {@link State}.", description.sourceComment());
+        assertEquals("Published state.", description.render());
+        assertEquals(List.of(DocDescription.Source.ENUM_REFERENCE, DocDescription.Source.OPEN_API),
+                description.supplements().stream().map(DocDescription.Supplement::source).toList());
+        assertTrue(description.supplementaryText().contains("PENDING"));
+
+        var body = new Body();
+        body.setDescription(description);
+        var cached = DtoSchemaCacheService.copyBody(body, null, false);
+        var row = DocViewData.buildBodyDataList(List.of(cached)).getFirst();
+        assertEquals(description, row.getDescription());
+        assertEquals("Published state.", row.getDesc());
+
+        var target = SourceDescriptionService.fieldDescriptionTarget("state", description, field);
+        var draft = SourceDescriptionService.capture(target);
+        assertTrue(SourceDescriptionService.apply(draft, "Changed state."));
+        assertTrue(field.getDocComment().getText().contains("{@link State}"));
+        assertTrue(field.getDocComment().getText().contains("@see State"));
+        assertFalse(field.getDocComment().getText().contains("PENDING"));
+        assertEquals("Published state.", DocViewUtils.fieldDesc(field));
+    }
+
+    public void testOrdinaryFieldCommentIsReplacedInPlace() {
+        var type = myFixture.addClass("""
+                class Credentials {
+                    String /* Original token. */ token;
+                }
+                """);
+        var field = type.getFields()[0];
+        var description = DocViewUtils.fieldDescription(field);
+        assertEquals("Original token.", description.sourceComment());
+        var draft = SourceDescriptionService.capture(
+                SourceDescriptionService.fieldDescriptionTarget("token", description, field));
+        assertTrue(SourceDescriptionService.apply(draft, "Updated token."));
+        assertTrue(field.getText().contains("/* Updated token. */"));
+        assertNull(field.getDocComment());
+    }
+
+    public void testProtoGetterDescriptionHasNoFieldWriteTarget() {
+        var field = myFixture.addClass("class GeneratedDto { int count; }").getFields()[0];
+        var description = DocDescription.EMPTY.with(DocDescription.Source.PROTO_GETTER, "Generated field.");
+        assertNull(SourceDescriptionService.fieldDescriptionTarget("count", description, field));
     }
 
     public void testStaleDraftDoesNotWrite() {

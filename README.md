@@ -19,7 +19,7 @@
 | 平台集成 | YApi、ShowDoc、语雀（YuQue） |
 | Agent 接入 | 通过本机 MCP 服务将指定 Java Controller 文档上传到 YApi |
 
-预览、复制和导出接口文档时只读取源码。通过预览工具栏的 **重新生成注释**，可以选中 Java 接口说明、请求参数或请求/响应字段，生成并编辑候选说明，确认后写回对应 Javadoc 并刷新预览。`Doc Editor` 中的描述、必填等编辑仅用于复制 Markdown 草稿，不写回 JavaDoc、Swagger / OpenAPI 注解，也不自动保存业务源码。复制 JSON 仍按类型结构生成示例。
+预览、复制和导出接口文档时只读取源码。通过预览工具栏的 **重新生成注释**，可以选中 Java 接口说明、请求参数或请求/响应字段，生成并编辑候选说明，确认后写回对应 Javadoc 并刷新预览。在 `Doc Editor` 中，**源码注释**显示实际写在声明上的正文，**补充说明**只读展示校验范围、枚举引用、OpenAPI 等来源。字段显示「未写注释」时，可为可写声明新增注释。提交源码注释单元格，或点击字段行的 **重新生成**，会写回该字段的注释。不关联可写源码的行仍可用于 Markdown 草稿。「必填」根据源码和生成设置计算，只读展示并用于 Markdown 导出。光标位于字段时会定位到该行，也可通过 **整类注释** 生成类说明与直接声明的字段说明，勾选后一次写回。复制 JSON 仍按类型结构生成示例。
 
 ## 生成源码注释
 
@@ -188,8 +188,8 @@ http://127.0.0.1:12333/mcp
 # 构建可安装 ZIP，输出到 build/distributions/
 ./gradlew buildPlugin
 
-# 运行主测试及独立解析回归测试
-./gradlew test constantValueTest contentUsingTest
+# 运行测试（含解析回归测试）
+./gradlew test
 
 # 对配置的本地 IDE 执行插件兼容性检查
 ./gradlew verifyPlugin

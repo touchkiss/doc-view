@@ -15,8 +15,8 @@ import com.intellij.ui.components.JBTextArea;
 import com.intellij.ui.components.JBTextField;
 import com.intellij.util.ui.JBUI;
 import com.liuzhihang.doc.view.service.SourceDescriptionService;
-import com.star.easydoc.service.gpt.ModelRequestException;
-import com.star.easydoc.view.settings.CommonSettingsConfigurable;
+import com.liuzhihang.doc.view.service.gpt.ModelRequestException;
+import com.liuzhihang.doc.view.view.settings.CommonSettingsConfigurable;
 
 import javax.swing.JButton;
 import javax.swing.JComboBox;
@@ -33,6 +33,7 @@ final class SourceDescriptionDialog extends DialogWrapper {
     private final JBTextArea original = textArea(false);
     private final JBTextArea candidate = textArea(true);
     private final JBTextField instruction = new JBTextField();
+    private final JBLabel supplement = new JBLabel();
     private final JBLabel status = new JBLabel();
     private SourceDescriptionService.Draft draft;
 
@@ -40,7 +41,7 @@ final class SourceDescriptionDialog extends DialogWrapper {
         super(project);
         this.project = project;
         targetBox = new JComboBox<>(targets.toArray(SourceDescriptionService.Target[]::new));
-        setTitle("重新生成源码注释");
+        setTitle("更新源码注释");
         setOKButtonText("写回源码");
         init();
         targetBox.addActionListener(event -> loadTarget());
@@ -53,9 +54,11 @@ final class SourceDescriptionDialog extends DialogWrapper {
         outer.setPreferredSize(new Dimension(JBUI.scale(710), JBUI.scale(340)));
         JPanel controls = new JPanel(new BorderLayout(JBUI.scale(8), JBUI.scale(7)));
         JBLabel targetLabel = new JBLabel("要更新的说明");
-        targetLabel.setLabelFor(targetBox);
+        var targetControl = targetBox.getItemCount() == 1
+                ? new JBLabel(targetBox.getItemAt(0).label()) : targetBox;
+        targetLabel.setLabelFor(targetControl);
         controls.add(targetLabel, BorderLayout.WEST);
-        controls.add(targetBox, BorderLayout.CENTER);
+        controls.add(targetControl, BorderLayout.CENTER);
         JButton settings = new JButton("生成设置");
         settings.addActionListener(event -> {
             ShowSettingsUtil.getInstance().showSettingsDialog(project, CommonSettingsConfigurable.class);
@@ -76,6 +79,7 @@ final class SourceDescriptionDialog extends DialogWrapper {
         generate.addActionListener(event -> generate());
         JPanel buttons = new JPanel(new FlowLayout(FlowLayout.RIGHT, 0, 0));
         buttons.add(generate);
+        footer.add(supplement, BorderLayout.NORTH);
         footer.add(status, BorderLayout.CENTER);
         footer.add(buttons, BorderLayout.EAST);
         outer.add(footer, BorderLayout.SOUTH);
@@ -90,15 +94,12 @@ final class SourceDescriptionDialog extends DialogWrapper {
         candidate.setText("");
         candidate.setEnabled(draft != null);
         setOKActionEnabled(draft != null);
-        status.setText(draft == null ? "目标源码当前不可写。"
-                : differsFromDisplayed(draft) ? "文档当前显示的说明与 Javadoc 不同，可能来自注解或生成规则。" : "");
+        String derived = selected == null ? "" : selected.description().supplementaryText();
+        supplement.setVisible(!derived.isBlank());
+        supplement.setText(derived);
+        supplement.setToolTipText(derived);
+        status.setText(draft == null ? "目标源码当前不可写。" : "");
         updateInstruction();
-    }
-
-    private static boolean differsFromDisplayed(SourceDescriptionService.Draft draft) {
-        String visible = draft.target().displayed();
-        return visible != null && !visible.isBlank()
-                && !visible.replaceAll("\\s+", "").equals(draft.original().replaceAll("\\s+", ""));
     }
 
     private void updateInstruction() {
@@ -148,7 +149,7 @@ final class SourceDescriptionDialog extends DialogWrapper {
             return;
         }
         if (!SourceDescriptionService.apply(draft, candidate.getText())) {
-            status.setText("源码已修改，未写回。请重新打开预览后重试。");
+            status.setText("源码已修改，未写回。请重新打开字段操作后重试。");
             return;
         }
         super.doOKAction();

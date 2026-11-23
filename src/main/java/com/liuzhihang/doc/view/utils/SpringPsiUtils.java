@@ -20,6 +20,8 @@ import com.liuzhihang.doc.view.constant.SpringConstant;
 import com.liuzhihang.doc.view.constant.ValidationConstant;
 import com.liuzhihang.doc.view.constant.SwaggerConstant;
 import com.liuzhihang.doc.view.dto.Body;
+import com.liuzhihang.doc.view.dto.DocDescription;
+import com.liuzhihang.doc.view.dto.DocDescription.Source;
 import com.liuzhihang.doc.view.dto.Header;
 import com.liuzhihang.doc.view.dto.JsonWireType;
 import com.liuzhihang.doc.view.dto.Param;
@@ -325,14 +327,14 @@ public class SpringPsiUtils extends ParamPsiUtils {
             header.setPsiElement(parameter);
             header.setRequired(isParameterRequired(parameter));
             header.setName(parameterName(parameter));
-            String desc = parameterMetadata(parameter, "description");
-            if (desc == null) desc = CustomPsiCommentUtils.paramDocComment(psiMethod.getDocComment(), parameter);
-            String validation = getValidatedValue(parameter);
-            header.setDesc(StringUtils.defaultString(desc) + (StringUtils.isNotBlank(validation) ? validation : ""));
+            var description = parameterDescription(psiMethod, parameter, true);
             String example = parameterMetadata(parameter, "example");
-            if (hasCustomSpringDefaultValue(requestHeader)) {
-                example = AnnotationUtil.getStringAttributeValue(requestHeader, "defaultValue");
+            String defaultValue = springDefaultValue(requestHeader);
+            if (defaultValue != null) {
+                example = defaultValue;
+                description = description.with(Source.SPRING_DEFAULT, "默认值:" + defaultValue + ";", false);
             }
+            header.setDescription(description);
             header.setValue(example);
             list.add(header);
         }
@@ -353,11 +355,8 @@ public class SpringPsiUtils extends ParamPsiUtils {
         if (type instanceof PsiPrimitiveType || FieldTypeConstant.FIELD_TYPE.containsKey(type.getPresentableText())) {
             Body body = new Body();
             body.setPsiElement(parameter);
-            String description = parameterMetadata(parameter, "description");
-            if (description == null && parameter.getDeclarationScope() instanceof PsiMethod method) {
-                description = CustomPsiCommentUtils.paramDocComment(method.getDocComment(), parameter);
-            }
-            body.setDesc(description);
+            PsiMethod method = parameter.getDeclarationScope() instanceof PsiMethod owner ? owner : null;
+            body.setDescription(parameterDescription(method, parameter, false));
             body.setRequired(DocViewUtils.isRequired(parameter));
             body.setName(parameter.getName());
             body.setType(parameter.getType().getPresentableText());
@@ -598,7 +597,7 @@ public class SpringPsiUtils extends ParamPsiUtils {
         param.setPsiElement(field);
         param.setRequired(DocViewUtils.isRequired(field));
         param.setName(parameterName);
-        param.setDesc(DocViewUtils.fieldDesc(field));
+        param.setDescription(DocViewUtils.fieldDescription(field));
         String example = DocViewUtils.fieldExample(field);
         param.setExample(getExample(field, example));
         PsiType fieldType = field.getType();
@@ -616,7 +615,7 @@ public class SpringPsiUtils extends ParamPsiUtils {
         param.setPsiElement(component);
         param.setRequired(DocViewUtils.isRequired(component));
         param.setName(requestParamName(component, DocViewUtils.fieldName(component, false)));
-        param.setDesc(DocViewUtils.fieldDesc(component));
+        param.setDescription(DocViewUtils.fieldDescription(component));
         param.setExample(getExample(component, ""));
         PsiType componentType = component.getType();
         JsonWireType wireType = JacksonPsiUtils.resolveJsonWireType(component, componentType);
@@ -671,11 +670,7 @@ public class SpringPsiUtils extends ParamPsiUtils {
         param.setRequired(isParameterRequired(parameter));
         param.setName(parameterName);
         param.setType(parameter.getType().getPresentableText());
-        PsiDocComment docComment = psiMethod.getDocComment();
-        String desc = parameterMetadata(parameter, "description");
-        if (desc == null) desc = CustomPsiCommentUtils.paramDocComment(docComment, parameter);
-        String validation = getValidatedValue(parameter);
-        param.setDesc(StringUtils.defaultString(desc) + (StringUtils.isNotBlank(validation) ? validation : ""));
+        param.setDescription(parameterDescription(psiMethod, parameter, true));
         String example = parameterMetadata(parameter, "example");
         PsiAnnotation binding = springBindingAnnotation(parameter);
         if (binding != null && hasCustomSpringDefaultValue(binding)) {
@@ -684,33 +679,35 @@ public class SpringPsiUtils extends ParamPsiUtils {
             example = getExample(parameter, null);
         }
         param.setExample(example);
+        PsiDocComment docComment = psiMethod.getDocComment();
         param.setSince(CustomPsiCommentUtils.tagDocComment(docComment, "since"));
         param.setVersion(CustomPsiCommentUtils.tagDocComment(docComment, "version"));
 
         return param;
     }
 
-    public static String getValidatedValue(@NotNull PsiModifierListOwner psiField) {
-        StringBuilder validatedValue = new StringBuilder(" ");
-        PsiAnnotation minAnnotation = AnnotationUtil.findAnnotation(psiField, ValidationConstant.MIN);
-        if (minAnnotation != null) {
-            validatedValue.append("最小值:").append(AnnotationUtil.getLongAttributeValue(minAnnotation, "value")).append(";");
+    private static DocDescription parameterDescription(PsiMethod method, PsiParameter parameter, boolean includeConstraints) {
+        PsiDocComment comment = method == null ? null : method.getDocComment();
+        var description = DocDescription.local(CustomPsiCommentUtils.paramText(comment, parameter.getName()),
+                method == null ? null : CustomPsiCommentUtils.paramDocComment(comment, parameter))
+                .with(Source.OPEN_API, parameterMetadata(parameter, "description"));
+        return withDescriptionConstraints(description, parameter, includeConstraints);
+    }
+
+    static DocDescription withDescriptionConstraints(DocDescription description, PsiModifierListOwner owner,
+                                                      boolean includeConstraints) {
+        var validation = ValidationDescription.extract(owner);
+        String defaultValue = springDefaultValue(AnnotationUtil.findAnnotation(owner, SpringConstant.REQUEST_PARAM));
+        var result = validation.appendTo(description, includeConstraints);
+        if (defaultValue != null) {
+            result = result.with(Source.SPRING_DEFAULT,
+                    (validation.constraints().isEmpty() ? " " : "") + "默认值:" + defaultValue + ";", includeConstraints);
         }
-        PsiAnnotation maxAnnotation = AnnotationUtil.findAnnotation(psiField, ValidationConstant.MAX);
-        if (maxAnnotation != null) {
-            validatedValue.append("最大值:").append(AnnotationUtil.getLongAttributeValue(maxAnnotation, "value")).append(";");
-        }
-        PsiAnnotation sizeAnnotation = AnnotationUtil.findAnnotation(psiField, ValidationConstant.SIZE);
-        if (sizeAnnotation != null) {
-            validatedValue.append("长度范围:").append("最小值:").append(AnnotationUtil.getLongAttributeValue(sizeAnnotation, "min")).append(",");
-            validatedValue.append("最大值:").append(AnnotationUtil.getLongAttributeValue(sizeAnnotation, "max")).append(";");
-        }
-        PsiAnnotation requestParam = AnnotationUtil.findAnnotation(psiField, SpringConstant.REQUEST_PARAM);
-        String springDefault = springDefaultValue(requestParam);
-        if (springDefault != null) {
-            validatedValue.append("默认值:").append(springDefault).append(";");
-        }
-        return StringUtils.isBlank(validatedValue) ? "" : validatedValue.toString();
+        return result;
+    }
+
+    public static String getValidatedValue(@NotNull PsiModifierListOwner owner) {
+        return withDescriptionConstraints(DocDescription.EMPTY, owner, true).render();
     }
 
     private static String parameterName(PsiParameter parameter) {

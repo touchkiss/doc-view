@@ -56,7 +56,15 @@ public class DocView {
     /**
      * 文档描述
      */
-    private String desc;
+    private DocDescription description = DocDescription.legacy(null);
+
+    public String getDesc() {
+        return description.render();
+    }
+
+    public void setDesc(String desc) {
+        description = DocDescription.legacy(desc);
+    }
 
     /** 方法 Javadoc 声明的生效时间。 */
     private String since;

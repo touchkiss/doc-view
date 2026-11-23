@@ -1,0 +1,28 @@
+package com.liuzhihang.doc.view.javadoc.service.variable.impl;
+
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
+
+import com.intellij.openapi.diagnostic.Logger;
+import com.intellij.psi.PsiElement;
+import com.liuzhihang.doc.view.common.Consts;
+
+/**
+ * @author <a href="mailto:wangchao.star@gmail.com">wangchao</a>
+ * @version 1.0.0
+ * @since 2019-12-07 23:15:00
+ */
+public class DateVariableGenerator extends AbstractVariableGenerator {
+    private static final Logger LOGGER = Logger.getInstance(DateVariableGenerator.class);
+
+    @Override
+    public String generate(PsiElement element) {
+        try {
+            return LocalDateTime.now().format(DateTimeFormatter.ofPattern(getConfig().getDateFormat()));
+        } catch (Exception e) {
+            LOGGER.error("date format error", e);
+            return LocalDateTime.now().format(DateTimeFormatter.ofPattern(Consts.DEFAULT_DATE_FORMAT));
+        }
+    }
+
+}

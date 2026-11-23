@@ -2,9 +2,11 @@ package com.liuzhihang.doc.view.service.impl;
 
 import com.intellij.psi.PsiClass;
 import com.intellij.psi.PsiMethod;
+import com.liuzhihang.doc.view.dto.DocDescription;
 import com.liuzhihang.doc.view.dto.DocView;
 import com.liuzhihang.doc.view.enums.FrameworkEnum;
 import com.liuzhihang.doc.view.service.DocViewService;
+import com.liuzhihang.doc.view.utils.CustomPsiCommentUtils;
 import com.liuzhihang.doc.view.utils.DocViewUtils;
 import com.liuzhihang.doc.view.utils.PojoUtils;
 import com.liuzhihang.doc.view.utils.ProtoUtils;
@@ -52,7 +54,7 @@ public class PojoDocViewServiceImpl implements DocViewService {
             }
         }
         docView.setDocTitle(title);
-        docView.setDesc(title);
+        docView.setDescription(DocDescription.local(CustomPsiCommentUtils.descriptionBody(psiClass.getDocComment()), title));
         docView.setName(psiClass.getName());
         docView.setType(FrameworkEnum.NONE_POJO);
         docView.setDomain(Collections.emptyList());

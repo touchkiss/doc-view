@@ -17,6 +17,7 @@ import com.liuzhihang.doc.view.constant.DubboConstant;
 import com.liuzhihang.doc.view.constant.FieldTypeConstant;
 import com.liuzhihang.doc.view.dom.BeansDomElement;
 import com.liuzhihang.doc.view.dto.Body;
+import com.liuzhihang.doc.view.dto.DocDescription;
 import org.apache.commons.lang3.StringUtils;
 import org.jetbrains.annotations.NotNull;
 
@@ -133,7 +134,10 @@ public class DubboPsiUtils {
             body.setType(type.getPresentableText());
             body.setParent(root);
             // 获取@param 上的注解描述
-            body.setDesc(CustomPsiCommentUtils.paramDocComment(psiMethod.getDocComment(), parameter));
+            var comment = psiMethod.getDocComment();
+            var description = DocDescription.local(CustomPsiCommentUtils.paramText(comment, parameter.getName()),
+                    CustomPsiCommentUtils.paramDocComment(comment, parameter));
+            body.setDescription(ValidationDescription.extract(parameter).appendTo(description, true));
 
             body.setSince(since);
             body.setVersion(version);

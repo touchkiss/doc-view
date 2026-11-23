@@ -18,6 +18,7 @@ import com.intellij.openapi.editor.highlighter.EditorHighlighterFactory;
 import com.intellij.openapi.fileTypes.FileType;
 import com.intellij.openapi.fileTypes.FileTypeManager;
 import com.intellij.openapi.options.ShowSettingsUtil;
+import com.intellij.openapi.progress.ProcessCanceledException;
 import com.intellij.openapi.progress.ProgressIndicator;
 import com.intellij.openapi.progress.Task;
 import com.intellij.openapi.project.Project;
@@ -74,6 +75,7 @@ import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.Collections;
 import java.util.IdentityHashMap;
+import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
 /**
@@ -132,6 +134,7 @@ public class PreviewForm implements Disposable {
      * 仅当 {@link JBCefApp#isSupported()} 为 true 时创建，否则为 null（降级为源码视图）。
      */
     private JBCefBrowser jcefBrowser;
+    private final Supplier<JBCefBrowser> browserFactory;
 
     /**
      * 根面板
@@ -208,11 +211,14 @@ public class PreviewForm implements Disposable {
 
 
     public PreviewForm(@NotNull PsiClass psiClass, PsiMethod psiMethod) {
+        this(psiClass, psiMethod, () -> JBCefApp.isSupported() ? JBCefBrowser.createBuilder().build() : null);
+    }
 
+    PreviewForm(@NotNull PsiClass psiClass, PsiMethod psiMethod, Supplier<JBCefBrowser> browserFactory) {
         this.psiClass = psiClass;
         this.project = psiClass.getProject();
         this.psiMethod = psiMethod;
-
+        this.browserFactory = browserFactory;
     }
 
     /**
@@ -322,10 +328,7 @@ public class PreviewForm implements Disposable {
             EditorFactory.getInstance().releaseEditor(markdownEditor);
             markdownEditor = null;
         }
-        if (jcefBrowser != null) {
-            Disposer.dispose(jcefBrowser);
-            jcefBrowser = null;
-        }
+        discardHtmlBrowser();
 
         currentMarkdownText = null;
         currentDocView = null;
@@ -508,29 +511,64 @@ public class PreviewForm implements Disposable {
      * 当运行环境不支持 JCEF 时不创建浏览器，预览降级为 Markdown 源码视图。
      */
     private void initHtmlBrowser() {
-
-        if (!JBCefApp.isSupported()) {
-            // Fallback to a browser-less solution (源码视图)
-            // https://plugins.jetbrains.com/docs/intellij/jcef.html#jbcefapp
-            log.info("当前不支持 JCEF");
-            return;
+        try {
+            jcefBrowser = browserFactory.get();
+        } catch (ProcessCanceledException canceled) {
+            throw canceled;
+        } catch (RuntimeException failure) {
+            disableHtmlPreview(failure);
         }
-
-        jcefBrowser = JBCefBrowser.createBuilder().build();
     }
 
-    /**
-     * 预览面板，根据设置选择 HTML 面板或者 Markdown 面板
-     */
-    private void choosePreviewPanel() {
+    private void discardHtmlBrowser() {
+        JBCefBrowser browser = jcefBrowser;
+        jcefBrowser = null;
+        if (browser != null) {
+            try {
+                Disposer.dispose(browser);
+            } catch (RuntimeException failure) {
+                log.warn("Could not dispose the Doc View HTML browser", failure);
+            }
+        }
+    }
 
+    private void disableHtmlPreview(RuntimeException failure) {
+        log.warn("Doc View HTML preview is unavailable; using Markdown", failure);
+        previewIsHtml.set(false);
+        discardHtmlBrowser();
+    }
+
+    private void choosePreviewPanel() {
+        previewContentPanel.removeAll();
         if (previewIsHtml.get() && jcefBrowser != null) {
-            previewContentPanel.add(jcefBrowser.getComponent(), BorderLayout.CENTER);
-        } else {
-            // 展示源码
+            try {
+                previewContentPanel.add(jcefBrowser.getComponent(), BorderLayout.CENTER);
+            } catch (ProcessCanceledException canceled) {
+                throw canceled;
+            } catch (RuntimeException failure) {
+                disableHtmlPreview(failure);
+            }
+        }
+        if (previewContentPanel.getComponentCount() == 0) {
+            previewIsHtml.set(false);
             previewContentPanel.add(ScrollPaneFactory.createScrollPane(markdownEditor.getComponent()), BorderLayout.CENTER);
         }
+        previewContentPanel.revalidate();
+        previewContentPanel.repaint();
+    }
 
+    private void loadPreviewHtml(String htmlText) {
+        if (jcefBrowser == null) {
+            return;
+        }
+        try {
+            jcefBrowser.loadHTML(htmlText);
+        } catch (ProcessCanceledException canceled) {
+            throw canceled;
+        } catch (RuntimeException failure) {
+            disableHtmlPreview(failure);
+            choosePreviewPanel();
+        }
     }
 
     /**
@@ -556,25 +594,12 @@ public class PreviewForm implements Disposable {
             @Override
             public void setSelected(@NotNull AnActionEvent e, boolean state) {
 
-                if (jcefBrowser == null) {
-                    // 不支持 JCEF 不允许预览
-                    previewIsHtml.set(false);
+                if (state && jcefBrowser == null) {
                     DocViewNotification.notifyInfo(project, DocViewBundle.message("notify.not.support.jcef"));
-                } else {
-                    previewIsHtml.set(state);
-                    if (state) {
-                        previewContentPanel.removeAll();
-                        previewContentPanel.repaint();
-                        previewContentPanel.add(jcefBrowser.getComponent(), BorderLayout.CENTER);
-                        previewContentPanel.revalidate();
-                    } else {
-                        // 展示源码
-                        previewContentPanel.removeAll();
-                        previewContentPanel.repaint();
-                        previewContentPanel.add(ScrollPaneFactory.createScrollPane(markdownEditor.getComponent()), BorderLayout.CENTER);
-                        previewContentPanel.revalidate();
-                    }
+                    return;
                 }
+                previewIsHtml.set(state);
+                choosePreviewPanel();
             }
 
             @Override
@@ -985,11 +1010,10 @@ public class PreviewForm implements Disposable {
 
         currentMarkdownText = markdownText;
 
-        if (jcefBrowser != null && htmlText != null) {
-            jcefBrowser.loadHTML(htmlText);
-        }
-
         setMarkdownText(markdownText);
+        if (htmlText != null) {
+            loadPreviewHtml(htmlText);
+        }
     }
 
     private void showPreviewStatus(@NotNull String message) {
@@ -1000,7 +1024,7 @@ public class PreviewForm implements Disposable {
         currentMarkdownText = null;
         setMarkdownText(message);
         if (jcefBrowser != null) {
-            jcefBrowser.loadHTML("<!doctype html><html><body><p>" + escapeHtml(message) + "</p></body></html>");
+            loadPreviewHtml("<!doctype html><html><body><p>" + escapeHtml(message) + "</p></body></html>");
         }
     }
 

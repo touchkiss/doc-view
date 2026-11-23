@@ -1,0 +1,85 @@
+package com.liuzhihang.doc.view.view.settings.javadoc.template;
+
+import java.util.Objects;
+import java.util.TreeMap;
+
+import com.intellij.openapi.application.ApplicationManager;
+import com.intellij.openapi.options.ConfigurationException;
+import com.liuzhihang.doc.view.config.EasyDocConfig;
+import com.liuzhihang.doc.view.config.EasyDocConfig.TemplateConfig;
+import com.liuzhihang.doc.view.config.EasyDocConfigComponent;
+import org.apache.commons.lang3.BooleanUtils;
+import org.apache.commons.lang3.StringUtils;
+import org.jetbrains.annotations.Nls;
+
+/**
+ * @author <a href="mailto:wangchao.star@gmail.com">wangchao</a>
+ * @version 1.0.0
+ * @since 2019-11-10 17:35:00
+ */
+public class MethodSettingsConfigurable extends AbstractTemplateConfigurable<MethodSettingsView> {
+    private EasyDocConfig config = ApplicationManager.getApplication().getService(EasyDocConfigComponent.class).getState();
+    /** Lazy: Settings tree instantiates Configurable without building UI */
+    private MethodSettingsView view;
+
+    @Nls
+    @Override
+    public String getDisplayName() {
+        return "EasyDocMethodTemplate";
+    }
+
+    @Override
+    public MethodSettingsView getView() {
+        if (view == null) {
+            view = new MethodSettingsView(config);
+        }
+        return view;
+    }
+
+    @Override
+    public boolean isModified() {
+        if (view == null) {
+            return false;
+        }
+        TemplateConfig templateConfig = config.getMethodTemplateConfig();
+        if (!Objects.equals(templateConfig.getIsDefault(), view.isDefault())) {
+            return true;
+        }
+        if (!Objects.equals(templateConfig.getTemplate(), view.getTemplate())) {
+            return true;
+        }
+        return false;
+    }
+
+    @Override
+    public void apply() throws ConfigurationException {
+        MethodSettingsView settingsView = getView();
+        TemplateConfig templateConfig = config.getMethodTemplateConfig();
+        templateConfig.setIsDefault(settingsView.isDefault());
+        templateConfig.setTemplate(settingsView.getTemplate());
+        if (templateConfig.getCustomMap() == null) {
+            templateConfig.setCustomMap(new TreeMap<>());
+        }
+        if (!settingsView.isDefault()) {
+            if (StringUtils.isBlank(settingsView.getTemplate())) {
+                throw new ConfigurationException("使用自定义模板，模板不能为空");
+            }
+            String temp = StringUtils.strip(settingsView.getTemplate());
+            if (!temp.startsWith("/**") || !temp.endsWith("*/")) {
+                throw new ConfigurationException("模板格式不正确，正确的javadoc应该以\"/**\"开头，以\"*/\"结束");
+            }
+        }
+    }
+
+    @Override
+    public void reset() {
+        MethodSettingsView settingsView = getView();
+        TemplateConfig templateConfig = config.getMethodTemplateConfig();
+        if (BooleanUtils.isTrue(templateConfig.getIsDefault())) {
+            settingsView.setDefault(true);
+        } else {
+            settingsView.setDefault(false);
+        }
+        settingsView.setTemplate(templateConfig.getTemplate());
+    }
+}

@@ -116,6 +116,57 @@ public class CustomPsiCommentUtils {
 
     }
 
+    public static String descriptionBody(PsiDocComment comment) {
+        if (comment == null) {
+            return "";
+        }
+        String text = comment.getText();
+        var tags = comment.getTags();
+        boolean block = text.startsWith("/**") && text.endsWith("*/");
+        int end = tags.length == 0 ? (block ? text.length() - 2 : text.length())
+                : tags[0].getTextRange().getStartOffset() - comment.getTextRange().getStartOffset();
+        if (!block) {
+            return text.substring(0, end).lines().map(String::strip)
+                    .map(line -> line.startsWith("///") ? line.substring(3).strip() : line)
+                    .collect(Collectors.joining("\n")).strip();
+        }
+        return text.substring(3, Math.max(3, end)).lines().map(String::strip)
+                .map(line -> line.startsWith("*") ? line.substring(1).strip() : line)
+                .collect(Collectors.joining("\n")).strip();
+    }
+
+    public static String paramText(PsiDocComment comment, String name) {
+        if (comment != null) {
+            for (PsiDocTag tag : comment.findTagsByName("param")) {
+                if (tag.getValueElement() != null && name.equals(tag.getValueElement().getText())) {
+                    return Arrays.stream(tag.getDataElements()).skip(1).map(PsiElement::getText)
+                            .collect(Collectors.joining(" ")).strip();
+                }
+            }
+        }
+        return "";
+    }
+
+    /** A unique, ordinary comment owned directly by this declaration. */
+    public static PsiComment ordinaryDeclarationComment(PsiElement declaration) {
+        PsiComment result = null;
+        for (PsiElement child = declaration.getFirstChild(); child != null; child = child.getNextSibling()) {
+            if (child instanceof PsiComment comment && !(comment instanceof PsiDocComment)) {
+                if (result != null) {
+                    return null;
+                }
+                result = comment;
+            }
+        }
+        return result;
+    }
+
+    public static String ordinaryCommentText(PsiComment comment) {
+        String text = comment.getText();
+        return text.startsWith("//") ? text.substring(2).strip()
+                : text.substring(2, text.length() - 2).strip();
+    }
+
     public static String tagValueFromDocComment(PsiDocComment docComment, String tagName) {
         return ApplicationManager.getApplication().runReadAction((Computable<String>) () -> {
             String comment = "";
@@ -236,7 +287,7 @@ public class CustomPsiCommentUtils {
      * @return 枚举约束描述，如 "click: 商品点击; cart: 加入购物车"，未找到枚举时返回空字符串
      */
     @NotNull
-    private static String resolveEnumInfoFromSeeTag(@NotNull PsiDocComment docComment) {
+    static String resolveEnumInfoFromSeeTag(@NotNull PsiDocComment docComment) {
         for (String referenceText : collectReferenceTexts(docComment)) {
             // 引用值示例："UserLogEnum#name" 或 "UserLogEnum"
             String seeText = referenceText;

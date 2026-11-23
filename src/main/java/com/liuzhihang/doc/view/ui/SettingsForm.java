@@ -8,7 +8,7 @@ import com.intellij.ui.components.ActionLink;
 import com.liuzhihang.doc.view.config.GenerationRulesConfigurable;
 import com.liuzhihang.doc.view.config.IntegrationSettingsConfigurable;
 import com.liuzhihang.doc.view.config.TemplateConfigurable;
-import com.star.easydoc.view.settings.CommonSettingsConfigurable;
+import com.liuzhihang.doc.view.view.settings.CommonSettingsConfigurable;
 import com.intellij.ui.ContextHelpLabel;
 import com.intellij.ui.ToolbarDecorator;
 import com.intellij.ui.components.JBTextField;

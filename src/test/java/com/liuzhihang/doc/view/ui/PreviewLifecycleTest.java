@@ -243,6 +243,33 @@ public final class PreviewLifecycleTest extends LightJavaCodeInsightFixtureTestC
         assertTrue("Disposal must preserve unrelated editors", isEditorAlive(unrelatedEditor));
     }
 
+    public void testDisconnectedJcefFallsBackToMarkdownForCustomField() throws Exception {
+        PsiClass owner = myFixture.addClass("""
+                class PreviewEntity {
+                    /** Nested payload. */
+                    PreviewPayload payload;
+                }
+                class PreviewPayload {
+                    String name;
+                }
+                """);
+        var form = EdtTestUtil.runInEdtAndGet(() -> new PreviewForm(owner, null, () -> {
+            throw new IllegalStateException("JCEF server was disconnected.");
+        }));
+        forms.add(form);
+        AtomicReference<Thread> dispatchThread = new AtomicReference<>();
+        EdtTestUtil.runInEdtAndWait(() -> {
+            initializeUi(form);
+            dispatchThread.set(Thread.currentThread());
+        });
+        assertNull(fieldValue(form, "jcefBrowser", Object.class));
+        DocView doc = ApplicationManager.getApplication().runReadAction((Computable<DocView>) () ->
+                DocViewService.getInstance(project, owner).buildDoc(owner, null).getFirst());
+        String expected = markdownText(doc);
+        assertTrue(expected, expected.contains("payload"));
+        renderAndAssert(form, doc, expected, dispatchThread.get());
+    }
+
     public void testPreviewCacheKeyTracksForkPojoTemplateAndDocumentCurlHost() throws Exception {
         PreviewForm form = createForm();
         DocView docView = new DocView("Fork settings cache");

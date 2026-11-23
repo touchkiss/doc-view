@@ -13,6 +13,8 @@ import com.liuzhihang.doc.view.config.Settings;
 import com.liuzhihang.doc.view.constant.JsonPropertyConstant;
 import com.liuzhihang.doc.view.constant.SpringConstant;
 import com.liuzhihang.doc.view.constant.SwaggerConstant;
+import com.liuzhihang.doc.view.dto.DocDescription;
+import com.liuzhihang.doc.view.dto.DocDescription.Source;
 import com.liuzhihang.doc.view.dto.DocViewParamData;
 import org.apache.commons.lang3.StringUtils;
 import org.jetbrains.annotations.NotNull;
@@ -203,8 +205,14 @@ public class DocViewUtils {
      */
     @NotNull
     public static String getMethodDesc(@NotNull PsiMethod psiMethod) {
+        return methodDescription(psiMethod).render();
+    }
 
-        return ApplicationManager.getApplication().runReadAction((Computable<String>) () -> {
+    public static DocDescription methodDescription(@NotNull PsiMethod psiMethod) {
+        return ApplicationManager.getApplication().runReadAction((Computable<DocDescription>) () -> {
+            var comment = psiMethod.getDocComment();
+            var local = DocDescription.local(CustomPsiCommentUtils.descriptionBody(comment),
+                    CustomPsiCommentUtils.tagDocComment(comment));
 
             Settings settings = Settings.getInstance(psiMethod.getProject());
 
@@ -214,7 +222,7 @@ public class DocViewUtils {
                 if (operationAnnotation != null) {
                     String description = AnnotationUtil.getStringAttributeValue(operationAnnotation, "description");
                     if (StringUtils.isNotBlank(description)) {
-                        return description;
+                        return local.with(Source.OPEN_API, description);
                     }
                 }
             }
@@ -224,13 +232,13 @@ public class DocViewUtils {
                 if (apiOperationAnnotation != null) {
                     String notes = AnnotationUtil.getStringAttributeValue(apiOperationAnnotation, "notes");
                     if (StringUtils.isNotBlank(notes)) {
-                        return notes;
+                        return local.with(Source.OPEN_API, notes);
                     }
                 }
             }
             // 最后从注释中获取
 
-            return CustomPsiCommentUtils.tagDocComment(psiMethod.getDocComment());
+            return local;
         });
     }
 
@@ -489,39 +497,57 @@ public class DocViewUtils {
      * @return
      */
     @NotNull
-    public static String fieldDesc(@NotNull PsiField psiField) {
+    public static String fieldDesc(@NotNull PsiField field) {
+        return fieldDescription(field).render();
+    }
 
-        return ApplicationManager.getApplication().runReadAction((Computable<String>) () -> {
-            // swagger v3 @Schema
-            PsiAnnotation schemaAnnotation = psiField.getAnnotation(SwaggerConstant.SCHEMA);
-            if (schemaAnnotation != null) {
-                PsiAnnotationMemberValue descriptionValue = schemaAnnotation.findDeclaredAttributeValue("description");
-                String description = evaluateStringConstant(psiField.getProject(), descriptionValue);
-                if (description != null) {
-                    return description;
-                }
-            }
-            // swagger @ApiModelProperty
-            PsiAnnotation apiModelPropertyAnnotation = psiField.getAnnotation(SwaggerConstant.API_MODEL_PROPERTY);
-            if (apiModelPropertyAnnotation != null) {
-                PsiAnnotationMemberValue value = apiModelPropertyAnnotation.findAttributeValue("value");
-                if (value != null && StringUtils.isNotBlank(value.getText())) {
-                    return value.getText().replace("\"", "");
-                }
-            }
-
-            String getValidatedValue = SpringPsiUtils.getValidatedValue(psiField);
-
-            PsiField documentationField = DependencySourceComments.documentationField(psiField);
+    public static DocDescription fieldDescription(@NotNull PsiField field) {
+        return ApplicationManager.getApplication().runReadAction((Computable<DocDescription>) () -> {
+            PsiField documentationField = DependencySourceComments.documentationField(field);
             PsiComment comment = PsiTreeUtil.findChildOfType(documentationField, PsiComment.class);
-
-            if (comment != null) {
-                // param.setExample();
-                // 参数举例, 使用 tag 判断; fieldComment 已统一支持 PsiDocComment 及 @see 枚举解析
-                return CustomPsiCommentUtils.fieldComment(comment) + getValidatedValue;
-            }
-            return getValidatedValue;
+            var description = declarationDescription(documentationField, comment, documentationField != field);
+            return SpringPsiUtils.withDescriptionConstraints(description, field, true)
+                    .with(Source.OPEN_API, fieldAnnotationDescription(field));
         });
+    }
+
+    private static DocDescription declarationDescription(PsiElement declaration, PsiComment comment, boolean external) {
+        if (comment == null) {
+            return DocDescription.EMPTY;
+        }
+        if (comment instanceof PsiDocComment javadoc) {
+            String rendered = CustomPsiCommentUtils.tagDocComment(javadoc);
+            var description = external
+                    ? DocDescription.EMPTY.with(Source.DEPENDENCY, rendered)
+                    : DocDescription.local(CustomPsiCommentUtils.descriptionBody(javadoc), rendered);
+            return description.with(Source.ENUM_REFERENCE, CustomPsiCommentUtils.resolveEnumInfoFromSeeTag(javadoc));
+        }
+        String rendered = CustomPsiCommentUtils.fieldComment(comment);
+        if (external) {
+            return DocDescription.EMPTY.with(Source.DEPENDENCY, rendered);
+        }
+        return comment.equals(CustomPsiCommentUtils.ordinaryDeclarationComment(declaration))
+                ? DocDescription.local(CustomPsiCommentUtils.ordinaryCommentText(comment), rendered)
+                : DocDescription.EMPTY.with(Source.GENERATED, rendered);
+    }
+
+    private static String fieldAnnotationDescription(PsiModifierListOwner field) {
+        var schema = field.getAnnotation(SwaggerConstant.SCHEMA);
+        if (schema != null) {
+            String description = evaluateStringConstant(field.getProject(),
+                    schema.findDeclaredAttributeValue("description"));
+            if (description != null) {
+                return description;
+            }
+        }
+        var property = field.getAnnotation(SwaggerConstant.API_MODEL_PROPERTY);
+        if (property != null) {
+            var value = property.findAttributeValue("value");
+            if (value != null && StringUtils.isNotBlank(value.getText())) {
+                return value.getText().replace("\"", "");
+            }
+        }
+        return null;
     }
 
     public static String fieldExample(@NotNull PsiField psiField) {
@@ -554,55 +580,25 @@ public class DocViewUtils {
 
     @NotNull
     public static String fieldDesc(@NotNull PsiRecordComponent component) {
-        return ApplicationManager.getApplication().runReadAction((Computable<String>) () -> {
-            // 1. @Schema annotation on component
-            PsiAnnotation schemaAnnotation = component.getAnnotation(SwaggerConstant.SCHEMA);
-            if (schemaAnnotation != null) {
-                String description = evaluateStringConstant(component.getProject(),
-                        schemaAnnotation.findDeclaredAttributeValue("description"));
-                if (description != null) return description;
-            }
-            // 2. @ApiModelProperty annotation on component
-            PsiAnnotation apiModelPropertyAnnotation = component.getAnnotation(SwaggerConstant.API_MODEL_PROPERTY);
-            if (apiModelPropertyAnnotation != null) {
-                PsiAnnotationMemberValue value = apiModelPropertyAnnotation.findAttributeValue("value");
-                if (value != null && StringUtils.isNotBlank(value.getText())) {
-                    return value.getText().replace("\"", "");
-                }
-            }
-            String validatedValue = SpringPsiUtils.getValidatedValue(component);
-            // 3. Inline comment directly on the component declaration
-            PsiComment inlineComment = PsiTreeUtil.findChildOfType(component, PsiComment.class);
-            if (inlineComment != null) {
-                String desc = CustomPsiCommentUtils.fieldComment(inlineComment);
-                if (StringUtils.isNotBlank(desc)) {
-                    return desc + validatedValue;
-                }
-            }
-            // 4. Class-level @param tag in the containing record's JavaDoc
-            //    e.g.  /** @param name 名称 */  public record Foo(String name) {}
-            PsiClass containingClass = component.getContainingClass();
-            if (containingClass != null) {
-                PsiDocComment classDoc = containingClass.getDocComment();
-                if (classDoc != null) {
-                    String paramDesc = recordComponentParamDesc(classDoc, component.getName());
-                    if (StringUtils.isNotBlank(paramDesc)) {
-                        return paramDesc + validatedValue;
+        return fieldDescription(component).render();
+    }
+
+    public static DocDescription fieldDescription(@NotNull PsiRecordComponent component) {
+        return ApplicationManager.getApplication().runReadAction((Computable<DocDescription>) () -> {
+            PsiComment inline = PsiTreeUtil.findChildOfType(component, PsiComment.class);
+            var description = declarationDescription(component, inline, false);
+            if (StringUtils.isBlank(description.render())) {
+                PsiClass owner = component.getContainingClass();
+                if (owner != null) {
+                    String raw = CustomPsiCommentUtils.paramText(owner.getDocComment(), component.getName());
+                    if (!raw.isBlank() || description.sourceComment().isBlank()) {
+                        description = DocDescription.local(raw, raw.replaceAll("\\s+", " ").trim());
                     }
                 }
             }
-            return validatedValue;
+            return SpringPsiUtils.withDescriptionConstraints(description, component, true)
+                    .with(Source.OPEN_API, fieldAnnotationDescription(component));
         });
-    }
-
-    private static String recordComponentParamDesc(@NotNull PsiDocComment classDoc, @NotNull String componentName) {
-        for (PsiDocTag tag : classDoc.findTagsByName("param")) {
-            if (tag.getValueElement() != null && componentName.equals(tag.getValueElement().getText().trim())) {
-                return java.util.Arrays.stream(tag.getDataElements()).skip(1).map(PsiElement::getText)
-                        .collect(java.util.stream.Collectors.joining(" ")).replaceAll("\\s+", " ").trim();
-            }
-        }
-        return "";
     }
 
     public static String fieldName(@NotNull PsiRecordComponent component, boolean parentIsProto) {

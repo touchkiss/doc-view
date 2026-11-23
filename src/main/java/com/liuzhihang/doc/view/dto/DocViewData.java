@@ -16,6 +16,7 @@ import org.jetbrains.annotations.NotNull;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 /**
@@ -28,6 +29,7 @@ import java.util.stream.Collectors;
  */
 @Data
 public class DocViewData {
+    private static final Pattern MARKDOWN_CELL_PIPE = Pattern.compile("(\\\\*)\\|");
 
     /**
      * 文档名称
@@ -366,7 +368,7 @@ public class DocViewData {
                     .append("|").append(data.getType())
                     .append("|").append(Boolean.TRUE.equals(data.getRequired()) ? "Y" : "N")
                     .append("|").append(data.getExample())
-                    .append("|").append(markdownBr(data.getDesc()))
+                    .append("|").append(markdownDescription(data.getDesc()))
                     .append("|").append(Arrays.stream(new String[]{data.getSince(), data.getVersion()}).filter(StringUtils::isNotBlank).collect(Collectors.joining("-")))
                     .append("|").append("\n");
             if (data.getChildList() != null && !data.getChildList().isEmpty()) {
@@ -407,7 +409,7 @@ public class DocViewData {
                     .append("|").append(data.getType())
                     .append("|").append(data.getRequired() ? "Y" : "N")
                     .append("|").append(data.getExample())
-                    .append("|").append(markdownBr(data.getDesc()))
+                    .append("|").append(markdownDescription(data.getDesc()))
                     .append("|").append(Arrays.stream(new String[]{data.getSince(), data.getVersion()}).filter(StringUtils::isNotBlank).collect(Collectors.joining("-")))
                     .append("|").append("\n");
             if (data.getChildList() != null && !data.getChildList().isEmpty()) {
@@ -418,11 +420,15 @@ public class DocViewData {
         return builder;
     }
 
-    private static String markdownBr(String text) {
+    private static String markdownDescription(String text) {
         if (StringUtils.isBlank(text)) {
             return "";
         }
-        return text.replace("\n", "<br>");
+        // Regex alternation and escaped pipes belong inside the cell, including their literal slashes.
+        return MARKDOWN_CELL_PIPE.matcher(text)
+                .replaceAll(match -> "&#92;".repeat(match.group(1).length()) + "&#124;")
+                .replace("\r\n", "<br>")
+                .replace("\n", "<br>");
     }
 
     @NotNull
@@ -438,7 +444,7 @@ public class DocViewData {
             builder.append("|").append(data.getName())
                     .append("|").append(data.getExample())
                     .append("|").append(data.getRequired() ? "Y" : "N")
-                    .append("|").append(data.getDesc())
+                    .append("|").append(markdownDescription(data.getDesc()))
                     .append("|").append(Arrays.stream(new String[]{data.getSince(), data.getVersion()}).filter(StringUtils::isNotBlank).collect(Collectors.joining("-")))
                     .append("|").append("\n");
         }
@@ -461,7 +467,7 @@ public class DocViewData {
             data.setName(header.getName());
             data.setExample(header.getValue());
             data.setRequired(header.getRequired());
-            data.setDesc(StringUtils.isNotBlank(header.getDesc()) ? header.getDesc() : "");
+            data.setDescription(header.getDescription().orEmpty());
 
             return data;
         }).collect(Collectors.toList());
@@ -480,7 +486,7 @@ public class DocViewData {
             data.setName(param.getName());
             data.setRequired(param.getRequired());
             data.setType(param.getType());
-            data.setDesc(StringUtils.isNotBlank(param.getDesc()) ? param.getDesc() : "");
+            data.setDescription(param.getDescription().orEmpty());
 
             data.setVersion(param.getVersion());
             data.setSince(param.getSince());
@@ -534,7 +540,7 @@ public class DocViewData {
             data.setExample(body.getExample());
             data.setRequired(body.getRequired());
             data.setType(body.getType());
-            data.setDesc(StringUtils.isNotBlank(body.getDesc()) ? body.getDesc() : "");
+            data.setDescription(body.getDescription().orEmpty());
 
             data.setVersion(body.getVersion());
             data.setSince(body.getSince());

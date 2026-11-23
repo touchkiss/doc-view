@@ -100,7 +100,7 @@ public final class DtoSchemaCacheService {
         copy.setRequired(source.getRequired());
         copy.setName(source.getName());
         copy.setExample(source.getExample());
-        copy.setDesc(source.getDesc());
+        copy.setDescription(source.getDescription());
         copy.setType(source.getType());
         copy.setSince(source.getSince());
         copy.setVersion(source.getVersion());

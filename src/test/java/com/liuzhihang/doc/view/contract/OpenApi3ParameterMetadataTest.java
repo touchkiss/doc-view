@@ -334,6 +334,11 @@ public final class OpenApi3ParameterMetadataTest extends LightJavaCodeInsightFix
         List<Header> headers = SpringPsiUtils.buildHeader(method(controller, "headers"));
         assertEquals(List.of(true, false, false, true),
                 headers.subList(1, headers.size()).stream().map(Header::getRequired).toList());
+        Header defaulted = headers.get(3);
+        assertEquals("fallback", defaulted.getValue());
+        assertEquals("", defaulted.getDesc());
+        assertTrue(defaulted.getDescription().supplementaryText().contains("Spring 默认值"));
+        assertTrue(defaulted.getDescription().supplementaryText().contains("fallback"));
     }
 
     public void testMetadataDoesNotRenameFlattenedFieldsOrRequestBodyAndIgnoresMethodLevelAnnotations() {

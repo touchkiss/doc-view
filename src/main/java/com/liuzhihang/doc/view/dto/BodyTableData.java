@@ -42,7 +42,7 @@ final class BodyTableData {
             copy.setType(row.getType());
             copy.setRequired(row.getRequired());
             copy.setExample(row.getExample());
-            copy.setDesc(row.getDesc());
+            copy.setDescription(row.getDescription());
             copy.setSince(row.getSince());
             copy.setVersion(row.getVersion());
             copy.setTabCount(row.getTabCount());

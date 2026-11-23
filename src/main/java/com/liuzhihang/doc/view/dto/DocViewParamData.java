@@ -57,7 +57,15 @@ public class DocViewParamData {
     /**
      * 参数描述
      */
-    private String desc = "";
+    private DocDescription description = DocDescription.EMPTY;
+
+    public String getDesc() {
+        return description.render();
+    }
+
+    public void setDesc(String desc) {
+        description = DocDescription.legacy(desc);
+    }
 
     /**
      * since

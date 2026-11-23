@@ -10,7 +10,7 @@
 -->
 <idea-plugin>
     <extensions defaultExtensionNs="com.intellij">
-        <applicationService serviceInterface="com.star.easydoc.service.ProtoCommentSupport"
-                            serviceImplementation="com.star.easydoc.proto.ProtoCommentSupportImpl"/>
+        <applicationService serviceInterface="com.liuzhihang.doc.view.service.ProtoCommentSupport"
+                            serviceImplementation="com.liuzhihang.doc.view.proto.ProtoCommentSupportImpl"/>
     </extensions>
 </idea-plugin>

@@ -66,7 +66,7 @@ public class SpringDocViewServiceImpl implements DocViewService {
         docView.setPsiMethod(psiMethod);
         docView.setDocTitle(DocViewUtils.getTitle(psiClass));
         docView.setName(DocViewUtils.getName(psiMethod));
-        docView.setDesc(DocViewUtils.getMethodDesc(psiMethod));
+        docView.setDescription(DocViewUtils.methodDescription(psiMethod));
         docView.setSince(CustomPsiCommentUtils.tagDocComment(psiMethod.getDocComment(), "since"));
         docView.setVersion(CustomPsiCommentUtils.tagDocComment(psiMethod.getDocComment(), "version"));
         docView.setPath(UrlRewriteUtils.rewrite(psiClass.getProject(), SpringPsiUtils.path(psiClass, psiMethod)));

@@ -37,7 +37,15 @@ public class Body {
     /**
      * 参数描述
      */
-    private String desc;
+    private DocDescription description = DocDescription.legacy(null);
+
+    public String getDesc() {
+        return description.render();
+    }
+
+    public void setDesc(String desc) {
+        description = DocDescription.legacy(desc);
+    }
 
     /**
      * 类型

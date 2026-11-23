@@ -32,7 +32,15 @@ public class Header {
     /**
      * 参数备注
      */
-    private String desc;
+    private DocDescription description = DocDescription.legacy(null);
+
+    public String getDesc() {
+        return description.render();
+    }
+
+    public void setDesc(String desc) {
+        description = DocDescription.legacy(desc);
+    }
 
 
 }

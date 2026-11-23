@@ -1,0 +1,36 @@
+package com.liuzhihang.doc.view.service.translator.impl;
+
+import com.intellij.openapi.application.ApplicationManager;
+import com.intellij.psi.PsiElement;
+import com.liuzhihang.doc.view.service.gpt.GptService;
+
+/**
+ * 通用大模型(OpenAI格式)翻译
+ *
+ * @author nanusl
+ * @date 2026/08/05
+ */
+public class OpenAiTranslator extends AbstractTranslator {
+
+    private GptService gptService = ApplicationManager.getApplication().getService(GptService.class);
+
+    private static final String DEFAULT_PROMPT = "Translate from {form} to {to}: {query}";
+
+    @Override
+    protected String translateCh2En(String text, PsiElement psiElement) {
+        return translate("zh", "en", text, psiElement);
+    }
+
+    @Override
+    protected String translateEn2Ch(String text, PsiElement psiElement) {
+        return translate("en", "zh", text, psiElement);
+    }
+
+    private String translate(String from, String to, String query, PsiElement psiElement) {
+        return gptService.chat(DEFAULT_PROMPT
+                .replace("{form}", from)
+                .replace("{to}", to)
+                .replace("{query}", query));
+
+    }
+}

@@ -24,7 +24,7 @@ Platform target: IntelliJ Ultimate 2026.3, built against the local IDEA installa
 ./gradlew clean
 ```
 
-Automated unit/PSI/UI/transport contract tests run with `./gradlew test`. Separate `constantValueTest` and `contentUsingTest` tasks cover fork parser regressions. Some older Swing main programs remain manual exploratory tools. Use a locally installed JDK 25; do not hardcode a personal JDK path in Gradle properties.
+Automated unit/PSI/UI/transport contract tests run with `./gradlew test`. Constant resolution and collection content regression tests also run in this suite. Some older Swing main programs remain manual exploratory tools. Use a locally installed JDK 25; do not hardcode a personal JDK path in Gradle properties.
 
 Plugin version is pinned to `1.99.99` in `gradle.properties` to prevent marketplace auto-update from overwriting local builds.
 
@@ -98,7 +98,7 @@ Platform credentials live in project-scoped `YApiSettings`, `ShowDocSettings`, `
 
 ### Source Read-only Boundary
 
-Document rendering, export, and draft edits read business source files. Doc Editor description and required edits affect copied Markdown drafts. Copy JSON retains its existing type structure and example output. The explicit Source Comments actions and the preview’s confirmed Write to Source action can update standard source documentation. Preview writeback changes only the selected Javadoc description or parameter tag and checks the file modification stamp. Parsing and template preview read metadata without adding proprietary source tags.
+Document rendering, export, and draft edits read business source files. Committing a writable description cell or regenerating a field in Doc Editor writes that field to source. Required flags are read-only results of the parser. Source-less rows support Markdown drafts. Copy JSON retains its existing type structure and example output. The explicit Source Comments actions and Preview confirmation, and Doc Editor field and class actions can update standard source documentation. Preview writeback changes only the selected Javadoc description or parameter tag and checks the file modification stamp. Parsing and template preview read metadata without adding proprietary source tags.
 
 ### Settings Persistence
 

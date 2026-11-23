@@ -64,11 +64,13 @@ public final class ParamDocMarkdownCopyTest extends LightJavaCodeInsightFixtureT
         }
     }
 
-    public void testCopiesCurrentCellEditAndRequiredFlagWithoutWritingSource() throws Exception {
+    public void testCopiesCurrentCellEditAndReadsRequiredFlagFromSource() throws Exception {
+        myFixture.addClass("package jakarta.validation.constraints; public @interface NotNull {}");
         EditorFixture fixture = createEditor("""
+                import jakarta.validation.constraints.NotNull;
                 class CopyEntity {
                     /** Original identifier. */
-                    String id;
+                    @NotNull String id;
                 }
                 """);
         String originalSource = myFixture.getFile().getText();
@@ -77,7 +79,11 @@ public final class ParamDocMarkdownCopyTest extends LightJavaCodeInsightFixtureT
         EdtTestUtil.runInEdtAndWait(() -> {
             ParamTreeTableView table = field(fixture.form(), "tableView", ParamTreeTableView.class);
             int row = rowFor(table, "id");
-            table.setValueAt(true, row, 2);
+            assertEquals(Boolean.TRUE, table.getValueAt(row, 2));
+            assertFalse(table.isCellEditable(row, 2));
+            assertFalse(table.editCellAt(row, 2));
+            table.setValueAt(false, row, 2);
+            assertEquals(Boolean.TRUE, table.getValueAt(row, 2));
             assertTrue("The description must be editable in the real field table", table.editCellAt(row, 3));
             assertInstanceOf(table.getEditorComponent(), JTextField.class);
             ((JTextField) table.getEditorComponent()).setText("Unsaved edited description");

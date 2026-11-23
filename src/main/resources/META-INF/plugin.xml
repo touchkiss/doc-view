@@ -24,20 +24,20 @@
     <depends optional="true" config-file="doc-view-kdoc.xml">org.jetbrains.kotlin</depends>
 
     <extensions defaultExtensionNs="com.intellij">
-        <applicationService serviceImplementation="com.star.easydoc.config.EasyDocConfigComponent"/>
-        <applicationService serviceImplementation="com.star.easydoc.javadoc.service.JavaDocGeneratorServiceImpl"/>
-        <applicationService serviceImplementation="com.star.easydoc.service.WriterService"/>
-        <applicationService serviceImplementation="com.star.easydoc.service.PackageInfoService"/>
-        <applicationService serviceImplementation="com.star.easydoc.service.translator.TranslatorService"/>
-        <applicationService serviceImplementation="com.star.easydoc.javadoc.service.variable.JavadocVariableGeneratorService"/>
-        <applicationService serviceImplementation="com.star.easydoc.service.gpt.GptService"/>
+        <applicationService serviceImplementation="com.liuzhihang.doc.view.config.EasyDocConfigComponent"/>
+        <applicationService serviceImplementation="com.liuzhihang.doc.view.javadoc.service.JavaDocGeneratorServiceImpl"/>
+        <applicationService serviceImplementation="com.liuzhihang.doc.view.service.WriterService"/>
+        <applicationService serviceImplementation="com.liuzhihang.doc.view.service.PackageInfoService"/>
+        <applicationService serviceImplementation="com.liuzhihang.doc.view.service.translator.TranslatorService"/>
+        <applicationService serviceImplementation="com.liuzhihang.doc.view.javadoc.service.variable.JavadocVariableGeneratorService"/>
+        <applicationService serviceImplementation="com.liuzhihang.doc.view.service.gpt.GptService"/>
 
-        <applicationConfigurable id="easydoc.common.settings" parentId="liuzhihang.api.doc.SettingsConfigurable" displayName="源码注释与 AI" instance="com.star.easydoc.view.settings.CommonSettingsConfigurable"/>
+        <applicationConfigurable id="easydoc.common.settings" parentId="liuzhihang.api.doc.SettingsConfigurable" displayName="源码注释与 AI" instance="com.liuzhihang.doc.view.view.settings.CommonSettingsConfigurable"/>
 
-        <applicationConfigurable parentId="easydoc.common.settings" id="easydoc.javadoc.settings" displayName="Java 注释" instance="com.star.easydoc.view.settings.javadoc.JavadocSettingsConfigurable">
-            <configurable parentId="easydoc.javadoc.settings" displayName="类注释模板" instance="com.star.easydoc.view.settings.javadoc.template.ClassSettingsConfigurable"/>
-            <configurable parentId="easydoc.javadoc.settings" displayName="方法注释模板" instance="com.star.easydoc.view.settings.javadoc.template.MethodSettingsConfigurable"/>
-            <configurable parentId="easydoc.javadoc.settings" displayName="字段注释模板" instance="com.star.easydoc.view.settings.javadoc.template.FieldSettingsConfigurable"/>
+        <applicationConfigurable parentId="easydoc.common.settings" id="easydoc.javadoc.settings" displayName="Java 注释" instance="com.liuzhihang.doc.view.view.settings.javadoc.JavadocSettingsConfigurable">
+            <configurable parentId="easydoc.javadoc.settings" displayName="类注释模板" instance="com.liuzhihang.doc.view.view.settings.javadoc.template.ClassSettingsConfigurable"/>
+            <configurable parentId="easydoc.javadoc.settings" displayName="方法注释模板" instance="com.liuzhihang.doc.view.view.settings.javadoc.template.MethodSettingsConfigurable"/>
+            <configurable parentId="easydoc.javadoc.settings" displayName="字段注释模板" instance="com.liuzhihang.doc.view.view.settings.javadoc.template.FieldSettingsConfigurable"/>
         </applicationConfigurable>
 
 
@@ -152,7 +152,7 @@
     </extensions>
 
     <actions>
-        <action id="liuzhihang.doc.sourceComments.generateAll" class="com.star.easydoc.action.GenerateAllJavadocAction" text="批量生成 Javadoc">
+        <action id="liuzhihang.doc.sourceComments.generateAll" class="com.liuzhihang.doc.view.action.GenerateAllJavadocAction" text="批量生成 Javadoc">
             <add-to-group group-id="JavaGenerateGroup1" anchor="before" relative-to-action="GenerateEquals"/>
             <keyboard-shortcut keymap="$default" first-keystroke="ctrl shift BACK_SLASH"/>
             <keyboard-shortcut keymap="Mac OS X" first-keystroke="ctrl shift BACK_SLASH"/>
@@ -167,7 +167,7 @@
             <add-to-group group-id="EditorPopupMenu" anchor="last"/>
             <add-to-group group-id="ProjectViewPopupMenu" anchor="last"/>
             <add-to-group group-id="ToolsMenu" anchor="last"/>
-            <action id="liuzhihang.doc.sourceComments.generate" class="com.star.easydoc.action.GenerateJavadocAction" text="生成注释或翻译选区">
+            <action id="liuzhihang.doc.sourceComments.generate" class="com.liuzhihang.doc.view.action.GenerateJavadocAction" text="生成注释或翻译选区">
                 <keyboard-shortcut keymap="$default" first-keystroke="ctrl BACK_SLASH"/>
                 <keyboard-shortcut keymap="Mac OS X" first-keystroke="ctrl BACK_SLASH"/>
                 <keyboard-shortcut keymap="Mac OS X" first-keystroke="meta BACK_SLASH"/>
@@ -176,14 +176,14 @@
             </action>
             <reference ref="liuzhihang.doc.sourceComments.generateAll"/>
             <action id="liuzhihang.doc.sourceComments.generateMembers"
-                    class="com.star.easydoc.action.GenerateClassMembersJavadocAction" text="生成全部成员注释">
+                    class="com.liuzhihang.doc.view.action.GenerateClassMembersJavadocAction" text="生成全部成员注释">
                 <keyboard-shortcut keymap="$default" first-keystroke="ctrl alt BACK_SLASH"/>
                 <keyboard-shortcut keymap="Mac OS X" first-keystroke="ctrl alt BACK_SLASH"/>
                 <keyboard-shortcut keymap="Mac OS X" first-keystroke="meta alt BACK_SLASH"/>
                 <keyboard-shortcut keymap="Mac OS X 10.5+" first-keystroke="ctrl alt BACK_SLASH"/>
                 <keyboard-shortcut keymap="Mac OS X 10.5+" first-keystroke="meta alt BACK_SLASH"/>
             </action>
-            <action id="liuzhihang.doc.sourceComments.analyzeTerms" class="com.star.easydoc.glossary.AnalyzeProjectTermsAction"
+            <action id="liuzhihang.doc.sourceComments.analyzeTerms" class="com.liuzhihang.doc.view.glossary.AnalyzeProjectTermsAction"
                     text="AI 分析项目术语"/>
         </group>
 
