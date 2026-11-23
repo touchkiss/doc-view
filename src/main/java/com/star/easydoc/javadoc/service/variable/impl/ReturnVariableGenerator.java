@@ -1,0 +1,55 @@
+package com.star.easydoc.javadoc.service.variable.impl;
+
+import java.util.function.Supplier;
+
+import com.intellij.openapi.application.ApplicationManager;
+import com.intellij.psi.PsiElement;
+import com.intellij.psi.PsiMethod;
+import com.intellij.psi.PsiTypeElement;
+import com.star.easydoc.common.Consts;
+import com.star.easydoc.service.translator.TranslatorService;
+
+/**
+ * 返回变量生成器
+ *
+ * @author <a href="mailto:wangchao.star@gmail.com">wangchao</a>
+ * @date 2025/07/28
+ */
+public class ReturnVariableGenerator extends AbstractVariableGenerator {
+    private final TranslatorService translatorService = ApplicationManager.getApplication().getService(TranslatorService.class);
+
+    @Override
+    public String generate(PsiElement element) {
+        return prepare(element).get();
+    }
+
+    @Override
+    public Supplier<String> prepare(PsiElement element) {
+        if (!(element instanceof PsiMethod)) {
+            return () -> "";
+        }
+        PsiMethod psiMethod = (PsiMethod)element;
+        PsiTypeElement returns = psiMethod.getReturnTypeElement();
+        if (returns == null) {
+            return () -> "";
+        }
+        String returnName = returns.getText();
+
+        if (Consts.BASE_TYPE_SET.contains(returnName)) {
+            return () -> "@return " + returnName;
+        } else if ("void".equalsIgnoreCase(returnName)) {
+            return () -> "";
+        } else {
+            if (getConfig().isCodeMethodReturnType()) {
+                return () -> "@return {@code " + returnName + " }";
+            } else if (getConfig().isLinkMethodReturnType()) {
+                return () -> "@return " + returnName.replaceAll("[^<> ,]+", "{@link $0 }");
+            } else if (getConfig().isDocMethodReturnType()) {
+                Supplier<String> description = translatorService.prepareTranslationWithClass(returnName,
+                    returns.getType().getCanonicalText(), element.getProject(), element);
+                return () -> "@return " + description.get();
+            }
+            return () -> String.format("@return {@link %s }", returnName);
+        }
+    }
+}

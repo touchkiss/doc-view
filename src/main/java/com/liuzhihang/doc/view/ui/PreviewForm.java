@@ -5,6 +5,9 @@ import icons.DocViewIcons;
 import com.intellij.openapi.actionSystem.*;
 import com.intellij.openapi.actionSystem.toolbarLayout.ToolbarLayoutStrategy;
 import com.intellij.openapi.application.ApplicationManager;
+import com.intellij.openapi.application.ReadAction;
+import com.intellij.openapi.project.DumbService;
+import com.intellij.psi.PsiDocumentManager;
 import com.intellij.openapi.command.WriteCommandAction;
 import com.intellij.openapi.util.Disposer;
 import com.intellij.openapi.editor.Document;
@@ -44,6 +47,7 @@ import com.liuzhihang.doc.view.enums.UploadPlatform;
 import com.liuzhihang.doc.view.notification.DocViewNotification;
 import com.liuzhihang.doc.view.service.DocViewService;
 import com.liuzhihang.doc.view.service.DocViewUploadService;
+import com.liuzhihang.doc.view.service.SourceDescriptionService;
 import com.liuzhihang.doc.view.utils.EditorUtils;
 import com.liuzhihang.doc.view.utils.ExportUtils;
 import lombok.extern.slf4j.Slf4j;
@@ -68,7 +72,6 @@ import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
-import java.util.HashMap;
 import java.util.Collections;
 import java.util.IdentityHashMap;
 import java.util.stream.Collectors;
@@ -191,12 +194,11 @@ public class PreviewForm implements Disposable {
     /**
      * 文档 Map
      */
-    private Map<String, DocView> docViewMap;
 
     private Map<DocView, ClassPresentation> classPresentations = Map.of();
     private ListSelectionListener catalogSelectionListener;
 
-    private final Map<String, String> markdownCache = new HashMap<>();
+    private final Map<DocView, MarkdownCacheEntry> markdownCache = new IdentityHashMap<>();
     private final AtomicLong renderRequest = new AtomicLong();
     private final AtomicLong loadRequest = new AtomicLong();
     private final ConcurrentMap<Long, ProgressIndicator> renderIndicators = new ConcurrentHashMap<>();
@@ -328,7 +330,6 @@ public class PreviewForm implements Disposable {
         currentMarkdownText = null;
         currentDocView = null;
         docViewList = null;
-        docViewMap = null;
     }
 
     private static void cancelIndicators(@NotNull ConcurrentMap<Long, ProgressIndicator> indicators) {
@@ -583,6 +584,45 @@ public class PreviewForm implements Disposable {
 
         });
 
+        leftGroup.add(new AnAction("重新生成注释") {
+            @Override
+            public boolean displayTextInToolbar() {
+                return true;
+            }
+
+            @Override
+            public @NotNull ActionUpdateThread getActionUpdateThread() {
+                return ActionUpdateThread.EDT;
+            }
+
+            @Override
+            public void update(@NotNull AnActionEvent event) {
+                event.getPresentation().setEnabled(!disposed && currentDocView != null
+                        && !DumbService.isDumb(project));
+                            }
+
+            @Override
+            public void actionPerformed(@NotNull AnActionEvent event) {
+                if (currentDocView == null) {
+                    return;
+                }
+                PsiDocumentManager.getInstance(project).commitAllDocuments();
+                var targets = ReadAction.compute(() -> SourceDescriptionService.targets(currentDocView));
+                if (targets.isEmpty()) {
+                    DocViewNotification.notifyInfo(project, "当前文档没有可写入的 Java 源码注释。");
+                    return;
+                }
+                boolean wasPinned = myIsPinned.getAndSet(true);
+                try {
+                    if (new SourceDescriptionDialog(project, targets).showAndGet() && !disposed) {
+                        buildDoc();
+                    }
+                } finally {
+                    myIsPinned.set(wasPinned);
+                }
+            }
+        });
+
         ActionToolbar toolbar = ActionManager.getInstance().createActionToolbar("DocViewEditorLeftToolbar", leftGroup, true);
         toolbar.setTargetComponent(previewToolbarPanel);
         toolbar.getComponent().setBackground(UIUtil.getPanelBackground());
@@ -813,9 +853,8 @@ public class PreviewForm implements Disposable {
             return;
         }
 
+        markdownCache.clear();
         docViewList = List.copyOf(loadedDocViewList);
-
-        docViewMap = docViewList.stream().collect(Collectors.toMap(DocView::getName, docView -> docView));
 
         Vector<String> nameVector = docViewList.stream().map(DocView::getName).collect(Collectors.toCollection(Vector::new));
 
@@ -823,6 +862,7 @@ public class PreviewForm implements Disposable {
             catalogList.removeListSelectionListener(catalogSelectionListener);
         }
 
+        DocView previous = currentDocView;
         catalogList.setListData(nameVector);
 
         catalogSelectionListener = catalog -> {
@@ -831,9 +871,9 @@ public class PreviewForm implements Disposable {
                 return;
             }
 
-            String selectedValue = catalogList.getSelectedValue();
-
-            currentDocView = docViewMap.get(selectedValue);
+            int selectedIndex = catalogList.getSelectedIndex();
+            currentDocView = selectedIndex >= 0 && selectedIndex < docViewList.size()
+                    ? docViewList.get(selectedIndex) : null;
 
             if (currentDocView == null) {
                 return;
@@ -847,9 +887,17 @@ public class PreviewForm implements Disposable {
         };
         catalogList.addListSelectionListener(catalogSelectionListener);
 
-        // 默认选择第一个
         if (!docViewList.isEmpty()) {
-            catalogList.setSelectedIndex(0);
+            int selection = 0;
+            if (previous != null && previous.getPsiMethod() != null) {
+                for (int i = 0; i < docViewList.size(); i++) {
+                    if (Objects.equals(previous.getPsiMethod(), docViewList.get(i).getPsiMethod())) {
+                        selection = i;
+                        break;
+                    }
+                }
+            }
+            catalogList.setSelectedIndex(selection);
         } else {
             currentDocView = null;
             showPreviewStatus(DocViewBundle.message("ui.preview.empty"));
@@ -866,7 +914,8 @@ public class PreviewForm implements Disposable {
         showPreviewStatus(DocViewBundle.message("ui.preview.rendering"));
 
         String cacheKey = markdownCacheKey(docView);
-        String cachedMarkdown = markdownCache.get(cacheKey);
+        MarkdownCacheEntry entry = markdownCache.get(docView);
+        String cachedMarkdown = entry != null && entry.key().equals(cacheKey) ? entry.markdown() : null;
 
         boolean generateHtml = jcefBrowser != null;
         AtomicReference<RenderResult> result = new AtomicReference<>();
@@ -905,7 +954,7 @@ public class PreviewForm implements Disposable {
                 if (isCurrentRender(requestId, docView)) {
                     RenderResult rendered = result.get();
                     try {
-                        markdownCache.put(cacheKey, rendered.markdownText());
+                        markdownCache.put(docView, new MarkdownCacheEntry(cacheKey, rendered.markdownText()));
                         applyMarkdown(docView, rendered.markdownText(), rendered.htmlText(), requestId);
                     } catch (RuntimeException exception) {
                         handleRenderFailure(requestId, exception);
@@ -1073,6 +1122,8 @@ public class PreviewForm implements Disposable {
 
     private record AllExportSnapshot(@NotNull String className, @NotNull List<DocView> docViews) {
     }
+
+    private record MarkdownCacheEntry(String key, String markdown) {}
 
     private String markdownCacheKey(@NotNull DocView docView) {
         Settings settings = Settings.getInstance(project);

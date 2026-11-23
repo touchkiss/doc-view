@@ -6,8 +6,11 @@
   通过 optional depends + 独立 config-file 的方式，保证插件在缺少 Protocol Buffers 时仍可正常加载，
   此时 .proto 上的 Doc View 不可用，Java/Spring/Dubbo/POJO 功能不受影响。
 
-  目前无需注册额外的扩展点：proto 相关能力通过
-  ProtoPluginSupport.isAvailable() 在运行时判断后再触达 protobuf PSI。
+  源码注释动作通过可选服务调用 protobuf PSI。
 -->
 <idea-plugin>
+    <extensions defaultExtensionNs="com.intellij">
+        <applicationService serviceInterface="com.star.easydoc.service.ProtoCommentSupport"
+                            serviceImplementation="com.star.easydoc.proto.ProtoCommentSupportImpl"/>
+    </extensions>
 </idea-plugin>

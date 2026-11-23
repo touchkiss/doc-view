@@ -11,6 +11,7 @@
 | 接口解析 | Spring MVC Controller、Feign 接口、Dubbo 服务 |
 | 数据结构 | POJO、record；安装 Protocol Buffers 插件后支持 Proto message 结构解析 |
 | 源码元数据 | 标准 JavaDoc、Swagger / OpenAPI、Validation、Spring 参数注解 |
+| 源码注释 | Java Javadoc、Kotlin KDoc、Proto 注释、Java 批量和包注释、模板、词典、选区翻译与 AI 项目术语 |
 | 文档输出 | Markdown 预览、复制、单独或批量导出；JSON 与带字段说明的 JSON5 示例 |
 | 原生 HTTP Client 增强 | `.http` / `.rest` 请求体 JSON5 编辑、单条运行、Run All、Convert to cURL and Copy |
 | 请求示例 | Spring / Feign 的 cURL、IDEA HTTP Client 请求和 Postman Collection；Proto RPC 的 gRPC 请求文本 |
@@ -18,7 +19,15 @@
 | 平台集成 | YApi、ShowDoc、语雀（YuQue） |
 | Agent 接入 | 通过本机 MCP 服务将指定 Java Controller 文档上传到 YApi |
 
-文档操作保持业务源码只读。`Doc Editor` 中的描述、必填等编辑仅用于复制 Markdown 草稿，不写回 JavaDoc、Swagger / OpenAPI 注解，也不自动保存业务源码。复制 JSON 仍按类型结构生成示例。
+预览、复制和导出接口文档时只读取源码。通过预览工具栏的 **重新生成注释**，可以选中 Java 接口说明、请求参数或请求/响应字段，生成并编辑候选说明，确认后写回对应 Javadoc 并刷新预览。`Doc Editor` 中的描述、必填等编辑仅用于复制 Markdown 草稿，不写回 JavaDoc、Swagger / OpenAPI 注解，也不自动保存业务源码。复制 JSON 仍按类型结构生成示例。
+
+## 生成源码注释
+
+- 在编辑器右键选择 **Doc View 源码注释 → 生成注释或翻译选区**。光标所在的 Java 或 Kotlin 声明会生成文档注释。选中文本时可查看翻译结果，或将中文替换为英文命名。Java 支持多光标、record 组件和后台批量生成，Proto 支持单项和批量成员注释，Java 源码目录支持生成 `package-info.java`。
+- 在 **设置 → 工具 → Doc View → 源码注释与 AI** 配置模板、词典、翻译及大模型，可导入原插件导出的 `easy_javadoc.json`。已有注释默认跳过，可设为补齐缺失标签或强制覆盖。默认使用 `Ctrl+\`（macOS 也可用 `⌘+\`），快捷键可在 Keymap 中配置。通用大模型支持填写基础地址（如 `http://127.0.0.1:8317/v1`）或完整的 `/chat/completions` 地址。本地服务无需认证时，密钥可留空。
+- 在 **工具 → Doc View 源码注释 → AI 分析项目术语** 启动分析。确认后，插件抽取项目 Java/Kotlin 源码中的最多 400 个声明标识符，向配置的模型请求候选术语。可以编辑、勾选并逐条保存到当前项目或全局。项目映射按本机项目目录区分，生成注释时优先采用项目释义。已有映射默认不勾选。
+
+源码注释功能基于 [Easy Javadoc](https://github.com/starcwang/easy_javadoc/tree/4facf16a83093308da805ca9792bdffc07296139) 4.5.9，另包含本地分支的多光标、record、Proto 和后台批量生成能力。插件内附 Apache-2.0 许可与来源说明。
 
 ## 安装与环境
 

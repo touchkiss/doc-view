@@ -1,6 +1,14 @@
 package com.liuzhihang.doc.view.ui;
 
+import com.intellij.ide.DataManager;
+import com.intellij.openapi.options.Configurable;
+import com.intellij.openapi.options.ShowSettingsUtil;
 import com.intellij.openapi.project.Project;
+import com.intellij.ui.components.ActionLink;
+import com.liuzhihang.doc.view.config.GenerationRulesConfigurable;
+import com.liuzhihang.doc.view.config.IntegrationSettingsConfigurable;
+import com.liuzhihang.doc.view.config.TemplateConfigurable;
+import com.star.easydoc.view.settings.CommonSettingsConfigurable;
 import com.intellij.ui.ContextHelpLabel;
 import com.intellij.ui.ToolbarDecorator;
 import com.intellij.ui.components.JBTextField;
@@ -27,6 +35,7 @@ import javax.swing.BoxLayout;
 import java.awt.BorderLayout;
 import java.awt.Component;
 import java.awt.FlowLayout;
+import java.awt.event.ActionListener;
 
 /**
  * The project-wide behavior settings shown on the Doc View root page.
@@ -61,6 +70,8 @@ public final class SettingsForm {
         content.setLayout(new BoxLayout(content, BoxLayout.Y_AXIS));
         content.setBorder(JBUI.Borders.empty(8, 12));
         content.setAlignmentX(Component.LEFT_ALIGNMENT);
+
+        content.add(workflowLinks());
 
         JPanel behaviorPanel = new JPanel();
         behaviorPanel.setLayout(new BoxLayout(behaviorPanel, BoxLayout.Y_AXIS));
@@ -117,6 +128,29 @@ public final class SettingsForm {
         content.add(links);
 
         rootPanel.add(content, BorderLayout.NORTH);
+    }
+
+    private JPanel workflowLinks() {
+        JPanel links = new JPanel(new FlowLayout(FlowLayout.LEFT, JBUI.scale(12), JBUI.scale(5)));
+        links.setAlignmentX(Component.LEFT_ALIGNMENT);
+        links.add(settingsLink("源码注释与 AI", CommonSettingsConfigurable.class));
+        links.add(settingsLink(DocViewBundle.message("settings.page.rules"), GenerationRulesConfigurable.class));
+        links.add(settingsLink(DocViewBundle.message("settings.page.template"), TemplateConfigurable.class));
+        links.add(settingsLink(DocViewBundle.message("settings.page.integrations"), IntegrationSettingsConfigurable.class));
+        return links;
+    }
+
+    private ActionLink settingsLink(String title, Class<? extends Configurable> settingsPage) {
+        return new ActionLink(title, (ActionListener) event -> {
+            var context = DataManager.getInstance().getDataContext((Component) event.getSource());
+            var settings = com.intellij.openapi.options.ex.Settings.KEY.getData(context);
+            var page = settings == null ? null : settings.find(settingsPage);
+            if (page != null) {
+                settings.select(page);
+            } else {
+                ShowSettingsUtil.getInstance().showSettingsDialog(project, settingsPage);
+            }
+        });
     }
 
     public JPanel getRootPanel() {

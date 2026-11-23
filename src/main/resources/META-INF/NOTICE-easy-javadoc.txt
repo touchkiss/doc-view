@@ -1,0 +1,4 @@
+Easy Javadoc, https://github.com/starcwang/easy_javadoc
+Source revision 4facf16a83093308da805ca9792bdffc07296139 (4.5.9).
+Includes adaptations from the touchkiss/easy_javadoc fork (ea5f7a3 and local asynchronous generation changes).
+Imported and modified for Doc View. Apache License 2.0 applies to the imported code.

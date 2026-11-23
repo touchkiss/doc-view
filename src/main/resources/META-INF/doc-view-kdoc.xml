@@ -1,0 +1,13 @@
+<idea-plugin>
+    <extensions defaultExtensionNs="com.intellij">
+        <applicationService serviceInterface="com.star.easydoc.service.KdocSupport"
+                            serviceImplementation="com.star.easydoc.kdoc.KdocSupportImpl"/>
+        <applicationService serviceImplementation="com.star.easydoc.kdoc.service.KdocGeneratorServiceImpl"/>
+        <applicationService serviceImplementation="com.star.easydoc.kdoc.service.variable.KdocVariableGeneratorService"/>
+        <applicationConfigurable parentId="easydoc.common.settings" id="easydoc.kdoc.settings" displayName="Kotlin 注释" instance="com.star.easydoc.view.settings.kdoc.KdocSettingsConfigurable">
+            <configurable parentId="easydoc.kdoc.settings" displayName="类注释模板" instance="com.star.easydoc.view.settings.kdoc.template.KtClassSettingsConfigurable"/>
+            <configurable parentId="easydoc.kdoc.settings" displayName="函数注释模板" instance="com.star.easydoc.view.settings.kdoc.template.KtMethodSettingsConfigurable"/>
+            <configurable parentId="easydoc.kdoc.settings" displayName="属性注释模板" instance="com.star.easydoc.view.settings.kdoc.template.KtFieldSettingsConfigurable"/>
+        </applicationConfigurable>
+    </extensions>
+</idea-plugin>

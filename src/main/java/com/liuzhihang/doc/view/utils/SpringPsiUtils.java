@@ -322,6 +322,7 @@ public class SpringPsiUtils extends ParamPsiUtils {
 //            }
             PsiAnnotation requestHeader = AnnotationUtil.findAnnotation(parameter, SpringConstant.REQUEST_HEADER);
             Header header = new Header();
+            header.setPsiElement(parameter);
             header.setRequired(isParameterRequired(parameter));
             header.setName(parameterName(parameter));
             String desc = parameterMetadata(parameter, "description");
@@ -351,6 +352,12 @@ public class SpringPsiUtils extends ParamPsiUtils {
         // 基本类型
         if (type instanceof PsiPrimitiveType || FieldTypeConstant.FIELD_TYPE.containsKey(type.getPresentableText())) {
             Body body = new Body();
+            body.setPsiElement(parameter);
+            String description = parameterMetadata(parameter, "description");
+            if (description == null && parameter.getDeclarationScope() instanceof PsiMethod method) {
+                description = CustomPsiCommentUtils.paramDocComment(method.getDocComment(), parameter);
+            }
+            body.setDesc(description);
             body.setRequired(DocViewUtils.isRequired(parameter));
             body.setName(parameter.getName());
             body.setType(parameter.getType().getPresentableText());

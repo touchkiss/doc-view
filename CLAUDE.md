@@ -98,7 +98,7 @@ Platform credentials live in project-scoped `YApiSettings`, `ShowDocSettings`, `
 
 ### Source Read-only Boundary
 
-Plugin document actions must not change or save business source files, JavaDoc or Swagger/OpenAPI annotations. Doc Editor description/required edits affect copied Markdown drafts only. Copy JSON retains its existing type structure/example output. There is no confirmation action that writes edits back. Parsing and template preview read metadata without adding proprietary source tags.
+Document rendering, export, and draft edits read business source files. Doc Editor description and required edits affect copied Markdown drafts. Copy JSON retains its existing type structure and example output. The explicit Source Comments actions and the preview’s confirmed Write to Source action can update standard source documentation. Preview writeback changes only the selected Javadoc description or parameter tag and checks the file modification stamp. Parsing and template preview read metadata without adding proprietary source tags.
 
 ### Settings Persistence
 

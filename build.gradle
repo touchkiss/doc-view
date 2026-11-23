@@ -6,6 +6,7 @@ import org.jetbrains.intellij.platform.gradle.tasks.VerifyPluginTask
 
 plugins {
     id 'java'
+    id 'org.jetbrains.kotlin.jvm' version '2.4.20'
     id 'org.jetbrains.intellij.platform' version '2.17.0'
     id 'org.jetbrains.changelog' version '2.1.2'
 }
@@ -40,6 +41,11 @@ dependencies {
     testRuntimeOnly files(new File(localIde, 'Contents/plugins/java/lib/idea_rt.jar'))
 
     compileOnly group: 'org.projectlombok', name: 'lombok', version: '1.18.42'
+    implementation 'com.alibaba.fastjson2:fastjson2:2.0.61'
+    implementation 'org.apache.commons:commons-lang3:3.20.0'
+    implementation 'commons-io:commons-io:2.22.0'
+    implementation 'com.auth0:java-jwt:4.4.0'
+    implementation 'org.apache.groovy:groovy:4.0.32'
     implementation group: 'org.commonmark', name: 'commonmark', version: '0.29.0'
     implementation 'de.marhali:json5-java:3.0.0'
     implementation group: 'org.apache.commons', name: 'commons-collections4', version: '4.5.0'
@@ -57,6 +63,7 @@ dependencies {
         testFramework TestFrameworkType.Plugin.Java.INSTANCE
 
         bundledPlugin('com.intellij.java')
+        bundledPlugin('org.jetbrains.kotlin')
         bundledPlugin('com.intellij.xml')
         bundledPlugin('intellij.java.aetherDependencyResolver.plugin')
         // Java/Proto and native HTTP Client platform modules in IDEA 2026.3.
@@ -96,6 +103,8 @@ sourceSets {
 }
 
 configurations {
+    // The Java test framework also pulls Groovy 3, which conflicts with the script runtime.
+    testImplementation.exclude group: 'org.codehaus.groovy', module: 'groovy'
     constantValueTestImplementation.extendsFrom testImplementation
     constantValueTestRuntimeOnly.extendsFrom testRuntimeOnly
     contentUsingTestImplementation.extendsFrom testImplementation
