@@ -109,6 +109,7 @@ public final class DtoSchemaCacheService {
         copy.setCollection(source.isCollection());
         copy.setMap(source.isMap());
         copy.setSyntheticContainerNode(source.isSyntheticContainerNode());
+        copy.setOmitFromExample(source.isOmitFromExample());
         for (Body child : source.getChildList()) {
             ProgressManager.checkCanceled();
             copy.getChildList().add(copyBody(child, copy, keepPsiElement));

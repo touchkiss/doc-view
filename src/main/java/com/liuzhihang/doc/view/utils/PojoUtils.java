@@ -5,13 +5,11 @@ import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.util.Computable;
 import com.intellij.psi.*;
 import com.intellij.psi.util.PsiTypesUtil;
-import com.intellij.psi.util.PsiUtil;
 import com.liuzhihang.doc.view.config.Settings;
 import com.liuzhihang.doc.view.constant.FieldTypeConstant;
 import com.liuzhihang.doc.view.dto.Body;
 import org.jetbrains.annotations.NotNull;
 
-import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Objects;
@@ -53,20 +51,7 @@ public class PojoUtils extends ParamPsiUtils {
         PsiClassType psiClassType = (PsiClassType) type;
         Map<String, PsiType> genericsMap = CustomPsiUtils.getGenericsMap(psiClassType);
 
-        if (psiClass.isRecord()) {
-            for (PsiRecordComponent component : psiClass.getRecordComponents()) {
-                ParamPsiUtils.buildBodyParamFromComponent(psiClass, component, genericsMap, root, new HashMap<>());
-            }
-        } else {
-            for (PsiField field : psiClass.getAllFields()) {
-                // 通用排除字段
-                if (DocViewUtils.isExcludeField(field, isProto)) {
-                    continue;
-                }
-                // 增加 genericsMap 参数传入，用于将泛型 T 替换为原始对象
-                ParamPsiUtils.buildBodyParam(psiClass, field, genericsMap, root, new HashMap<>(), isProto);
-            }
-        }
+        ParamPsiUtils.buildBodyList(psiClass, genericsMap, root, isProto);
         return root;
     }
 

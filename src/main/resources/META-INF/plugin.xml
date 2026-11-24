@@ -169,10 +169,8 @@
             <add-to-group group-id="ToolsMenu" anchor="last"/>
             <action id="liuzhihang.doc.sourceComments.generate" class="com.liuzhihang.doc.view.action.GenerateJavadocAction" text="生成注释或翻译选区">
                 <keyboard-shortcut keymap="$default" first-keystroke="ctrl BACK_SLASH"/>
-                <keyboard-shortcut keymap="Mac OS X" first-keystroke="ctrl BACK_SLASH"/>
-                <keyboard-shortcut keymap="Mac OS X" first-keystroke="meta BACK_SLASH"/>
-                <keyboard-shortcut keymap="Mac OS X 10.5+" first-keystroke="ctrl BACK_SLASH"/>
-                <keyboard-shortcut keymap="Mac OS X 10.5+" first-keystroke="meta BACK_SLASH"/>
+                <keyboard-shortcut keymap="Mac OS X" first-keystroke="ctrl BACK_SLASH" replace-all="true"/>
+                <keyboard-shortcut keymap="Mac OS X 10.5+" first-keystroke="ctrl BACK_SLASH" replace-all="true"/>
             </action>
             <reference ref="liuzhihang.doc.sourceComments.generateAll"/>
             <action id="liuzhihang.doc.sourceComments.generateMembers"

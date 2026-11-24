@@ -60,7 +60,22 @@ public class ParamPsiUtils {
     private static void buildBodyParam(PsiClass parentClass, PsiField field, Map<String, PsiType> genericsMap,
                                        Body parent, Map<String, Boolean> parentChildPair, boolean parentIsProto,
                                        DtoParsingContext context) {
+        JacksonPropertyProjection projection = parentClass == null ? null : new JacksonPropertyProjection(parentClass, parentIsProto);
+        if (projection != null && !projection.includes(field, projection.name(field, parentIsProto))) {
+            return;
+        }
+        buildBodyProperty(parentClass, field, genericsMap, parent, parentChildPair, parentIsProto, context, projection);
+    }
+
+    private static void buildBodyProperty(PsiClass parentClass, PsiDocCommentOwner member, Map<String, PsiType> genericsMap,
+                                          Body parent, Map<String, Boolean> parentChildPair, boolean parentIsProto,
+                                          DtoParsingContext context, JacksonPropertyProjection projection) {
         ProgressManager.checkCanceled();
+        PsiField field = member instanceof PsiField propertyField ? propertyField : null;
+        PsiType declaredType = field != null ? field.getType() : ((PsiMethod) member).getReturnType();
+        String fieldName = field != null
+                ? (projection == null ? DocViewUtils.fieldName(field, parentIsProto) : projection.name(field, parentIsProto))
+                : JacksonPropertyProjection.getterName((PsiMethod) member);
 
         // parentChildPair 语义：当前递归路径栈（而非"全局已访问集合"）
         // - 进入时入栈，退出时出栈（try-finally 保证）
@@ -68,7 +83,7 @@ public class ParamPsiUtils {
         // - 不同分支（A.c 和 B.c 都持有 C 类型字段）可以各自完整解析 C 的子字段
         String parentQName = (parentClass != null && parentClass.getQualifiedName() != null)
                 ? parentClass.getQualifiedName() : "";
-        String pair = parentQName + "_" + field.getName();
+        String pair = parentQName + "_" + member.getName();
         if (parentChildPair.containsKey(pair)) {
             // 当前字段已在递归路径上，跳过以防循环
             return;
@@ -76,16 +91,15 @@ public class ParamPsiUtils {
         parentChildPair.put(pair, true);
         try {
 
-        PsiType type = field.getType();
+        PsiType type = declaredType;
         boolean isProto = ProtoUtils.isProto(type);
         Body body = new Body();
-        body.setRequired(DocViewUtils.isRequired(field));
-        String fieldName = DocViewUtils.fieldName(field, parentIsProto);
+        body.setRequired(field != null && DocViewUtils.isRequired(field));
         body.setName(fieldName);
-        body.setPsiElement(field);
-        PsiField documentationField = DependencySourceComments.documentationField(field);
-        body.setSince(CustomPsiCommentUtils.tagDocComment(documentationField.getDocComment(), "since"));
-        body.setVersion(CustomPsiCommentUtils.tagDocComment(documentationField.getDocComment(), "version"));
+        body.setPsiElement(member);
+        PsiDocCommentOwner documentationMember = field == null ? member : DependencySourceComments.documentationField(field);
+        body.setSince(CustomPsiCommentUtils.tagDocComment(documentationMember.getDocComment(), "since"));
+        body.setVersion(CustomPsiCommentUtils.tagDocComment(documentationMember.getDocComment(), "version"));
         boolean parseProtoFieldDesc = false;
         boolean isProtoMap = false;
         if (parentIsProto) {
@@ -148,12 +162,17 @@ public class ParamPsiUtils {
         }
         if (!parseProtoFieldDesc) {
             body.setType(type.getPresentableText());
-            body.setDescription(DocViewUtils.fieldDescription(field));
+            if (field == null) {
+                String comment = CustomPsiCommentUtils.descriptionBody(member.getDocComment());
+                body.setDescription(DocDescription.local(comment, comment));
+            } else {
+                body.setDescription(DocViewUtils.fieldDescription(field));
+            }
 
             // 提前替换字段比如 T -> UserDTO   List<T> -> List<UserDTO>
             // 如果是泛型, 且泛型字段是当前字段, 将当前字段类型替换為泛型類型, 替換完之後重新設置 body 的 type
-            type = replaceFieldType(genericsMap, type);
-            JsonWireType wireType = JacksonPsiUtils.resolveJsonWireType(field, type);
+            type = projection == null ? replaceFieldType(genericsMap, type) : projection.memberType(member, type, genericsMap);
+            JsonWireType wireType = JacksonPsiUtils.resolveJsonWireType(member, type);
             body.setType(wireType.isOverridden() ? wireType.getJsonType() : type.getPresentableText());
             qualifiedName = wireType.isOverridden() ? wireType.getJsonType() : type.getPresentableText();
             body.setQualifiedNameForClassType(qualifiedName);
@@ -165,7 +184,11 @@ public class ParamPsiUtils {
         body.setParent(parent);
 
         parent.getChildList().add(body);
-        JsonWireType fieldWireType = JacksonPsiUtils.resolveJsonWireType(field, type);
+        JsonWireType fieldWireType = JacksonPsiUtils.resolveJsonWireType(member, type);
+        boolean omitNull = projection != null && projection.omitsNull(member);
+        if (omitNull && JacksonPropertyProjection.hasNullInitializer(field)) {
+            body.setOmitFromExample(true);
+        }
         if (fieldWireType.isOverridden() && isJsonSimpleType(fieldWireType.getJsonType())) {
             if (fieldWireType.getExampleOverride() != null) {
                 body.setExample(fieldWireType.getExampleOverride());
@@ -182,8 +205,14 @@ public class ParamPsiUtils {
         }
         if (type instanceof PsiPrimitiveType || FieldTypeConstant.FIELD_TYPE.containsKey(type.getPresentableText())) {
 
-            String example = PsiConstantUtils.expressionText(field.getInitializer());
-            if (example != null) {
+            String example = field == null ? null : PsiConstantUtils.expressionText(field.getInitializer());
+            if (omitNull && example == null) {
+                Object sample = type instanceof PsiPrimitiveType ? PsiTypesUtil.getDefaultValue(type)
+                        : FieldTypeConstant.FIELD_TYPE.get(type.getPresentableText());
+                body.setOmitFromExample(sample == null);
+                example = sample == null ? null : String.valueOf(sample);
+            }
+            if (example != null && !body.isOmitFromExample()) {
                 body.setExample(example);
             }
             return;
@@ -219,7 +248,7 @@ public class ParamPsiUtils {
             }
             // 基本类型或者包装类型：不要创建 name="" 的子节点，否则 JSON5 会生成 {"":"..."}
             // 这里保持字段本身是 collection，仅设置 example 为元素示例，渲染层会输出 [example]
-            JsonWireType contentWireType = JacksonPsiUtils.resolveContentUsing(field, iterableType);
+            JsonWireType contentWireType = JacksonPsiUtils.resolveContentUsing(member, iterableType);
             if (iterableType instanceof PsiPrimitiveType
                     || FieldTypeConstant.FIELD_TYPE.containsKey(iterableType.getPresentableText())) {
                 if (contentWireType.isOverridden()) {
@@ -298,26 +327,7 @@ public class ParamPsiUtils {
         if (FieldTypeConstant.FIELD_TYPE.containsKey(type.getPresentableText()) || isProtoMap) {
             return;
         }
-        if (childClass.isRecord()) {
-            for (PsiRecordComponent rc : childClass.getRecordComponents()) {
-                ProgressManager.checkCanceled();
-                buildBodyParamFromComponent(childClass, rc, fieldGenericsMap, parentBody, parentChildPair, childContext);
-            }
-            return;
-        }
-        // 用 seenFieldNames 处理 getAllFields() 可能返回父类同名字段的情况（继承字段去重）
-        // 不依赖 parentChildPair 去重，因为 pair 在退出时会被移除（递归栈语义）
-        Set<String> seenFieldNames = new HashSet<>();
-        for (PsiField psiField : childClass.getAllFields()) {
-            ProgressManager.checkCanceled();
-                if (!DocViewUtils.isExcludeField(psiField, isProto)) {
-                // 同一个类的 getAllFields() 可能因继承返回同名字段，保留第一个（子类优先）
-                if (!seenFieldNames.add(psiField.getName())) {
-                    continue;
-                }
-                buildBodyParam(childClass, psiField, fieldGenericsMap, parentBody, parentChildPair, isProto, childContext);
-            }
-        }
+        buildBodyProperties(childClass, fieldGenericsMap, parentBody, parentChildPair, isProto, childContext);
 
         } finally {
             // 出栈：退出时从路径栈中移除，允许同类型字段在不同分支中各自被完整解析
@@ -334,7 +344,7 @@ public class ParamPsiUtils {
      * @param type        当前字段的类型
      * @return
      */
-    private static PsiType replaceFieldType(Map<String, PsiType> genericsMap, PsiType type) {
+    static PsiType replaceFieldType(Map<String, PsiType> genericsMap, PsiType type) {
 
         if (genericsMap == null || genericsMap.isEmpty()) {
             return type;
@@ -543,23 +553,25 @@ public class ParamPsiUtils {
 
         boolean isProto = ProtoUtils.isProto(PsiTypesUtil.getClassType(psiClass));
 
+        JacksonPropertyProjection projection = new JacksonPropertyProjection(psiClass, isProto);
         // 设置当前类的类型
         qualifiedNameList.add(psiClass.getQualifiedName());
-        for (PsiField field : psiClass.getAllFields()) {
+        for (PsiDocCommentOwner member : projection.members(isProto)) {
+            PsiField field = member instanceof PsiField propertyField ? propertyField : null;
             ProgressManager.checkCanceled();//            proto的map类型，不展示子属性
             if (("Map".equals(psiClass.getName()) || Objects.requireNonNull(psiClass.getName()).startsWith("Map<")) && isProto) {
                 break;
             }
-            if (DocViewUtils.isExcludeField(field, isProto)) {
+            boolean omitNull = projection.omitsNull(member);
+            if (omitNull && JacksonPropertyProjection.hasNullInitializer(field)) {
                 continue;
             }
-//            todo 从get方法中获取到真实类型
-
-            String fieldName = DocViewUtils.fieldName(field, isProto);
+            String fieldName = field == null ? JacksonPropertyProjection.getterName((PsiMethod) member)
+                    : projection.name(field, isProto);
             boolean parseProtoFieldType = false;
             String fieldTypeName = "";
             boolean isProtoMap = false;
-            PsiType type = field.getType();
+            PsiType type = field == null ? ((PsiMethod) member).getReturnType() : field.getType();
             if (isProto) {
 //            snake_case -> PascalCase
                 String pascalCaseName = DocViewUtils.snakeToPascal(fieldName);
@@ -587,15 +599,15 @@ public class ParamPsiUtils {
                     parseProtoFieldType = true;
                 }
             }
-            Object defaultValue = SpringPsiUtils.getDefaultValue(field, type);
+            Object defaultValue = field == null ? null : SpringPsiUtils.getDefaultValue(field, type);
             if (!parseProtoFieldType) {
                 // 如果是泛型, 且泛型字段是当前字段, 将当前字段类型替换为泛型类型
-                type = replaceFieldType(genericMap, type);
+                type = projection.memberType(member, type, genericMap);
 
                 // 引用类型
                 fieldTypeName = type.getPresentableText();
             }
-            JsonWireType wireType = JacksonPsiUtils.resolveJsonWireType(field, type);
+            JsonWireType wireType = JacksonPsiUtils.resolveJsonWireType(member, type);
             if (wireType.isOverridden() && isJsonSimpleType(wireType.getJsonType())) {
                 fieldMap.put(fieldName, wireType.getDefaultValue() != null ? wireType.getDefaultValue() : "");
                 continue;
@@ -614,7 +626,9 @@ public class ParamPsiUtils {
                 if (wireType.isOverridden() && wireType.getDefaultValue() != null) {
                     value = wireType.getDefaultValue();
                 }
-                fieldMap.put(fieldName, value);
+                if (!omitNull || value != null) {
+                    fieldMap.put(fieldName, value);
+                }
             } else if (type instanceof PsiArrayType) {
                 // 数组类型
                 List<Object> list = new ArrayList<>();
@@ -639,7 +653,7 @@ public class ParamPsiUtils {
                 // List Set or HashSet
                 List<Object> list = new ArrayList<>();
                 PsiType iterableType = PsiUtil.extractIterableTypeParameter(type, false);
-                JsonWireType contentWireType = JacksonPsiUtils.resolveContentUsing(field, iterableType);
+                JsonWireType contentWireType = JacksonPsiUtils.resolveContentUsing(member, iterableType);
                 PsiClass iterableClass = PsiUtil.resolveClassInClassTypeOnly(iterableType);
                 if (iterableClass != null) {
                     String classTypeName = iterableClass.getName();
@@ -656,7 +670,9 @@ public class ParamPsiUtils {
                         if (hasContainQualifiedName(temp, iterableClass.getQualifiedName()) || temp.size() >= DEFAULT_MAX_SCHEMA_DEPTH) {
                             list.add("Object for " + iterableClass.getName());
                         } else {
-                            list.add(getFieldsAndDefaultValue(iterableClass, null, temp));
+                            Map<String, PsiType> elementGenerics = iterableType instanceof PsiClassType classType
+                                    ? CustomPsiUtils.getGenericsMap(classType) : null;
+                            list.add(getFieldsAndDefaultValue(iterableClass, elementGenerics, temp));
                         }
 
                     }
@@ -722,9 +738,13 @@ public class ParamPsiUtils {
         if (qualifiedNameList.size() >= DEFAULT_MAX_SCHEMA_DEPTH) return fieldMap;
         qualifiedNameList.add(psiClass.getQualifiedName());
 
+        JacksonPropertyProjection projection = new JacksonPropertyProjection(psiClass, false);
         for (PsiRecordComponent component : psiClass.getRecordComponents()) {
             ProgressManager.checkCanceled();
-                String fieldName = DocViewUtils.fieldName(component, false);
+            String fieldName = projection.name(component);
+            if (!projection.includes(component, fieldName)) {
+                continue;
+            }
             PsiType type = replaceFieldType(genericMap, component.getType());
             String fieldTypeName = type.getPresentableText();
             JsonWireType wireType = JacksonPsiUtils.resolveJsonWireType(component, type);
@@ -746,7 +766,9 @@ public class ParamPsiUtils {
                 if (wireType.isOverridden() && wireType.getDefaultValue() != null) {
                     value = wireType.getDefaultValue();
                 }
-                fieldMap.put(fieldName, value);
+                if (value != null || !projection.omitsNull(component)) {
+                    fieldMap.put(fieldName, value);
+                }
             } else if (type instanceof PsiArrayType) {
                 List<Object> list = new ArrayList<>();
                 PsiType deepType = type.getDeepComponentType();
@@ -902,7 +924,9 @@ public class ParamPsiUtils {
                         // 泛型是类
                         PsiClass genericsPsiClass = PsiUtil.resolveClassInClassTypeOnly(psiType);
                         if (genericsPsiClass != null) {
-                            buildBodyList(genericsPsiClass, null, collectionBody, isProto);
+                            Map<String, PsiType> elementGenerics = psiType instanceof PsiClassType classType
+                                    ? CustomPsiUtils.getGenericsMap(classType) : null;
+                            buildBodyList(genericsPsiClass, elementGenerics, collectionBody, isProto);
                         }
                     }
                 } else {
@@ -930,25 +954,23 @@ public class ParamPsiUtils {
 
     private static void buildBodyList(@NotNull PsiClass psiClass, Map<String, PsiType> genericMap, Body parent,
                                       boolean isProto, DtoParsingContext context) {
+        buildBodyProperties(psiClass, genericMap, parent, new HashMap<>(), isProto, context);
+    }
+
+    private static void buildBodyProperties(PsiClass psiClass, Map<String, PsiType> generics, Body parent,
+                                            Map<String, Boolean> parentChildPair, boolean proto, DtoParsingContext context) {
         ProgressManager.checkCanceled();
+        JacksonPropertyProjection projection = new JacksonPropertyProjection(psiClass, proto);
         if (psiClass.isRecord()) {
             for (PsiRecordComponent component : psiClass.getRecordComponents()) {
                 ProgressManager.checkCanceled();
-                buildBodyParamFromComponent(psiClass, component, genericMap, parent, new HashMap<>(), context);
+                buildBodyParamFromComponent(psiClass, component, generics, parent, parentChildPair, context);
             }
             return;
         }
-
-        for (PsiField field : psiClass.getAllFields()) {
-            ProgressManager.checkCanceled();
-
-            if (DocViewUtils.isExcludeField(field, isProto)) {
-                continue;
-            }
-
-            ParamPsiUtils.buildBodyParam(psiClass, field, genericMap, parent, new HashMap<>(), isProto, context);
+        for (PsiDocCommentOwner member : projection.members(proto)) {
+            buildBodyProperty(psiClass, member, generics, parent, parentChildPair, proto, context, projection);
         }
-
     }
 
     public static void buildBodyParamFromComponent(@NotNull PsiClass parentClass, @NotNull PsiRecordComponent component,
@@ -962,6 +984,11 @@ public class ParamPsiUtils {
                                                     Map<String, PsiType> genericsMap, @NotNull Body parent,
                                                     @NotNull Map<String, Boolean> parentChildPair, DtoParsingContext context) {
         ProgressManager.checkCanceled();
+        JacksonPropertyProjection projection = new JacksonPropertyProjection(parentClass, false);
+        String name = projection.name(component);
+        if (!projection.includes(component, name)) {
+            return;
+        }
         String parentQName = parentClass.getQualifiedName() != null ? parentClass.getQualifiedName() : "";
         String pair = parentQName + "_" + component.getName();
         if (parentChildPair.containsKey(pair)) {
@@ -972,7 +999,7 @@ public class ParamPsiUtils {
             PsiType type = component.getType();
             Body body = new Body();
             body.setRequired(DocViewUtils.isRequired(component));
-            body.setName(DocViewUtils.fieldName(component, false));
+            body.setName(name);
             body.setPsiElement(component);
             body.setDescription(DocViewUtils.fieldDescription(component));
             PsiField recordField = parentClass.findFieldByName(component.getName(), false);
@@ -1011,6 +1038,12 @@ public class ParamPsiUtils {
                 if (setScalarArrayItemExample(body, type)) return;
             }
             if (type instanceof PsiPrimitiveType || FieldTypeConstant.FIELD_TYPE.containsKey(type.getPresentableText())) {
+                if (projection.omitsNull(component)) {
+                    Object sample = type instanceof PsiPrimitiveType ? PsiTypesUtil.getDefaultValue(type)
+                            : FieldTypeConstant.FIELD_TYPE.get(type.getPresentableText());
+                    body.setOmitFromExample(sample == null);
+                    body.setExample(sample == null ? null : String.valueOf(sample));
+                }
                 return;
             }
 
@@ -1077,21 +1110,7 @@ public class ParamPsiUtils {
             if (childContext.isDepthLimitReached()) return;
             if (FieldTypeConstant.FIELD_TYPE.containsKey(type.getPresentableText())) return;
 
-            if (childClass.isRecord()) {
-                for (PsiRecordComponent rc : childClass.getRecordComponents()) {
-                    ProgressManager.checkCanceled();
-                buildBodyParamFromComponent(childClass, rc, fieldGenericsMap, parentBody, parentChildPair, childContext);
-                }
-            } else {
-                Set<String> seenFieldNames = new HashSet<>();
-                for (PsiField psiField : childClass.getAllFields()) {
-                    ProgressManager.checkCanceled();
-                if (!DocViewUtils.isExcludeField(psiField, false)) {
-                        if (!seenFieldNames.add(psiField.getName())) continue;
-                        buildBodyParam(childClass, psiField, fieldGenericsMap, parentBody, parentChildPair, false, childContext);
-                    }
-                }
-            }
+            buildBodyProperties(childClass, fieldGenericsMap, parentBody, parentChildPair, false, childContext);
         } finally {
             parentChildPair.remove(pair);
         }
@@ -1131,7 +1150,9 @@ public class ParamPsiUtils {
                     }
 
                     PsiClass iterableClass = PsiUtil.resolveClassInClassTypeOnly(iterableType);
-                    Map<String, Object> fieldMap = ParamPsiUtils.getFieldsAndDefaultValue(iterableClass, null);
+                    Map<String, PsiType> elementGenerics = iterableType instanceof PsiClassType classType
+                            ? CustomPsiUtils.getGenericsMap(classType) : null;
+                    Map<String, Object> fieldMap = ParamPsiUtils.getFieldsAndDefaultValue(iterableClass, elementGenerics);
 
                     Object[] objectArr = {fieldMap};
 

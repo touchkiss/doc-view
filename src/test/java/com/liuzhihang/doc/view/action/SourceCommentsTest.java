@@ -66,6 +66,8 @@ public class SourceCommentsTest extends LightJavaCodeInsightFixtureTestCase {
         var keymap = KeymapManager.getInstance().getActiveKeymap();
         var shortcut = new KeyboardShortcut(KeyStroke.getKeyStroke("ctrl BACK_SLASH"), null);
         assertTrue(Arrays.asList(keymap.getShortcuts(actionId)).contains(shortcut));
+        var commandShortcut = new KeyboardShortcut(KeyStroke.getKeyStroke("meta BACK_SLASH"), null);
+        assertFalse(Arrays.asList(keymap.getShortcuts(actionId)).contains(commandShortcut));
 
         var file = (PsiJavaFile) myFixture.configureByText("ModelDemo.java", "class ModelDemo { void lo<caret>ad() {} }");
         var server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);

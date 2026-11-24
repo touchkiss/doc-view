@@ -4,6 +4,11 @@ import com.intellij.openapi.editor.Editor;
 import com.intellij.openapi.editor.EditorFactory;
 import com.intellij.openapi.editor.EditorKind;
 import com.intellij.openapi.editor.Document;
+import com.intellij.openapi.fileEditor.FileDocumentManager;
+import com.intellij.openapi.fileEditor.FileEditor;
+import kotlinx.coroutines.flow.StateFlow;
+import org.intellij.plugins.markdown.ui.preview.MarkdownPreviewFileEditorProvider;
+import com.intellij.testFramework.LightVirtualFile;
 import com.intellij.openapi.editor.event.DocumentEvent;
 import com.intellij.openapi.editor.event.DocumentListener;
 import com.intellij.openapi.application.ApplicationManager;
@@ -226,11 +231,50 @@ public final class PreviewLifecycleTest extends LightJavaCodeInsightFixtureTestC
         assertTrue("Closing a preview must preserve an unrelated editor", isEditorAlive(unrelatedEditor));
     }
 
+    public void testPreviewDocumentBelongsToAnInMemoryMarkdownFile() throws Exception {
+        PreviewForm form = createForm();
+        EdtTestUtil.runInEdtAndWait(() -> {
+            initializeUi(form);
+            Document document = fieldValue(form, "markdownDocument", Document.class);
+            var file = FileDocumentManager.getInstance().getFile(document);
+            assertInstanceOf(file, LightVirtualFile.class);
+            assertEquals("md", file.getExtension());
+            assertSame(document, fieldValue(form, "markdownEditor", Editor.class).getDocument());
+        });
+    }
+
+    public void testNativeMarkdownPreviewIsMountedAndSharesGeneratedText() {
+        var form = EdtTestUtil.runInEdtAndGet(() -> new PreviewForm(fixtureClass, null,
+                (project, file) -> new MarkdownPreviewFileEditorProvider().createEditor(project, file)));
+        forms.add(form);
+
+        EdtTestUtil.runInEdtAndWait(() -> {
+            initializeUi(form);
+            FileEditor preview = fieldValue(form, "nativeMarkdownPreview", FileEditor.class);
+            assertNotNull(preview);
+            var panel = fieldValue(form, "previewContentPanel", javax.swing.JPanel.class);
+            assertSame(preview.getComponent(), panel.getComponent(0));
+            var mainEditor = fieldValue(preview, "mainEditor", StateFlow.class);
+            assertSame("The native renderer requires the associated Markdown editor",
+                    fieldValue(form, "markdownEditor", Editor.class), mainEditor.getValue());
+
+            String markdown = "# Heading\n\n| Name | Value |\n|---|---|\n| status | OK |\n\n" +
+                    "> [!NOTE]\n> Sample\n\n" + "```java\nint example = 1;\n```\n";
+            setDocumentText(form, markdown);
+            var previewDocument = FileDocumentManager.getInstance().getDocument(preview.getFile());
+            assertNotNull(previewDocument);
+            assertEquals(markdown, previewDocument.getText());
+
+            form.dispose();
+            assertTrue(Disposer.isDisposed(preview));
+        });
+    }
+
     public void testBrowserlessPreviewKeepsSourceAndDisposesIdempotently() throws Exception {
         PreviewForm form = createForm();
         EdtTestUtil.runInEdtAndWait(() -> initializeUi(form));
         assertNull("JCEF-disabled environments must use the Markdown source viewer",
-                fieldValue(form, "jcefBrowser", Object.class));
+                fieldValue(form, "nativeMarkdownPreview", Object.class));
         Editor previewEditor = fieldValue(form, "markdownEditor", Editor.class);
         assertNotNull(previewEditor);
         assertFalse(previewEditor.isDisposed());
@@ -253,7 +297,7 @@ public final class PreviewLifecycleTest extends LightJavaCodeInsightFixtureTestC
                     String name;
                 }
                 """);
-        var form = EdtTestUtil.runInEdtAndGet(() -> new PreviewForm(owner, null, () -> {
+        var form = EdtTestUtil.runInEdtAndGet(() -> new PreviewForm(owner, null, (project, file) -> {
             throw new IllegalStateException("JCEF server was disconnected.");
         }));
         forms.add(form);
@@ -262,7 +306,7 @@ public final class PreviewLifecycleTest extends LightJavaCodeInsightFixtureTestC
             initializeUi(form);
             dispatchThread.set(Thread.currentThread());
         });
-        assertNull(fieldValue(form, "jcefBrowser", Object.class));
+        assertNull(fieldValue(form, "nativeMarkdownPreview", Object.class));
         DocView doc = ApplicationManager.getApplication().runReadAction((Computable<DocView>) () ->
                 DocViewService.getInstance(project, owner).buildDoc(owner, null).getFirst());
         String expected = markdownText(doc);
@@ -516,8 +560,8 @@ public final class PreviewLifecycleTest extends LightJavaCodeInsightFixtureTestC
             fieldValue(form, "renderRequest", AtomicLong.class).set(4L);
             setField(form, "currentMarkdownText", "# Latest document\n");
             setDocumentText(form, "# Latest document\n");
-            invoke(form, "applyMarkdown", new Class<?>[]{DocView.class, String.class, String.class, long.class},
-                    older, "# Stale document\n", "<p>Stale document</p>", 3L);
+            invoke(form, "applyMarkdown", new Class<?>[]{DocView.class, String.class, long.class},
+                    older, "# Stale document\n", 3L);
         });
         assertEquals("# Latest document\n", documentText(form));
 
@@ -801,7 +845,7 @@ public final class PreviewLifecycleTest extends LightJavaCodeInsightFixtureTestC
 
     private static <T> T fieldValue(Object target, String name, Class<T> type) {
         try {
-            Field field = PreviewForm.class.getDeclaredField(name);
+            Field field = target.getClass().getDeclaredField(name);
             field.setAccessible(true);
             return type.cast(field.get(target));
         } catch (ReflectiveOperationException exception) {

@@ -88,4 +88,7 @@ public class Body {
     /** Only parser-created element/key/value wrappers, never a real business field. */
     private boolean syntheticContainerNode;
 
+    /** A null example excluded by Jackson inclusion policy. */
+    private boolean omitFromExample;
+
 }

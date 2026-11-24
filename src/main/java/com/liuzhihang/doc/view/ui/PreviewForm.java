@@ -15,6 +15,8 @@ import com.intellij.openapi.editor.EditorFactory;
 import com.intellij.openapi.editor.EditorKind;
 import com.intellij.openapi.editor.ex.EditorEx;
 import com.intellij.openapi.editor.highlighter.EditorHighlighterFactory;
+import com.intellij.openapi.fileEditor.FileDocumentManager;
+import com.intellij.openapi.fileEditor.FileEditor;
 import com.intellij.openapi.fileTypes.FileType;
 import com.intellij.openapi.fileTypes.FileTypeManager;
 import com.intellij.openapi.options.ShowSettingsUtil;
@@ -23,6 +25,8 @@ import com.intellij.openapi.progress.ProgressIndicator;
 import com.intellij.openapi.progress.Task;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.util.Computable;
+import com.intellij.openapi.vfs.VirtualFile;
+import com.intellij.testFramework.LightVirtualFile;
 import com.intellij.openapi.Disposable;
 import com.intellij.openapi.ui.popup.JBPopup;
 import com.intellij.openapi.ui.popup.JBPopupFactory;
@@ -34,8 +38,6 @@ import com.intellij.psi.util.PsiModificationTracker;
 import com.intellij.ui.*;
 import com.intellij.ui.components.JBList;
 import com.intellij.ui.components.JBPanel;
-import com.intellij.ui.jcef.JBCefApp;
-import com.intellij.ui.jcef.JBCefBrowser;
 import com.intellij.util.ui.JBUI;
 import com.intellij.util.ui.UIUtil;
 import com.liuzhihang.doc.view.DocViewBundle;
@@ -52,7 +54,9 @@ import com.liuzhihang.doc.view.service.SourceDescriptionService;
 import com.liuzhihang.doc.view.utils.EditorUtils;
 import com.liuzhihang.doc.view.utils.ExportUtils;
 import lombok.extern.slf4j.Slf4j;
-import org.intellij.plugins.markdown.ui.preview.html.MarkdownUtil;
+import org.intellij.plugins.markdown.ui.preview.MarkdownHtmlPanelProvider;
+import org.intellij.plugins.markdown.ui.preview.MarkdownPreviewFileEditor;
+import org.intellij.plugins.markdown.ui.preview.MarkdownPreviewFileEditorProvider;
 import org.jetbrains.annotations.Contract;
 import org.jetbrains.annotations.NonNls;
 import org.jetbrains.annotations.NotNull;
@@ -75,7 +79,7 @@ import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.Collections;
 import java.util.IdentityHashMap;
-import java.util.function.Supplier;
+import java.util.function.BiFunction;
 import java.util.stream.Collectors;
 
 /**
@@ -90,7 +94,7 @@ public class PreviewForm implements Disposable {
     @NonNls
     public static final String DOC_VIEW_POPUP = "com.intellij.docview.popup";
     public static final AtomicBoolean myIsPinned = new AtomicBoolean(false);
-    private static final AtomicBoolean previewIsHtml = new AtomicBoolean(false);
+    private static final AtomicBoolean preferRenderedPreview = new AtomicBoolean(true);
 
     private Document markdownDocument;
 
@@ -129,12 +133,8 @@ public class PreviewForm implements Disposable {
      */
     private final JBPanel<?> previewToolbarPanel = new JBPanel<>(new BorderLayout());
 
-    /**
-     * JCEF 嵌入式浏览器，用于承载并渲染 HTML 预览。
-     * 仅当 {@link JBCefApp#isSupported()} 为 true 时创建，否则为 null（降级为源码视图）。
-     */
-    private JBCefBrowser jcefBrowser;
-    private final Supplier<JBCefBrowser> browserFactory;
+    private volatile FileEditor nativeMarkdownPreview;
+    private final BiFunction<Project, VirtualFile, FileEditor> previewFactory;
 
     /**
      * 根面板
@@ -211,14 +211,15 @@ public class PreviewForm implements Disposable {
 
 
     public PreviewForm(@NotNull PsiClass psiClass, PsiMethod psiMethod) {
-        this(psiClass, psiMethod, () -> JBCefApp.isSupported() ? JBCefBrowser.createBuilder().build() : null);
+        this(psiClass, psiMethod, PreviewForm::createNativeMarkdownPreview);
     }
 
-    PreviewForm(@NotNull PsiClass psiClass, PsiMethod psiMethod, Supplier<JBCefBrowser> browserFactory) {
+    PreviewForm(@NotNull PsiClass psiClass, PsiMethod psiMethod,
+                BiFunction<Project, VirtualFile, FileEditor> previewFactory) {
         this.psiClass = psiClass;
         this.project = psiClass.getProject();
         this.psiMethod = psiMethod;
-        this.browserFactory = browserFactory;
+        this.previewFactory = previewFactory;
     }
 
     /**
@@ -297,7 +298,10 @@ public class PreviewForm implements Disposable {
         }
 
         try {
-            markdownDocument = EditorFactory.getInstance().createDocument("");
+            var previewFile = createPreviewFile();
+            markdownDocument = Objects.requireNonNull(FileDocumentManager.getInstance().getDocument(previewFile));
+            markdownSourcePanel();
+            initNativePreview(previewFile);
             layout();
             addMouseListeners();
             uiInitialized = true;
@@ -324,11 +328,11 @@ public class PreviewForm implements Disposable {
             catalogSelectionListener = null;
         }
 
+        discardNativePreview();
         if (markdownEditor != null && !markdownEditor.isDisposed()) {
             EditorFactory.getInstance().releaseEditor(markdownEditor);
             markdownEditor = null;
         }
-        discardHtmlBrowser();
 
         currentMarkdownText = null;
         currentDocView = null;
@@ -384,11 +388,7 @@ public class PreviewForm implements Disposable {
         previewToolbarPanel.setBorder(JBUI.Borders.empty());
         previewPanel.setBorder(JBUI.Borders.empty());
 
-        // 右侧 Markdown 源码面板
-        markdownSourcePanel();
-        // HTML 预览浏览器
-        initHtmlBrowser();
-        // 选择在预览面板上呈现的面板：源码/HTML
+        // 选择原生 Markdown 预览或源码
         choosePreviewPanel();
         // 预览面板操作栏
         previewLeftToolbar();
@@ -501,74 +501,81 @@ public class PreviewForm implements Disposable {
         markdownEditor.setBorder(JBUI.Borders.emptyLeft(5));
     }
 
-    /**
-     * 初始化 HTML 预览浏览器。
-     * <p>
-     * 2026.2 起平台将 JCEF 拆分为独立捆绑插件（module intellij.platform.ui.jcef），
-     * 且 JetBrains 官方将 Markdown 插件面板类标注为不稳定的实现细节。这里改用平台稳定的
-     * {@link JBCefBrowser} 直接承载 HTML，HTML 由 {@link MarkdownUtil} 生成。
-     * <p>
-     * 当运行环境不支持 JCEF 时不创建浏览器，预览降级为 Markdown 源码视图。
-     */
-    private void initHtmlBrowser() {
+    private LightVirtualFile createPreviewFile() {
+        FileType type = FileTypeManager.getInstance().getFileTypeByExtension("md");
+        VirtualFile folder = ReadAction.compute(() -> {
+            var psiFile = psiClass.getContainingFile();
+            var source = psiFile == null ? null : psiFile.getVirtualFile();
+            return source == null ? null : source.getParent();
+        });
+        // The source folder supplies the base for relative images and links without a disk write.
+        return new LightVirtualFile("Doc View.md", type, "") {
+            @Override
+            public VirtualFile getParent() {
+                return folder;
+            }
+
+            @Override
+            public String getPath() {
+                return folder == null ? super.getPath() : folder.getPath() + "/" + getName();
+            }
+        };
+    }
+
+    // Keep the version-specific Markdown plugin entry points together.
+    private static @Nullable FileEditor createNativeMarkdownPreview(Project project, VirtualFile file) {
+        return MarkdownHtmlPanelProvider.hasAvailableProviders()
+                ? new MarkdownPreviewFileEditorProvider().createEditor(project, file)
+                : null;
+    }
+
+    private void initNativePreview(VirtualFile file) {
         try {
-            jcefBrowser = browserFactory.get();
+            nativeMarkdownPreview = previewFactory.apply(project, file);
+            if (nativeMarkdownPreview instanceof MarkdownPreviewFileEditor preview) {
+                // The native renderer needs the editor's caret and document to submit its first render.
+                preview.setMainEditor(markdownEditor);
+            }
         } catch (ProcessCanceledException canceled) {
             throw canceled;
-        } catch (RuntimeException failure) {
-            disableHtmlPreview(failure);
+        } catch (RuntimeException | LinkageError failure) {
+            disableNativePreview(failure);
         }
     }
 
-    private void discardHtmlBrowser() {
-        JBCefBrowser browser = jcefBrowser;
-        jcefBrowser = null;
-        if (browser != null) {
+    private void discardNativePreview() {
+        FileEditor preview = nativeMarkdownPreview;
+        nativeMarkdownPreview = null;
+        if (preview != null) {
             try {
-                Disposer.dispose(browser);
+                Disposer.dispose(preview);
             } catch (RuntimeException failure) {
-                log.warn("Could not dispose the Doc View HTML browser", failure);
+                log.warn("Could not dispose the native Markdown preview", failure);
             }
         }
     }
 
-    private void disableHtmlPreview(RuntimeException failure) {
-        log.warn("Doc View HTML preview is unavailable; using Markdown", failure);
-        previewIsHtml.set(false);
-        discardHtmlBrowser();
+    private void disableNativePreview(Throwable failure) {
+        log.warn("Doc View native Markdown preview is unavailable; using Markdown source", failure);
+        discardNativePreview();
     }
 
     private void choosePreviewPanel() {
         previewContentPanel.removeAll();
-        if (previewIsHtml.get() && jcefBrowser != null) {
+        if (preferRenderedPreview.get() && nativeMarkdownPreview != null) {
             try {
-                previewContentPanel.add(jcefBrowser.getComponent(), BorderLayout.CENTER);
+                previewContentPanel.add(nativeMarkdownPreview.getComponent(), BorderLayout.CENTER);
             } catch (ProcessCanceledException canceled) {
                 throw canceled;
-            } catch (RuntimeException failure) {
-                disableHtmlPreview(failure);
+            } catch (RuntimeException | LinkageError failure) {
+                disableNativePreview(failure);
             }
         }
         if (previewContentPanel.getComponentCount() == 0) {
-            previewIsHtml.set(false);
             previewContentPanel.add(ScrollPaneFactory.createScrollPane(markdownEditor.getComponent()), BorderLayout.CENTER);
         }
         previewContentPanel.revalidate();
         previewContentPanel.repaint();
-    }
-
-    private void loadPreviewHtml(String htmlText) {
-        if (jcefBrowser == null) {
-            return;
-        }
-        try {
-            jcefBrowser.loadHTML(htmlText);
-        } catch (ProcessCanceledException canceled) {
-            throw canceled;
-        } catch (RuntimeException failure) {
-            disableHtmlPreview(failure);
-            choosePreviewPanel();
-        }
     }
 
     /**
@@ -588,17 +595,17 @@ public class PreviewForm implements Disposable {
 
             @Override
             public boolean isSelected(@NotNull AnActionEvent e) {
-                return previewIsHtml.get();
+                return nativeMarkdownPreview != null && preferRenderedPreview.get();
             }
 
             @Override
             public void setSelected(@NotNull AnActionEvent e, boolean state) {
 
-                if (state && jcefBrowser == null) {
-                    DocViewNotification.notifyInfo(project, DocViewBundle.message("notify.not.support.jcef"));
+                if (state && nativeMarkdownPreview == null) {
+                    DocViewNotification.notifyInfo(project, DocViewBundle.message("notify.markdown.preview.unavailable"));
                     return;
                 }
-                previewIsHtml.set(state);
+                preferRenderedPreview.set(state);
                 choosePreviewPanel();
             }
 
@@ -942,8 +949,7 @@ public class PreviewForm implements Disposable {
         MarkdownCacheEntry entry = markdownCache.get(docView);
         String cachedMarkdown = entry != null && entry.key().equals(cacheKey) ? entry.markdown() : null;
 
-        boolean generateHtml = jcefBrowser != null;
-        AtomicReference<RenderResult> result = new AtomicReference<>();
+        AtomicReference<String> result = new AtomicReference<>();
         new Task.Backgroundable(project, DocViewBundle.message("task.docview.markdown"), true) {
             @Override
             public void run(@NotNull ProgressIndicator indicator) {
@@ -953,7 +959,7 @@ public class PreviewForm implements Disposable {
                 indicator.setIndeterminate(true);
                 trackIndicator(renderIndicators, requestId, indicator, renderRequest, project);
                 try {
-                    result.set(ApplicationManager.getApplication().runReadAction((Computable<RenderResult>) () -> {
+                    result.set(ApplicationManager.getApplication().runReadAction((Computable<String>) () -> {
                         indicator.checkCanceled();
                         if (ApplicationManager.getApplication().isDispatchThread()) {
                             throw new AssertionError("Markdown preview generation must run outside the dispatch thread");
@@ -962,12 +968,7 @@ public class PreviewForm implements Disposable {
                                 ? cachedMarkdown
                                 : DocViewData.markdownText(project, docView);
                         indicator.checkCanceled();
-                        String htmlText = generateHtml
-                                ? MarkdownUtil.INSTANCE.generateMarkdownHtml(
-                                        psiClass.getContainingFile().getVirtualFile(), markdownText, project)
-                                : null;
-                        indicator.checkCanceled();
-                        return new RenderResult(markdownText, htmlText);
+                        return markdownText;
                     }));
                 } finally {
                     renderIndicators.remove(requestId, indicator);
@@ -977,10 +978,10 @@ public class PreviewForm implements Disposable {
             @Override
             public void onSuccess() {
                 if (isCurrentRender(requestId, docView)) {
-                    RenderResult rendered = result.get();
+                    String markdown = result.get();
                     try {
-                        markdownCache.put(docView, new MarkdownCacheEntry(cacheKey, rendered.markdownText()));
-                        applyMarkdown(docView, rendered.markdownText(), rendered.htmlText(), requestId);
+                        markdownCache.put(docView, new MarkdownCacheEntry(cacheKey, markdown));
+                        applyMarkdown(docView, markdown, requestId);
                     } catch (RuntimeException exception) {
                         handleRenderFailure(requestId, exception);
                     }
@@ -1001,7 +1002,6 @@ public class PreviewForm implements Disposable {
 
     private void applyMarkdown(@NotNull DocView docView,
                                @NotNull String markdownText,
-                               @Nullable String htmlText,
                                long requestId) {
         ApplicationManager.getApplication().assertIsDispatchThread();
         if (!isCurrentRender(requestId, docView)) {
@@ -1011,9 +1011,6 @@ public class PreviewForm implements Disposable {
         currentMarkdownText = markdownText;
 
         setMarkdownText(markdownText);
-        if (htmlText != null) {
-            loadPreviewHtml(htmlText);
-        }
     }
 
     private void showPreviewStatus(@NotNull String message) {
@@ -1023,17 +1020,6 @@ public class PreviewForm implements Disposable {
         }
         currentMarkdownText = null;
         setMarkdownText(message);
-        if (jcefBrowser != null) {
-            loadPreviewHtml("<!doctype html><html><body><p>" + escapeHtml(message) + "</p></body></html>");
-        }
-    }
-
-    private static String escapeHtml(@NotNull String value) {
-        return value.replace("&", "&amp;")
-                .replace("<", "&lt;")
-                .replace(">", "&gt;")
-                .replace("\"", "&quot;")
-                .replace("'", "&#39;");
     }
 
     private void handleLoadCancellation(long requestId) {
@@ -1137,9 +1123,6 @@ public class PreviewForm implements Disposable {
 
     private record PreviewLoadResult(List<DocView> documents,
                                      Map<DocView, ClassPresentation> classPresentations) { }
-
-    private record RenderResult(@NotNull String markdownText, @Nullable String htmlText) {
-    }
 
     private record SingleExportSnapshot(@NotNull String fileName, @NotNull String markdownText) {
     }

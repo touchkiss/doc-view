@@ -94,4 +94,6 @@ public class DocViewParamData {
 
     /** True only for parser-created element/key/value container nodes. */
     private boolean syntheticContainerNode;
+
+    private boolean omitFromExample;
 }

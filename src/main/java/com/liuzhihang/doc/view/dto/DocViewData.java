@@ -181,9 +181,12 @@ public class DocViewData {
     }
 
     private String buildJsonWithDescContent(List<DocViewParamData> responseParamDataList) {
+        List<DocViewParamData> exampleProperties = responseParamDataList.stream()
+                .filter(data -> !data.isOmitFromExample())
+                .toList();
         StringBuilder builder = new StringBuilder();
-        for (int j = 0; j < responseParamDataList.size(); j++) {
-            DocViewParamData data = responseParamDataList.get(j);
+        for (int j = 0; j < exampleProperties.size(); j++) {
+            DocViewParamData data = exampleProperties.get(j);
             String tab = "    ";
             for (int i = 0; i < data.getTabCount(); i++) {
                 builder.append(tab);
@@ -223,7 +226,7 @@ public class DocViewData {
                     }
                     builder.append("}");
                 }
-                if (j < responseParamDataList.size() - 1) {
+                if (j < exampleProperties.size() - 1) {
                     builder.append(",\n");
                 } else {
                     builder.append("\n");
@@ -243,7 +246,7 @@ public class DocViewData {
                 } else {
                     builder.append("\"").append(data.getExample()).append("\"");
                 }
-                if (j < responseParamDataList.size() - 1) {
+                if (j < exampleProperties.size() - 1) {
                     builder.append(",");
                 }
                 addDesc(data, builder, tab);
@@ -551,6 +554,7 @@ public class DocViewData {
             data.setCollection(body.isCollection());
             data.setMap(body.isMap());
             data.setSyntheticContainerNode(body.isSyntheticContainerNode());
+            data.setOmitFromExample(body.isOmitFromExample());
 
             if (body.getChildList() != null && !body.getChildList().isEmpty()) {
 
