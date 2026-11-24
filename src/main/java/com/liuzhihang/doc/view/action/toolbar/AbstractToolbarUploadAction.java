@@ -1,16 +1,20 @@
 package com.liuzhihang.doc.view.action.toolbar;
 
-import com.liuzhihang.doc.view.action.upload.AbstractUploadAction;
-import com.liuzhihang.doc.view.service.DocViewUploadService;
+import com.intellij.openapi.actionSystem.ActionUpdateThread;
+import com.intellij.openapi.actionSystem.AnAction;
+import com.intellij.openapi.actionSystem.AnActionEvent;
+import com.intellij.openapi.project.DumbService;
+import org.jetbrains.annotations.NotNull;
 
-/**
- * @author liuzhihang
- * @date 2021/10/23 23:13
- */
-public abstract class AbstractToolbarUploadAction extends AbstractUploadAction {
+public abstract class AbstractToolbarUploadAction extends AnAction {
+    @Override
+    public final @NotNull ActionUpdateThread getActionUpdateThread() {
+        return ActionUpdateThread.BGT;
+    }
 
     @Override
-    protected DocViewUploadService uploadService() {
-        return null;
+    public void update(@NotNull AnActionEvent event) {
+        var project = event.getProject();
+        event.getPresentation().setEnabledAndVisible(project != null && !project.isDisposed() && !DumbService.isDumb(project));
     }
 }

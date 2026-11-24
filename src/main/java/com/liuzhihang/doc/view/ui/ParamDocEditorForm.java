@@ -3,7 +3,6 @@ package com.liuzhihang.doc.view.ui;
 import com.intellij.find.editorHeaderActions.Utils;
 import icons.DocViewIcons;
 import com.intellij.openapi.actionSystem.*;
-import com.intellij.openapi.actionSystem.toolbarLayout.ToolbarLayoutStrategy;
 import com.intellij.openapi.application.ReadAction;
 import com.intellij.openapi.editor.Editor;
 import com.intellij.openapi.ide.CopyPasteManager;
@@ -23,14 +22,12 @@ import com.intellij.psi.SmartPointerManager;
 import com.intellij.psi.SmartPsiElementPointer;
 import com.intellij.psi.util.PsiTreeUtil;
 import com.intellij.psi.PsiFile;
-import com.intellij.psi.util.PsiTypesUtil;
 import com.intellij.ui.WindowMoveListener;
 import com.intellij.ui.treeStructure.treetable.ListTreeTableModelOnColumns;
 import com.intellij.util.ui.JBUI;
 import com.liuzhihang.doc.view.DocViewBundle;
 import com.liuzhihang.doc.view.config.Settings;
 import com.liuzhihang.doc.view.config.SettingsConfigurable;
-import com.liuzhihang.doc.view.dto.Body;
 import com.liuzhihang.doc.view.dto.DocViewData;
 import com.liuzhihang.doc.view.dto.DocViewParamData;
 import com.liuzhihang.doc.view.notification.DocViewNotification;
@@ -38,13 +35,12 @@ import com.liuzhihang.doc.view.service.SourceDescriptionService;
 import com.liuzhihang.doc.view.service.gpt.ModelRequestException;
 import com.liuzhihang.doc.view.ui.treeview.ParamTreeTableView;
 import com.liuzhihang.doc.view.utils.DocViewBackgroundTasks;
-import com.liuzhihang.doc.view.utils.DocViewUtils;
 import com.liuzhihang.doc.view.utils.GsonFormatUtil;
 import com.liuzhihang.doc.view.utils.ParamPsiUtils;
-import com.liuzhihang.doc.view.utils.ProtoUtils;
 import org.jetbrains.annotations.Contract;
 import org.jetbrains.annotations.NonNls;
 import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
 
 import javax.swing.*;
 import javax.swing.tree.DefaultMutableTreeNode;
@@ -55,7 +51,6 @@ import java.awt.event.MouseEvent;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.IdentityHashMap;
-import java.util.LinkedHashMap;
 import java.util.Objects;
 import java.util.Set;
 import java.util.function.Consumer;
@@ -71,15 +66,13 @@ public class ParamDocEditorForm {
 
     private final Project project;
     private final PsiFile psiFile;
-    private final Editor editor;
     private final PsiClass psiClass;
     private final String entityName;
     private final SmartPsiElementPointer<PsiElement> initialField;
     private JButton classCommentsButton;
 
     private ParamTreeTableView tableView;
-    private List<DocViewParamData> paramDataList = List.of();
-    private Map<DocViewParamData, SourceDescriptionService.Target> sourceTargets = Map.of();
+    private DocEditorFields fields = new DocEditorFields(List.of(), Map.of());
     private final Set<DocViewParamData> generatingRows = Collections.newSetFromMap(new IdentityHashMap<>());
     private long markdownCopyRequest;
 
@@ -96,14 +89,13 @@ public class ParamDocEditorForm {
     private static final AtomicBoolean myIsPinned = new AtomicBoolean(true);
 
     public ParamDocEditorForm(@NotNull Project project, @NotNull PsiFile psiFile,
-                              @NotNull Editor editor, @NotNull PsiClass psiClass) {
+                              @Nullable Editor editor, @NotNull PsiClass psiClass) {
 
         this.project = project;
         this.psiFile = psiFile;
-        this.editor = editor;
         this.psiClass = psiClass;
         this.entityName = psiClass.getName();
-        PsiElement caret = psiFile.findElementAt(editor.getCaretModel().getOffset());
+        PsiElement caret = editor == null ? null : psiFile.findElementAt(editor.getCaretModel().getOffset());
         PsiElement field = PsiTreeUtil.getParentOfType(caret, PsiField.class, PsiRecordComponent.class);
         this.initialField = field == null ? null : SmartPointerManager.createPointer(field);
 
@@ -121,7 +113,7 @@ public class ParamDocEditorForm {
     @NotNull
     @Contract("_, _, _, _ -> new")
     public static ParamDocEditorForm getInstance(@NotNull Project project, @NotNull PsiFile psiFile,
-                                                 @NotNull Editor editor, @NotNull PsiClass psiClass) {
+                                                 @Nullable Editor editor, @NotNull PsiClass psiClass) {
         return new ParamDocEditorForm(project, psiFile, editor, psiClass);
     }
 
@@ -216,31 +208,12 @@ public class ParamDocEditorForm {
                 .createActionToolbar("ParamDocParamEditorHeadToolbar", group, true);
         toolbar.setTargetComponent(headToolbarPanel);
 
-        keepToolbarPreferredMinimumSize(toolbar);
+        PopupToolbarLayout.keepPreferredMinimumSize(toolbar);
         Utils.setSmallerFontForChildren(toolbar.getComponent());
 
         headToolbarPanel.add(toolbar.getComponent(), BorderLayout.EAST);
     }
 
-    private static void keepToolbarPreferredMinimumSize(@NotNull ActionToolbar toolbar) {
-        ToolbarLayoutStrategy delegate = toolbar.getLayoutStrategy();
-        toolbar.setLayoutStrategy(new ToolbarLayoutStrategy() {
-            @Override
-            public @NotNull List<Rectangle> calculateBounds(@NotNull ActionToolbar actionToolbar) {
-                return delegate.calculateBounds(actionToolbar);
-            }
-
-            @Override
-            public @NotNull Dimension calcPreferredSize(@NotNull ActionToolbar actionToolbar) {
-                return delegate.calcPreferredSize(actionToolbar);
-            }
-
-            @Override
-            public @NotNull Dimension calcMinimumSize(@NotNull ActionToolbar actionToolbar) {
-                return delegate.calcPreferredSize(actionToolbar);
-            }
-        });
-    }
 
     /**
      * 底部 右侧 主要是提交
@@ -292,7 +265,7 @@ public class ParamDocEditorForm {
                 .createActionToolbar("ParamDocParamEditorTailRightToolbar", rightGroup, true);
         toolbar.setTargetComponent(tailToolbarPanel);
 
-        keepToolbarPreferredMinimumSize(toolbar);
+        PopupToolbarLayout.keepPreferredMinimumSize(toolbar);
         Utils.setSmallerFontForChildren(toolbar.getComponent());
 
         tailToolbarPanel.add(toolbar.getComponent(), BorderLayout.EAST);
@@ -319,7 +292,7 @@ public class ParamDocEditorForm {
                 }
 
                 // Capture editable values on EDT; rendering must not retain or dereference PSI.
-                List<DocViewParamData> snapshot = snapshotParamData(paramDataList);
+                List<DocViewParamData> snapshot = DocEditorFields.snapshotParamData(fields.data());
                 boolean separate = Boolean.TRUE.equals(Settings.getInstance(project).getSeparateParam());
                 long request = ++markdownCopyRequest;
                 DocViewBackgroundTasks.runReadTask(project,
@@ -359,34 +332,8 @@ public class ParamDocEditorForm {
 
     private boolean isMarkdownCopyAvailable() {
         return !project.isDisposed() && popup != null && !popup.isDisposed()
-                && tableView != null && !paramDataList.isEmpty();
+                && tableView != null && !fields.data().isEmpty();
     }
-
-    private static List<DocViewParamData> snapshotParamData(List<DocViewParamData> source) {
-        List<DocViewParamData> snapshot = new ArrayList<>(source.size());
-        for (DocViewParamData data : source) {
-            DocViewParamData copy = new DocViewParamData();
-            copy.setName(data.getName());
-            copy.setType(data.getType());
-            copy.setRequired(data.getRequired());
-            copy.setExample(data.getExample());
-            copy.setDescription(data.getDescription());
-            copy.setSince(data.getSince());
-            copy.setVersion(data.getVersion());
-            copy.setPrefixSymbol1(data.getPrefixSymbol1());
-            copy.setPrefixSymbol2(data.getPrefixSymbol2());
-            copy.setCollection(data.isCollection());
-            copy.setMap(data.isMap());
-            copy.setTabCount(data.getTabCount());
-            copy.setSyntheticContainerNode(data.isSyntheticContainerNode());
-            if (data.getChildList() != null && !data.getChildList().isEmpty()) {
-                copy.setChildList(snapshotParamData(data.getChildList()));
-            }
-            snapshot.add(copy);
-        }
-        return snapshot;
-    }
-
 
     private void initParamTable() {
 
@@ -397,59 +344,28 @@ public class ParamDocEditorForm {
                 project,
                 DocViewBundle.message("task.docview.parameters"),
                 true,
-                indicator -> {
-                    Body rootBody = new Body();
-                    rootBody.setQualifiedNameForClassType(psiClass.getQualifiedName());
-                    boolean isProto = ProtoUtils.isProto(PsiTypesUtil.getClassType(psiClass));
-                    ParamPsiUtils.buildBodyList(psiClass, null, rootBody, isProto);
-                    List<DocViewParamData> rows = DocViewData.buildBodyDataList(rootBody.getChildList());
-                    Map<DocViewParamData, SourceDescriptionService.Target> targets = new IdentityHashMap<>();
-                    collectSourceTargets(rows, targets, "");
-                    return new EditorRows(rows, targets);
-                },
+                indicator -> DocEditorFields.read(psiClass),
                 this::applyParamTable,
                 throwable -> DocViewNotification.notifyError(project, throwable.getMessage())
         );
     }
 
-    private record EditorRows(List<DocViewParamData> data,
-                              Map<DocViewParamData, SourceDescriptionService.Target> targets) {}
-
-    private static void collectSourceTargets(List<DocViewParamData> rows,
-                                             Map<DocViewParamData, SourceDescriptionService.Target> targets,
-                                             String prefix) {
-        for (DocViewParamData row : rows) {
-            String path = row.getName() == null || row.getName().isBlank() ? prefix
-                    : prefix.isEmpty() ? row.getName() : prefix + " · " + row.getName();
-            if (!row.isSyntheticContainerNode()) {
-                var target = SourceDescriptionService.fieldDescriptionTarget(path, row.getDescription(), row.getPsiElement());
-                if (target != null) {
-                    targets.put(row, target);
-                }
-            }
-            if (row.getChildList() != null) {
-                collectSourceTargets(row.getChildList(), targets, path);
-            }
-        }
-    }
-
-    private void applyParamTable(@NotNull EditorRows rows) {
-        paramDataList = rows.data();
-        sourceTargets = rows.targets();
+    private void applyParamTable(@NotNull DocEditorFields rows) {
+        fields = rows;
         DefaultMutableTreeNode root = new DefaultMutableTreeNode();
 
-        convertToTreeNode(root, paramDataList);
+        convertToTreeNode(root, fields.data());
 
         ListTreeTableModelOnColumns model = new ListTreeTableModelOnColumns(root, ParamTreeTableView.COLUMN_INFOS);
 
         tableView = new ParamTreeTableView(model,
-                row -> !project.isDisposed() && !DumbService.isDumb(project) && sourceTargets.containsKey(row)
+                row -> !project.isDisposed() && !DumbService.isDumb(project) && fields.targets().containsKey(row)
                         && !generatingRows.contains(row),
                 this::regenerateRow, this::beginDescriptionEdit);
 
         paramScrollPane.setViewportView(tableView);
-        classCommentsButton.setEnabled(ReadAction.compute(() -> SourceDescriptionService.classTarget(psiClass) != null
-                || !directFieldTargets().isEmpty()));
+        classCommentsButton.setEnabled(ReadAction.computeBlocking(() -> SourceDescriptionService.classTarget(psiClass) != null
+                || !fields.directFieldTargets(psiClass).isEmpty()));
         PsiElement field = initialField != null ? initialField.getElement() : null;
         if (field != null) {
             for (int row = 0; row < tableView.getRowCount(); row++) {
@@ -463,50 +379,21 @@ public class ParamDocEditorForm {
         }
     }
 
-    private Map<SourceDescriptionService.Target, DocViewParamData> directFieldTargets() {
-        Map<PsiElement, DocViewParamData> visible = new LinkedHashMap<>();
-        for (var row : paramDataList) {
-            if (row.getPsiElement() != null && !row.isSyntheticContainerNode()) {
-                visible.put(row.getPsiElement(), row);
-            }
-        }
-        Map<SourceDescriptionService.Target, DocViewParamData> result = new LinkedHashMap<>();
-        if (psiClass.isValid()) {
-            for (var field : psiClass.getFields()) {
-                addClassField(result, visible, field, field.getName());
-            }
-            for (var component : psiClass.getRecordComponents()) {
-                addClassField(result, visible, component, component.getName());
-            }
-        }
-        return result;
-    }
-
-    private void addClassField(Map<SourceDescriptionService.Target, DocViewParamData> result,
-                               Map<PsiElement, DocViewParamData> visible, PsiElement element, String name) {
-        var row = visible.get(element);
-        var target = row == null ? SourceDescriptionService.fieldTarget("字段 · " + name, null, element)
-                : sourceTargets.get(row);
-        if (target != null) {
-            result.put(target, row);
-        }
-    }
-
     private void showClassDialog() {
         if (project.isDisposed() || DumbService.isDumb(project) || popup != null && popup.isDisposed()
                 || tableView.isEditing() && !tableView.getCellEditor().stopCellEditing()) {
             return;
         }
         PsiDocumentManager.getInstance(project).commitAllDocuments();
-        var fields = ReadAction.compute(this::directFieldTargets);
-        var rows = ReadAction.compute(() -> {
+        var classFields = ReadAction.computeBlocking(() -> fields.directFieldTargets(psiClass));
+        var rows = ReadAction.computeBlocking(() -> {
             var candidates = new ArrayList<ClassDescriptionDialog.Row>();
             var classTarget = SourceDescriptionService.classTarget(psiClass);
             var classDraft = classTarget == null ? null : SourceDescriptionService.capture(classTarget);
             if (classDraft != null) {
                 candidates.add(new ClassDescriptionDialog.Row(classDraft, classDraft.original(), true));
             }
-            fields.forEach((target, row) -> {
+            classFields.forEach((target, row) -> {
                 var draft = SourceDescriptionService.capture(target);
                 if (draft != null) {
                     String edited = row == null ? null : editedDescription(row, target);
@@ -527,9 +414,9 @@ public class ParamDocEditorForm {
             if (dialog.showAndGet()) {
                 for (var edit : dialog.written()) {
                     var target = edit.draft().target();
-                    var row = fields.get(target);
+                    var row = classFields.get(target);
                     if (row != null) {
-                        updateRowDescription(row);
+                        fields.updateRowDescription(row);
                     }
                 }
                 tableView.repaint();
@@ -540,14 +427,14 @@ public class ParamDocEditorForm {
     }
 
     private Consumer<String> beginDescriptionEdit(DocViewParamData row) {
-        var target = sourceTargets.get(row);
+        var target = fields.targets().get(row);
         if (target == null) {
             // Rows without a source declaration remain editable for Markdown.
             return text -> row.setDescription(row.getDescription().withDraft(text));
         }
         var draft = captureRow(target);
         if (draft != null && !Objects.equals(draft.original(), target.description().sourceComment())) {
-            updateRowDescription(row);
+            fields.updateRowDescription(row);
         }
         return text -> writeRow(row, draft, text);
     }
@@ -557,7 +444,7 @@ public class ParamDocEditorForm {
             return null;
         }
         PsiDocumentManager.getInstance(project).commitAllDocuments();
-        return ReadAction.compute(() -> SourceDescriptionService.capture(target));
+        return ReadAction.computeBlocking(() -> SourceDescriptionService.capture(target));
     }
 
     private void writeRow(DocViewParamData row, SourceDescriptionService.Draft draft, String description) {
@@ -570,17 +457,17 @@ public class ParamDocEditorForm {
             return;
         }
         ++markdownCopyRequest;
-        updateRowDescription(row);
+        fields.updateRowDescription(row);
         tableView.repaint();
     }
 
     private void regenerateRow(DocViewParamData row) {
-        var target = sourceTargets.get(row);
+        var target = fields.targets().get(row);
         if (target == null || generatingRows.contains(row)) {
             return;
         }
         var draft = captureRow(target);
-        var generation = draft == null ? null : ReadAction.compute(() -> SourceDescriptionService.prepareGeneration(draft, ""));
+        var generation = draft == null ? null : ReadAction.computeBlocking(() -> SourceDescriptionService.prepareGeneration(draft, ""));
         if (generation == null) {
             DocViewNotification.notifyError(project, "源码已更改或不可写，请重新生成。");
             return;
@@ -623,34 +510,6 @@ public class ParamDocEditorForm {
     private static String editedDescription(DocViewParamData row, SourceDescriptionService.Target target) {
         String source = row.getDescription().editableText();
         return Objects.equals(source, target.description().sourceComment()) ? null : source;
-    }
-
-    private void updateRowDescription(DocViewParamData row) {
-        var target = sourceTargets.get(row);
-        var description = ReadAction.compute(() -> {
-            var owner = target.source().getElement();
-            if (owner instanceof PsiField field) {
-                return DocViewUtils.fieldDescription(field);
-            }
-            if (owner instanceof PsiClass type && target.paramName() != null) {
-                for (var component : type.getRecordComponents()) {
-                    if (target.paramName().equals(component.getName())) {
-                        return DocViewUtils.fieldDescription(component);
-                    }
-                }
-            }
-            return null;
-        });
-        if (description != null) {
-            for (var entry : sourceTargets.entrySet()) {
-                var other = entry.getValue();
-                if (Objects.equals(target.paramName(), other.paramName()) && target.source().equals(other.source())) {
-                    entry.getKey().setDescription(description);
-                    entry.setValue(new SourceDescriptionService.Target(
-                            other.label(), description, other.paramName(), other.source()));
-                }
-            }
-        }
     }
 
     private void convertToTreeNode(DefaultMutableTreeNode root, List<DocViewParamData> paramDataList) {

@@ -11,24 +11,15 @@ import com.intellij.psi.PsiElementFactory;
 import com.intellij.psi.PsiField;
 import com.intellij.psi.PsiJavaDocumentedElement;
 import com.intellij.psi.PsiMethod;
-import com.intellij.psi.PsiNamedElement;
 import com.intellij.psi.PsiParameter;
 import com.intellij.psi.PsiParserFacade;
 import com.intellij.psi.PsiRecordComponent;
 import com.intellij.psi.SmartPointerManager;
 import com.intellij.psi.SmartPsiElementPointer;
-import com.intellij.psi.javadoc.PsiDocComment;
-import com.intellij.psi.javadoc.PsiDocTag;
-import com.intellij.psi.javadoc.PsiInlineDocTag;
-import com.intellij.psi.util.PsiTreeUtil;
 import com.liuzhihang.doc.view.dto.Body;
 import com.liuzhihang.doc.view.dto.DocDescription;
 import com.liuzhihang.doc.view.dto.DocView;
 import com.liuzhihang.doc.view.enums.FrameworkEnum;
-import com.liuzhihang.doc.view.common.Consts;
-import com.liuzhihang.doc.view.config.EasyDocConfigComponent;
-import com.liuzhihang.doc.view.service.gpt.GptService;
-import com.liuzhihang.doc.view.service.translator.TranslatorService;
 import com.liuzhihang.doc.view.utils.CustomPsiCommentUtils;
 
 import java.util.ArrayList;
@@ -41,7 +32,6 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.function.Supplier;
-import java.util.stream.Collectors;
 
 public final class SourceDescriptionService {
     private SourceDescriptionService() {}
@@ -170,58 +160,11 @@ public final class SourceDescriptionService {
 
     public static Supplier<String> prepareGeneration(Draft draft, String instructions) {
         var owner = currentOwner(draft);
-        if (owner == null) {
-            return null;
-        }
-        var app = ApplicationManager.getApplication();
-        String provider = app.getService(EasyDocConfigComponent.class).getState().getTranslator();
-        String name = draft.target().paramName() != null ? draft.target().paramName()
-                : owner instanceof PsiNamedElement named ? named.getName() : "";
-        if (!Consts.AI_TRANSLATOR.contains(provider)) {
-            return app.getService(TranslatorService.class).prepareTranslation(name == null ? "" : name, owner);
-        }
-
-        var model = app.getService(GptService.class);
-        String source = owner.getText();
-        var existing = owner.getDocComment();
-        if (existing != null && source.startsWith(existing.getText())) {
-            source = source.substring(existing.getTextLength()).stripLeading();
-        }
-        if (owner instanceof PsiClass && source.contains("{")) {
-            source = source.substring(0, source.indexOf('{')).stripTrailing();
-        }
-        String prompt = model.withProjectTerms(owner, source, """
-                根据下面的 Java 声明，为选中的条目写一段准确、简短的中文说明。
-                只返回当前条目的注释正文。避免推断源码中没有体现的行为。
-                校验约束、引用展开内容和 OpenAPI 描述由文档工具处理，请勿把它们复制进正文。
-                条目：%s（%s）
-                当前说明：%s
-                补充要求：%s
-                声明：
-                %s
-                """.formatted(draft.target().label(), name, draft.original(), instructions, source));
-        return () -> descriptionText(model.chat(provider, prompt));
-    }
-
-    private static String descriptionText(String response) {
-        String text = response == null ? "" : response.strip();
-        if (text.startsWith("```") && text.endsWith("```")) {
-            int firstLine = text.indexOf('\n');
-            if (firstLine >= 0 && firstLine < text.length() - 3) {
-                text = text.substring(firstLine + 1, text.length() - 3).strip();
-            }
-        }
-        if (WriterService.isBlockComment(text)) {
-            return text.substring(3, text.length() - 2).lines().map(String::strip)
-                    .map(line -> line.startsWith("*") ? line.substring(1).strip() : line)
-                    .filter(line -> !line.startsWith("@")).collect(Collectors.joining(" ")).strip();
-        }
-        return text;
+        return owner == null ? null : SourceDescriptionGenerator.prepare(draft, owner, instructions);
     }
 
     public static boolean usesModel() {
-        var settings = ApplicationManager.getApplication().getService(EasyDocConfigComponent.class).getState();
-        return Consts.AI_TRANSLATOR.contains(settings.getTranslator());
+        return SourceDescriptionGenerator.usesModel();
     }
 
     public static boolean apply(Draft draft, String description) {
@@ -261,10 +204,9 @@ public final class SourceDescriptionService {
                 var ordinary = ordinaryComment(entry.getKey(), name);
                 if (ordinary != null) {
                     ordinaryChanges.add(new OrdinaryChange(SmartPointerManager.createPointer(ordinary),
-                            safeCommentText(edit.description())));
+                            JavaDescriptionText.safeCommentText(edit.description())));
                 } else {
-                    String prose = safeProse(edit.description());
-                    result = rewrite(comment, name, preserveInlineReferences(comment, name, prose));
+                    result = JavaDescriptionText.rewrite(comment, name, edit.description());
                     comment = factory.createDocCommentFromText(result);
                 }
             }
@@ -294,45 +236,6 @@ public final class SourceDescriptionService {
     }
 
     private record OrdinaryChange(SmartPsiElementPointer<PsiComment> comment, String prose) {}
-
-    private static String preserveInlineReferences(PsiDocComment comment, String param, String prose) {
-        if (comment == null) {
-            return prose;
-        }
-        var references = new ArrayList<PsiInlineDocTag>();
-        if (param == null) {
-            for (var element : comment.getDescriptionElements()) {
-                if (element instanceof PsiInlineDocTag tag) {
-                    references.add(tag);
-                } else {
-                    references.addAll(PsiTreeUtil.findChildrenOfType(element, PsiInlineDocTag.class));
-                }
-            }
-        } else {
-            for (var tag : comment.findTagsByName("param")) {
-                if (matches(tag, param)) {
-                    references.addAll(PsiTreeUtil.findChildrenOfType(tag, PsiInlineDocTag.class));
-                }
-            }
-        }
-        for (var reference : references) {
-            String name = reference.getName();
-            String text = safeProse(reference.getText());
-            if (Set.of("link", "linkplain", "inheritDoc").contains(name) && !prose.contains(text)) {
-                prose = prose.isEmpty() ? text : prose + " " + text;
-            }
-        }
-        return prose;
-    }
-
-    private static String safeProse(String description) {
-        String prose = safeCommentText(description);
-        return prose.startsWith("@") ? "&#64;" + prose.substring(1) : prose;
-    }
-
-    private static String safeCommentText(String description) {
-        return WriterService.escapeJavaUnicodeSequences(description.strip().replaceAll("\\s+", " ").replace("*/", "*&#47;"));
-    }
 
     private static PsiJavaDocumentedElement currentOwner(Draft draft) {
         var owner = draft.target().source().getElement();
@@ -381,45 +284,5 @@ public final class SourceDescriptionService {
             }
         }
         return true;
-    }
-
-    private static boolean matches(PsiDocTag tag, String name) {
-        return "param".equals(tag.getName()) && tag.getValueElement() != null
-                && name.equals(tag.getValueElement().getText());
-    }
-
-    private static String rewrite(PsiDocComment previous, String param, String prose) {
-        String text = previous == null ? "/** */" : previous.getText();
-        var tags = previous == null ? new PsiDocTag[0] : previous.getTags();
-        int offset = previous == null ? 0 : previous.getTextRange().getStartOffset();
-        int closing = text.length() - 2;
-        if (param == null) {
-            int start = tags.length == 0 ? closing : tags[0].getTextRange().getStartOffset() - offset;
-            String suffix = suffix(text, start, tags.length == 0 ? " " : " * ");
-            return "/**\n * " + prose + "\n" + suffix;
-        }
-
-        String replacement = "@param " + param + " " + prose;
-        for (int i = 0; i < tags.length; i++) {
-            if (matches(tags[i], param)) {
-                int start = tags[i].getTextRange().getStartOffset() - offset;
-                int end = i + 1 == tags.length ? closing : tags[i + 1].getTextRange().getStartOffset() - offset;
-                return text.substring(0, start) + replacement + "\n"
-                        + suffix(text, end, end == closing ? " " : " * ");
-            }
-        }
-        int line = standaloneLineStart(text, closing);
-        return text.substring(0, line).stripTrailing() + "\n * " + replacement + "\n" + suffix(text, closing, " ");
-    }
-
-    private static String suffix(String text, int offset, String prefix) {
-        int line = standaloneLineStart(text, offset);
-        return line == offset ? prefix + text.substring(offset) : text.substring(line);
-    }
-
-    private static int standaloneLineStart(String text, int offset) {
-        int start = text.lastIndexOf('\n', offset - 1) + 1;
-        String prefix = text.substring(start, offset).strip();
-        return start > 0 && (prefix.isEmpty() || "*".equals(prefix)) ? start : offset;
     }
 }

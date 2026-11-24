@@ -29,7 +29,7 @@ public final class Json5RequestConverter extends RequestConverter<RestClientRequ
             throws HttpRequestValidationException {
         HttpRequest psi = pointer.getElement();
         boolean supported = HttpJsonBodies.isSupported(psi);
-        boolean json = supported && JsonBodyNormalizer.isJsonMediaType(psi.getHeaderField("Content-Type") == null ? null : psi.getHeaderField("Content-Type").getValue(substitutor));
+        boolean json = supported && HttpJsonBodies.hasJsonContentType(psi, substitutor);
         RestClientRequest request = delegate.psiToCommonRequest(pointer, json ? CommentAwareSubstitutor.wrap(psi, substitutor) : substitutor);
         if (supported && request.haveTextToSend && JsonBodyNormalizer.isJsonMediaType(request.getHeaderValue("Content-Type", null)) && !hasActiveVariables(request.textToSend)) {
             try {

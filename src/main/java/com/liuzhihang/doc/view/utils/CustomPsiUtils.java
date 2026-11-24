@@ -73,8 +73,12 @@ public class CustomPsiUtils {
      * @return 合成出来的 PsiClass; 光标不在 message 内时返回 null
      */
     @Nullable
-    private static PsiClass getProtoTargetClass(@NotNull Editor editor, @NotNull PsiFile file) {
+    public static PsiClass getProtoTargetClass(@Nullable Editor editor, @NotNull PsiFile file) {
         return ProtoMessageResolver.findTargetPsiClass(editor, file);
+    }
+
+    public static boolean hasProtoMessage(@Nullable Editor editor, @NotNull PsiFile file) {
+        return isProtoFile(file) && ProtoMessageResolver.findTargetMessage(editor, file) != null;
     }
 
     /**

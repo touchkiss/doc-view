@@ -1,5 +1,7 @@
 package com.liuzhihang.doc.view.mcp;
 
+import com.liuzhihang.doc.view.integration.YApiUploadOrchestrator;
+
 import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.util.Computable;
 import com.intellij.testFramework.fixtures.LightJavaCodeInsightFixtureTestCase;

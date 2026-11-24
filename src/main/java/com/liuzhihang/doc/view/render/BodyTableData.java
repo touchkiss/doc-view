@@ -1,6 +1,7 @@
-package com.liuzhihang.doc.view.dto;
+package com.liuzhihang.doc.view.render;
 
 import com.intellij.openapi.progress.ProgressManager;
+import com.liuzhihang.doc.view.dto.DocViewParamData;
 import org.apache.commons.lang3.StringUtils;
 
 import java.util.ArrayList;

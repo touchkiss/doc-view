@@ -15,8 +15,9 @@ public abstract class ProtoGrpcCopyRestAction extends ProtoGrpcCopyCurlAction {
     protected abstract boolean descriptions();
     @Override public void actionPerformed(@NotNull AnActionEvent event) {
         Project project = event.getData(CommonDataKeys.PROJECT);
-        PsiFile file = event.getData(CommonDataKeys.PSI_FILE);
-        Editor editor = event.getData(CommonDataKeys.EDITOR);
+        var selection = ActionSelection.from(event);
+        PsiFile file = selection.file();
+        Editor editor = selection.editor();
         if (project == null || file == null || editor == null) return;
         String[] signature = ProtoGrpcUtils.extractMethodSignature(editor, file);
         if (signature == null) { DocViewNotification.notifyError(project, "无法识别 gRPC 方法"); return; }

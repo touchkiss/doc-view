@@ -8,6 +8,7 @@ import com.intellij.psi.PsiClass;
 import com.intellij.psi.PsiMethod;
 import com.liuzhihang.doc.view.dto.DocView;
 import com.liuzhihang.doc.view.integration.impl.YApiFacadeServiceImpl;
+import com.liuzhihang.doc.view.integration.YApiUploadOrchestrator;
 import com.liuzhihang.doc.view.service.DocViewService;
 import io.modelcontextprotocol.spec.McpSchema;
 
@@ -188,8 +189,12 @@ public final class McpToolHandler {
 
     private static List<McpResult.Item> uploadDocuments(Project project, List<DocView> documents) {
         YApiFacadeServiceImpl facade = ApplicationManager.getApplication().getService(YApiFacadeServiceImpl.class);
-        List<YApiUploadOrchestrator.UploadItemResult> results = new YApiUploadOrchestrator(facade).upload(project, documents);
-        return results.stream().map(McpToolHandler::resultItem).toList();
+        try {
+            return new YApiUploadOrchestrator(facade).upload(project, documents).stream()
+                    .map(McpToolHandler::resultItem).toList();
+        } catch (YApiUploadOrchestrator.MissingConfigurationException exception) {
+            throw new McpException(McpException.Code.YAPI_NOT_CONFIGURED, exception.getMessage());
+        }
     }
 
     static McpResult.Item resultItem(YApiUploadOrchestrator.UploadItemResult result) {

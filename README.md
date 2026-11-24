@@ -23,7 +23,7 @@
 
 ## 生成源码注释
 
-- 在编辑器右键选择 **Doc View 源码注释 → 生成注释或翻译选区**。光标所在的 Java 或 Kotlin 声明会生成文档注释。选中文本时可查看翻译结果，或将中文替换为英文命名。Java 支持多光标、record 组件和后台批量生成，Proto 支持单项和批量成员注释，Java 源码目录支持生成 `package-info.java`。
+- 在编辑器右键选择 **Doc View → 源码注释 → 生成注释**，选中文本时该项显示为 **翻译选区**。光标所在的 Java 或 Kotlin 声明会生成文档注释。选中文本时可查看翻译结果，或将中文替换为英文命名。Java 支持多光标、record 组件和后台批量生成，Proto 支持单项和批量成员注释，Java 源码目录支持生成 `package-info.java`。
 - 在 **设置 → 工具 → Doc View → 源码注释与 AI** 配置模板、词典、翻译及大模型，可导入原插件导出的 `easy_javadoc.json`。已有注释默认跳过，可设为补齐缺失标签或强制覆盖。默认使用 `Ctrl+\`，快捷键可在 Keymap 中配置。通用大模型支持填写基础地址（如 `http://127.0.0.1:8317/v1`）或完整的 `/chat/completions` 地址。本地服务无需认证时，密钥可留空。
 - 在 **工具 → Doc View 源码注释 → AI 分析项目术语** 启动分析。确认后，插件抽取项目 Java/Kotlin 源码中的最多 400 个声明标识符，向配置的模型请求候选术语。可以编辑、勾选并逐条保存到当前项目或全局。项目映射按本机项目目录区分，生成注释时优先采用项目释义。已有映射默认不勾选。
 
@@ -48,23 +48,23 @@
 ### 查看、复制和导出
 
 1. 在已打开的 Java 项目中等待 IDE 索引完成。
-2. 将光标放在受支持的类或方法上，右键选择 **Doc View**。
+2. 将光标放在受支持的类或方法上，右键选择 **Doc View → 预览文档**。项目树右键同样提供 **Doc View**，操作对象为当前选中的文件、类或方法。
 3. 在预览中查看参数表和请求、返回示例，使用工具栏复制、导出或上传。
 
 右侧 **Doc View** 工具窗口提供按模块、类、方法组织的文档目录，可刷新、跳转源码和批量操作。若菜单未出现，先检查光标位置、类或方法是否受支持，以及索引是否完成。
 
-需要调整文档草稿或复制实体 JSON 时，使用右键菜单 **Doc Editor**。
+需要调整文档草稿或复制实体 JSON 时，使用右键菜单 **Doc View → 编辑文档**。
 
 ### 生成请求示例
 
-将光标放在 Spring / Feign 接口方法上，右键选择 **Copy As**：
+将光标放在 Spring / Feign 接口方法上，右键选择 **Doc View → 复制为**：
 
 - **cURL**：复制 cURL 命令，地址使用项目设置中的 Copy cURL 域名。
 - **REST Request (JSON)**：复制可粘贴到 IDEA `.http` 文件的请求，地址使用 `{{host}}` 变量。
 - **REST Request (JSON5)**：同样生成 `.http` 请求，并将请求体字段描述输出为注释。
 - **Postman**：复制仅包含当前接口的 Postman Collection JSON。打开 Postman 的 **Import**，粘贴并导入，再为 `{{host}}` 设置实际地址。JSON 请求体使用标准 JSON 加字段说明注释；Postman 的 raw JSON 模式发送前会移除注释。
 
-在 `.proto` 文件的 RPC 方法上右键，**Copy As** 提供：
+在 `.proto` 文件的 RPC 方法上右键，**Doc View → 复制为** 提供：
 
 - **cURL**：生成 `curl -X GRPC` 文本，供支持此语法的客户端使用；它不是 `grpcurl` 命令，普通 cURL 不能直接用它完成原生 gRPC 调用。
 - **REST Request (JSON)**：生成 IDEA HTTP Client 的 `GRPC` 请求，地址使用项目设置中的 gRPC cURL 域名。
@@ -92,7 +92,7 @@ HTTP REST Request 和 Postman 输出保留 `{{host}}`，不使用以上域名设
 
 ### 导出项目文档
 
-在 Doc View 工具窗口选择 **Export → Export Project Docs**，扫描当前项目中可导出的接口，并写入项目根目录：
+在 Doc View 工具窗口选择 **导出 → 导出项目文档**，扫描当前项目中可导出的接口，并写入项目根目录：
 
 ```text
 docs/doc-view/
@@ -117,7 +117,7 @@ docs/doc-view/
 
 ## 上传到文档平台
 
-先在 **Doc View → Platform Integrations** 下配置目标平台，再通过编辑器右键 **Doc Upload**、预览工具栏或工具窗口上传。
+先在 **Doc View → Platform Integrations** 下配置目标平台，再通过编辑器右键 **Doc View → 上传到**、预览工具栏或工具窗口上传。
 
 | 平台 | 需要配置 |
 | --- | --- |
@@ -178,6 +178,8 @@ http://127.0.0.1:12333/mcp
 服务不使用 MCP Token，仅绑定 `127.0.0.1`。请保持本机使用，不要通过端口转发、反向代理或共享网络暴露服务。YApi 项目 Token 仍需在 IDE 内配置。
 
 ## 本地开发
+
+菜单、文档生成、源码写回和上传的代码入口见[架构与实现导航](docs/superpowers/specs/2026-11-24-plugin-architecture.md#实现导航)。
 
 准备 JDK 25 和本地 IntelliJ IDEA。`build.gradle` 中的 `localIde` 当前指向 macOS 安装路径；其他安装位置需先调整该配置。构建使用仓库自带的 Gradle Wrapper。
 

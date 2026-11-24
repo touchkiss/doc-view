@@ -28,7 +28,7 @@ public final class GenerateClassMembersJavadocAction extends AnAction {
         var project = event.getProject();
         var context = context(event);
         var proto = service(ProtoCommentSupport.class);
-        event.getPresentation().setEnabled(project != null && !DumbService.isDumb(project) && projectFile(context)
+        event.getPresentation().setEnabledAndVisible(project != null && !DumbService.isDumb(project) && projectFile(context)
                 && (context.getContainingFile() instanceof PsiJavaFile || proto != null && proto.supports(context)));
     }
 

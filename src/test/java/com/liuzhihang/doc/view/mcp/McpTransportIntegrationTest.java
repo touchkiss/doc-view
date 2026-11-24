@@ -9,7 +9,6 @@ import io.modelcontextprotocol.spec.McpSchema;
 import org.junit.Test;
 
 import javax.swing.SwingUtilities;
-import java.lang.reflect.Constructor;
 import java.lang.reflect.Field;
 import java.lang.reflect.Proxy;
 import java.net.URI;
@@ -157,17 +156,10 @@ public class McpTransportIntegrationTest {
                         return documents.stream().map(document -> McpResult.Item.created(document.getName(),
                                 "http://yapi.test/" + document.getName())).toList();
                     });
-            Object transport = sdkTransport(handler);
-            McpServerService service = new McpServerService(() -> (McpServerService.McpTransport) transport);
+            var transport = new SdkMcpTransport(handler, 0);
+            McpServerService service = new McpServerService(() -> transport);
             service.start();
             return new RunningServer(service, transport, service.getEndpoint(), handledOffEdt);
-        }
-
-        private static Object sdkTransport(McpToolHandler handler) throws Exception {
-            Class<?> type = Class.forName("com.liuzhihang.doc.view.mcp.McpServerService$SdkMcpTransport");
-            Constructor<?> constructor = type.getDeclaredConstructor(McpToolHandler.class);
-            constructor.setAccessible(true);
-            return constructor.newInstance(handler);
         }
 
         private URI endpoint() {

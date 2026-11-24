@@ -31,8 +31,9 @@ public class ProtoGrpcCopyCurlAction extends AnAction {
     @Override
     public void actionPerformed(@NotNull AnActionEvent e) {
         Project project = e.getData(PlatformDataKeys.PROJECT);
-        PsiFile psiFile = e.getData(CommonDataKeys.PSI_FILE);
-        Editor editor = e.getData(CommonDataKeys.EDITOR);
+        var selection = ActionSelection.from(e);
+        PsiFile psiFile = selection.file();
+        Editor editor = selection.editor();
 
         if (project == null || psiFile == null || editor == null) {
             return;
@@ -63,9 +64,9 @@ public class ProtoGrpcCopyCurlAction extends AnAction {
         }
 
         // Copy to clipboard
-        StringSelection selection = new StringSelection(curl);
+        StringSelection clipboardText = new StringSelection(curl);
         Clipboard clipboard = Toolkit.getDefaultToolkit().getSystemClipboard();
-        clipboard.setContents(selection, selection);
+        clipboard.setContents(clipboardText, clipboardText);
 
         DocViewNotification.notifyInfo(project, "Copied gRPC cURL for " + methodName);
     }
@@ -73,8 +74,9 @@ public class ProtoGrpcCopyCurlAction extends AnAction {
     @Override
     public void update(@NotNull AnActionEvent e) {
         Project project = e.getData(PlatformDataKeys.PROJECT);
-        PsiFile psiFile = e.getData(CommonDataKeys.PSI_FILE);
-        Editor editor = e.getData(CommonDataKeys.EDITOR);
+        var selection = ActionSelection.from(e);
+        PsiFile psiFile = selection.file();
+        Editor editor = selection.editor();
 
         if (editor == null || project == null || psiFile == null) {
             e.getPresentation().setEnabledAndVisible(false);

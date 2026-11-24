@@ -1,7 +1,6 @@
 package com.liuzhihang.doc.view.action;
 
 import com.intellij.openapi.actionSystem.AnActionEvent;
-import com.intellij.openapi.actionSystem.CommonDataKeys;
 import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.application.ReadAction;
 import com.intellij.openapi.progress.ProcessCanceledException;
@@ -40,16 +39,7 @@ final class SourceCommentActionSupport {
     }
 
     static PsiElement context(AnActionEvent event) {
-        var editor = event.getData(CommonDataKeys.EDITOR);
-        var file = event.getData(CommonDataKeys.PSI_FILE);
-        if (editor != null && file != null && file.getTextLength() > 0) {
-            int offset = Math.min(editor.getCaretModel().getOffset(), file.getTextLength() - 1);
-            PsiElement atCaret = file.findElementAt(offset);
-            if (atCaret != null) {
-                return atCaret;
-            }
-        }
-        return event.getData(CommonDataKeys.PSI_ELEMENT);
+        return ActionSelection.from(event).element();
     }
 
     static PsiJavaDocumentedElement javaTarget(PsiElement context) {

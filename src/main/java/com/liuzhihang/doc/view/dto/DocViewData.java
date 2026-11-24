@@ -2,34 +2,22 @@ package com.liuzhihang.doc.view.dto;
 
 import com.intellij.openapi.project.Project;
 import com.liuzhihang.doc.view.config.Settings;
-import com.liuzhihang.doc.view.config.TemplateSettings;
 import com.liuzhihang.doc.view.enums.FrameworkEnum;
-import com.liuzhihang.doc.view.utils.CurlHostUtils;
-import com.liuzhihang.doc.view.utils.CurlUtils;
-import com.liuzhihang.doc.view.utils.VelocityUtils;
+import com.liuzhihang.doc.view.render.DocumentMarkdownRenderer;
+import com.liuzhihang.doc.view.render.Json5ExampleRenderer;
+import com.liuzhihang.doc.view.render.MarkdownExamples;
+import com.liuzhihang.doc.view.render.MarkdownTables;
+import com.liuzhihang.doc.view.render.TemplateParameterMapper;
 import lombok.Data;
-import org.apache.commons.collections4.CollectionUtils;
 import org.apache.commons.lang3.StringUtils;
 import org.jetbrains.annotations.Contract;
 import org.jetbrains.annotations.NotNull;
 
-import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.List;
-import java.util.regex.Pattern;
-import java.util.stream.Collectors;
 
-/**
- * DocView 的模版 用来使用 Velocity 生成内容
- * <p>
- * Velocity 会根据 get 方法 获取值, 不提供 set 方法
- *
- * @author liuzhihang
- * @date 2020/11/21 16:39
- */
+/** Variables exposed to built-in and user-defined Velocity templates. */
 @Data
 public class DocViewData {
-    private static final Pattern MARKDOWN_CELL_PIPE = Pattern.compile("(\\\\*)\\|");
 
     /**
      * 文档名称
@@ -130,182 +118,23 @@ public class DocViewData {
         this.method = docView.getMethod();
         this.type = docView.getType().toString();
 
-        this.requestHeaderDataList = headerDataList(docView.getHeaderList());
-        this.requestHeader = headerMarkdown(requestHeaderDataList);
+        this.requestHeaderDataList = TemplateParameterMapper.headerDataList(docView.getHeaderList());
+        this.requestHeader = MarkdownTables.headerMarkdown(requestHeaderDataList);
 
-        this.requestParamDataList = paramDataList(docView.getReqParamList());
-        this.requestParam = paramMarkdown(requestParamDataList);
+        this.requestParamDataList = TemplateParameterMapper.paramDataList(docView.getReqParamList());
+        this.requestParam = MarkdownTables.paramMarkdown(requestParamDataList);
 
         this.requestBodyDataList = buildBodyDataList(project, docView.getReqBody().getChildList());
         this.requestBody = bodyMarkdown(requestBodyDataList, settings.getSeparateParam());
-        this.requestJson5 = buildJson5(requestBodyDataList);
-        this.requestExample = requestExample(docView);
+        this.requestJson5 = Json5ExampleRenderer.render(requestBodyDataList);
+        this.requestExample = MarkdownExamples.requestExample(docView);
 
         this.responseParamDataList = buildBodyDataList(project, docView.getRespBody().getChildList());
         this.responseParam = bodyMarkdown(responseParamDataList, settings.getSeparateParam());
-        this.responseExample = respBodyExample(docView.getRespExample());
+        this.responseExample = MarkdownExamples.responseExample(docView.getRespExample());
 
-        this.responseJson5 = buildJson5(responseParamDataList);
+        this.responseJson5 = Json5ExampleRenderer.render(responseParamDataList);
         this.curlExample = docView.getType() == FrameworkEnum.SPRING ? curlMarkdown(project, docView) : "";
-    }
-
-    public static String curlMarkdown(DocView docView) {
-        // Keep empty/non-HTTP documents independent of PSI, as before the explicit-project overload.
-        if (StringUtils.isBlank(CurlUtils.build(docView))) {
-            return "";
-        }
-        return curlMarkdown(docView.getPsiClass().getProject(), docView);
-    }
-
-    public static String curlMarkdown(Project project, DocView docView) {
-        String curl = CurlUtils.build(docView);
-        if (StringUtils.isBlank(curl)) {
-            return "";
-        }
-        // 文档中的 curl 示例使用独立的域名配置, 默认为 {{host}} 即保持占位符不变
-        curl = CurlHostUtils.applyDocHost(project, curl);
-        return "```bash\n" + curl + "\n```\n\n";
-    }
-
-    /**
-     * 带有描述的 JSON
-     *
-     * @param responseParamDataList
-     * @return
-     */
-    private String buildJson5(List<DocViewParamData> responseParamDataList) {
-        if (CollectionUtils.isEmpty(responseParamDataList)) {
-            return "";
-        }
-        return "{\n" + buildJsonWithDescContent(responseParamDataList) + "}";
-    }
-
-    private String buildJsonWithDescContent(List<DocViewParamData> responseParamDataList) {
-        List<DocViewParamData> exampleProperties = responseParamDataList.stream()
-                .filter(data -> !data.isOmitFromExample())
-                .toList();
-        StringBuilder builder = new StringBuilder();
-        for (int j = 0; j < exampleProperties.size(); j++) {
-            DocViewParamData data = exampleProperties.get(j);
-            String tab = "    ";
-            for (int i = 0; i < data.getTabCount(); i++) {
-                builder.append(tab);
-            }
-            builder.append("\"").append(data.getName()).append("\": ");
-            int collectionDepth = Math.max(1, arrayDimensions(data.getType()));
-            if (CollectionUtils.isNotEmpty(data.getChildList())) {
-                if (data.isCollection()) {
-                    builder.append("[".repeat(collectionDepth));
-                    addDesc(data, builder, tab);
-                    for (int i = 0; i < data.getTabCount() + 1; i++) {
-                        builder.append(tab);
-                    }
-                    builder.append("{\n");
-                } else {
-                    builder.append("{");
-                    addDesc(data, builder, tab);
-                }
-                if (data.getChildList().size() == 1 && data.getChildList().get(0).isSyntheticContainerNode()
-                        && "element".equals(data.getChildList().get(0).getName())) {
-                    builder.append(buildJsonWithDescContent(data.getChildList().get(0).getChildList()));
-                } else {
-                    builder.append(buildJsonWithDescContent(data.getChildList()));
-                }
-                if (data.isCollection()) {
-                    for (int i = 0; i < data.getTabCount() + 1; i++) {
-                        builder.append(tab);
-                    }
-                    builder.append("}\n");
-                    for (int i = 0; i < data.getTabCount(); i++) {
-                        builder.append(tab);
-                    }
-                    builder.append("]".repeat(collectionDepth));
-                } else {
-                    for (int i = 0; i < data.getTabCount(); i++) {
-                        builder.append(tab);
-                    }
-                    builder.append("}");
-                }
-                if (j < exampleProperties.size() - 1) {
-                    builder.append(",\n");
-                } else {
-                    builder.append("\n");
-                }
-            } else {
-                // 集合（无子节点）必须输出数组；并根据元素类型决定是否需要引号
-                if (data.isCollection()) {
-                    if (doNotNeedQuote(extractCollectionItemType(data.getType()))) {
-                        builder.append("[".repeat(collectionDepth)).append(data.getExample()).append("]".repeat(collectionDepth));
-                    } else {
-                        builder.append("[".repeat(collectionDepth)).append("\"").append(data.getExample()).append("\"").append("]".repeat(collectionDepth));
-                    }
-                } else if (doNotNeedQuote(data.getType())) {
-                    builder.append(data.getExample());
-                } else if ("Map".equals(data.getType()) || data.getType().startsWith("Map<")) {
-                    builder.append("{}");
-                } else {
-                    builder.append("\"").append(data.getExample()).append("\"");
-                }
-                if (j < exampleProperties.size() - 1) {
-                    builder.append(",");
-                }
-                addDesc(data, builder, tab);
-            }
-        }
-        return builder.toString();
-    }
-
-    /**
-     * 从 List<Integer> / Set<Long> / Collection<Boolean> 或 Java 数组提取标量元素类型名。
-     * 解析失败时返回原 type，保持兼容。
-     */
-    private static String extractCollectionItemType(String type) {
-        if (StringUtils.isBlank(type)) {
-            return type;
-        }
-        int dimensions = arrayDimensions(type);
-        if (dimensions > 0) return type.trim().substring(0, type.trim().length() - dimensions * 2).trim();
-        int lt = type.indexOf('<');
-        int gt = type.lastIndexOf('>');
-        if (lt < 0 || gt < 0 || gt <= lt) {
-            return type;
-        }
-        String inner = type.substring(lt + 1, gt).trim();
-        // 处理 Map<K,V> 之类的情况：取第一个类型参数（K），但本方法主要用于 collection
-        int comma = inner.indexOf(',');
-        if (comma > -1) {
-            inner = inner.substring(0, comma).trim();
-        }
-        return inner;
-    }
-
-    private static int arrayDimensions(String type) {
-        if (type == null) return 0;
-        String value = type.trim();
-        int dimensions = 0;
-        while (value.endsWith("[]")) {
-            dimensions++;
-            value = value.substring(0, value.length() - 2);
-        }
-        return dimensions;
-    }
-
-    private static boolean doNotNeedQuote(String type) {
-        return "byte".equals(type) || "Byte".equals(type)
-                || "short".equals(type) || "Short".equals(type)
-                || "int".equals(type) || "Integer".equals(type)
-                || "long".equals(type) || "Long".equals(type)
-                || "float".equals(type) || "Float".equals(type)
-                || "double".equals(type) || "Double".equals(type)
-                || "boolean".equals(type) || "Boolean".equals(type);
-    }
-
-    private static void addDesc(DocViewParamData data, StringBuilder builder, String tab) {
-        if (StringUtils.isNotBlank(data.getDesc())) {
-            builder.append(tab).append("//").append(" ").append(data.getDesc()).append("\n");
-        } else {
-            builder.append("\n");
-        }
     }
 
     @NotNull
@@ -315,331 +144,27 @@ public class DocViewData {
     }
 
     public static String markdownText(Project project, DocView docView) {
-
-        DocViewData docViewData = new DocViewData(project, docView);
-
-        if (docView.getType() == FrameworkEnum.DUBBO) {
-            return VelocityUtils.convert(TemplateSettings.getInstance(project).getDubboTemplate(), docViewData);
-        } else if (docView.getType() == FrameworkEnum.NONE_POJO) {
-            return VelocityUtils.convert(TemplateSettings.getInstance(project).getPojoTemplate(), docViewData);
-        }else {
-            // 按照 Spring 模版
-            return VelocityUtils.convert(TemplateSettings.getInstance(project).getSpringTemplate(), docViewData);
-        }
+        return DocumentMarkdownRenderer.render(project, docView);
     }
 
-    /**
-     * Renders the current field values without changing the editor/custom-template tree.
-     */
-    public static String bodyMarkdown(List<DocViewParamData> dataList, boolean separate) {
-        List<DocViewParamData> tableData = BodyTableData.project(dataList);
-        return separate ? separateParamMarkdown(tableData) : paramMarkdown(tableData);
+    public static String curlMarkdown(DocView docView) {
+        return MarkdownExamples.curlMarkdown(docView);
     }
 
-    /**
-     * dataList 转为 Markdown 文本
-     *
-     * @param dataList
-     * @return
-     */
-    @NotNull
-    private static String paramMarkdown(List<DocViewParamData> dataList) {
-
-        if (dataList == null || dataList.isEmpty()) {
-            return "";
-        }
-
-        return "|参数名|类型|必填|默认值|描述|版本|\n"
-                + "|:-----|:-----|:-----|:-----|:-----|:-----|\n"
-                + paramMarkdownContent(dataList);
+    public static String curlMarkdown(Project project, DocView docView) {
+        return MarkdownExamples.curlMarkdown(project, docView);
     }
 
-    /**
-     * 切分多个展示
-     */
-    private static String separateParamMarkdown(List<DocViewParamData> dataList) {
-        if (dataList == null || dataList.isEmpty()) {
-            return "";
-        }
-        List<DocViewParamData> paramDataList = new ArrayList<>();
-
-        StringBuilder builder = new StringBuilder();
-        builder.append("|参数名|类型|必填|默认值|描述|版本|\n")
-                .append("|:-----|:-----|:-----|:-----|:-----|:-----|\n");
-        for (DocViewParamData data : dataList) {
-            builder.append("|").append(data.getName())
-                    .append("|").append(data.getType())
-                    .append("|").append(Boolean.TRUE.equals(data.getRequired()) ? "Y" : "N")
-                    .append("|").append(data.getExample())
-                    .append("|").append(markdownDescription(data.getDesc()))
-                    .append("|").append(Arrays.stream(new String[]{data.getSince(), data.getVersion()}).filter(StringUtils::isNotBlank).collect(Collectors.joining("-")))
-                    .append("|").append("\n");
-            if (data.getChildList() != null && !data.getChildList().isEmpty()) {
-                paramDataList.add(data);
-            }
-        }
-        builder.append(separateSubParamMarkdown(paramDataList));
-        return builder.toString();
+    public static String bodyMarkdown(List<DocViewParamData> rows, boolean separate) {
+        return MarkdownTables.bodyMarkdown(rows, separate);
     }
 
-    /**
-     * 构造子的参数 Markdown 实体
-     */
-    private static String separateSubParamMarkdown(List<DocViewParamData> dataList) {
-        if (dataList == null || dataList.isEmpty()) {
-            return "";
-        }
-
-        StringBuilder builder = new StringBuilder();
-        for (DocViewParamData data : dataList) {
-            builder.append("\n- ").append(data.getType()).append(" ").append(data.getName()).append("\n\n");
-            builder.append(separateParamMarkdown(data.getChildList()));
-        }
-
-        return builder.toString();
-    }
-
-
-    /**
-     * 表格内数据
-     */
-    private static StringBuilder paramMarkdownContent(List<DocViewParamData> dataList) {
-
-        StringBuilder builder = new StringBuilder();
-
-        for (DocViewParamData data : dataList) {
-            builder.append("|").append(data.getPrefixSymbol1()).append(data.getPrefixSymbol2()).append(data.getName())
-                    .append("|").append(data.getType())
-                    .append("|").append(data.getRequired() ? "Y" : "N")
-                    .append("|").append(data.getExample())
-                    .append("|").append(markdownDescription(data.getDesc()))
-                    .append("|").append(Arrays.stream(new String[]{data.getSince(), data.getVersion()}).filter(StringUtils::isNotBlank).collect(Collectors.joining("-")))
-                    .append("|").append("\n");
-            if (data.getChildList() != null && !data.getChildList().isEmpty()) {
-                builder.append(paramMarkdownContent(data.getChildList()));
-            }
-        }
-
-        return builder;
-    }
-
-    private static String markdownDescription(String text) {
-        if (StringUtils.isBlank(text)) {
-            return "";
-        }
-        // Regex alternation and escaped pipes belong inside the cell, including their literal slashes.
-        return MARKDOWN_CELL_PIPE.matcher(text)
-                .replaceAll(match -> "&#92;".repeat(match.group(1).length()) + "&#124;")
-                .replace("\r\n", "<br>")
-                .replace("\n", "<br>");
-    }
-
-    @NotNull
-    private static String headerMarkdown(List<DocViewParamData> dataList) {
-
-        if (dataList == null || dataList.isEmpty()) {
-            return "";
-        }
-
-        StringBuilder builder = new StringBuilder();
-
-        for (DocViewParamData data : dataList) {
-            builder.append("|").append(data.getName())
-                    .append("|").append(data.getExample())
-                    .append("|").append(data.getRequired() ? "Y" : "N")
-                    .append("|").append(markdownDescription(data.getDesc()))
-                    .append("|").append(Arrays.stream(new String[]{data.getSince(), data.getVersion()}).filter(StringUtils::isNotBlank).collect(Collectors.joining("-")))
-                    .append("|").append("\n");
-        }
-
-        return "|参数名|参数值|必填|描述|版本|\n"
-                + "|:-----|:-----|:-----|:-----|:-----|\n"
-                + builder;
-    }
-
-    private List<DocViewParamData> headerDataList(List<Header> headerList) {
-
-        if (headerList == null || headerList.isEmpty()) {
-            return new ArrayList<>();
-        }
-
-        return headerList.stream().map(header -> {
-
-            DocViewParamData data = new DocViewParamData();
-            data.setPsiElement(header.getPsiElement());
-            data.setName(header.getName());
-            data.setExample(header.getValue());
-            data.setRequired(header.getRequired());
-            data.setDescription(header.getDescription().orEmpty());
-
-            return data;
-        }).collect(Collectors.toList());
-    }
-
-    private List<DocViewParamData> paramDataList(List<Param> reqParamList) {
-        if (reqParamList == null || reqParamList.isEmpty()) {
-            return new ArrayList<>();
-        }
-
-        return reqParamList.stream().map(param -> {
-
-            DocViewParamData data = new DocViewParamData();
-            data.setPsiElement(param.getPsiElement());
-            data.setExample(param.getExample());
-            data.setName(param.getName());
-            data.setRequired(param.getRequired());
-            data.setType(param.getType());
-            data.setDescription(param.getDescription().orEmpty());
-
-            data.setVersion(param.getVersion());
-            data.setSince(param.getSince());
-
-            return data;
-        }).collect(Collectors.toList());
-    }
-
-    /**
-     * 根据 bodyList 构建参数集合
-     *
-     * @param bodyList
-     * @return
-     */
     @NotNull
     public static List<DocViewParamData> buildBodyDataList(List<Body> bodyList) {
-
-        if (bodyList == null || bodyList.isEmpty()) {
-            return new ArrayList<>();
-        }
-
-        return buildBodyDataList(null, bodyList, "", "", 1);
+        return TemplateParameterMapper.buildBodyDataList(null, bodyList);
     }
 
     public static List<DocViewParamData> buildBodyDataList(Project project, List<Body> bodyList) {
-        if (bodyList == null || bodyList.isEmpty()) {
-            return new ArrayList<>();
-        }
-        return buildBodyDataList(project, bodyList, "", "", 1);
+        return TemplateParameterMapper.buildBodyDataList(project, bodyList);
     }
-
-    /**
-     * 递归 body 生成 List<ParamData>
-     *
-     * @param prefixSymbol1,
-     * @param bodyList
-     * @param prefixSymbol2
-     * @param tabCount JSON5 indentation depth
-     */
-    @NotNull
-    private static List<DocViewParamData> buildBodyDataList(Project project, @NotNull List<Body> bodyList,
-                                                            String prefixSymbol1, String prefixSymbol2, int tabCount) {
-
-        List<DocViewParamData> dataList = new ArrayList<>();
-
-        for (Body body : bodyList) {
-
-            DocViewParamData data = new DocViewParamData();
-            data.setPsiElement(body.getPsiElement());
-            data.setName(body.getName());
-            data.setExample(body.getExample());
-            data.setRequired(body.getRequired());
-            data.setType(body.getType());
-            data.setDescription(body.getDescription().orEmpty());
-
-            data.setVersion(body.getVersion());
-            data.setSince(body.getSince());
-
-            data.setPrefixSymbol1(prefixSymbol1);
-            data.setPrefixSymbol2(prefixSymbol2);
-            data.setTabCount(tabCount);
-            data.setCollection(body.isCollection());
-            data.setMap(body.isMap());
-            data.setSyntheticContainerNode(body.isSyntheticContainerNode());
-            data.setOmitFromExample(body.isOmitFromExample());
-
-            if (body.getChildList() != null && !body.getChildList().isEmpty()) {
-
-                Project settingsProject = project == null ? body.getPsiElement().getProject() : project;
-                Settings settings = Settings.getInstance(settingsProject);
-
-                data.setChildList(
-                        buildBodyDataList(settingsProject, body.getChildList(), settings.getPrefixSymbol1(),
-                                prefixSymbol2 + settings.getPrefixSymbol2(), tabCount + 1));
-            }
-            dataList.add(data);
-        }
-        return dataList;
-    }
-
-    @NotNull
-    private String requestExample(DocView docView) {
-
-        String reqFormExample = reqFormExample(docView.getReqFormExample());
-
-        String reqBodyExample = reqBodyExample(docView.getReqBodyExample());
-
-        if (StringUtils.isBlank(reqFormExample)) {
-            return reqBodyExample;
-        }
-
-        if (StringUtils.isBlank(reqBodyExample)) {
-            return reqFormExample;
-        }
-
-        return reqFormExample + "\n\n" + reqBodyExample;
-    }
-
-    /**
-     * 请求参数中的 Form 示例
-     *
-     * @param reqFormExample
-     * @return
-     */
-    private String reqFormExample(String reqFormExample) {
-        if (StringUtils.isBlank(reqFormExample)) {
-            return "";
-        }
-
-        return "```Form\n" +
-                reqFormExample + "\n" +
-                "```";
-    }
-
-    /**
-     * 请求参数中的 Body 示例
-     *
-     * @param reqBodyExample Body
-     * @return 组装结果
-     */
-    @NotNull
-    @Contract(pure = true)
-    private String reqBodyExample(String reqBodyExample) {
-
-        if (StringUtils.isBlank(reqBodyExample)) {
-            return "";
-        }
-
-        return "```JSON\n"
-                + reqBodyExample + "\n"
-                + "```";
-    }
-
-    /**
-     * 构建返回 body
-     *
-     * @param respExample 返回示例
-     * @return 返回body
-     */
-    @NotNull
-    @Contract(pure = true)
-    private String respBodyExample(String respExample) {
-
-        if (StringUtils.isBlank(respExample)) {
-            return "";
-        }
-
-        return "```JSON\n"
-                + respExample + "\n"
-                + "```\n\n";
-    }
-
 }

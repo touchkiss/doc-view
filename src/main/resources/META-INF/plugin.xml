@@ -161,11 +161,9 @@
             <keyboard-shortcut keymap="Mac OS X 10.5+" first-keystroke="meta shift BACK_SLASH"/>
         </action>
 
-        <!-- Add your actions here -->
-        <group id="liuzhihang.doc.sourceComments" text="Doc View 源码注释" popup="true">
+        <group id="liuzhihang.doc.sourceComments" class="com.intellij.ide.actions.NonTrivialActionGroup" text="源码注释" popup="true">
 
-            <add-to-group group-id="EditorPopupMenu" anchor="last"/>
-            <add-to-group group-id="ProjectViewPopupMenu" anchor="last"/>
+            <override-text place="MainMenu" text="Doc View 源码注释"/>
             <add-to-group group-id="ToolsMenu" anchor="last"/>
             <action id="liuzhihang.doc.sourceComments.generate" class="com.liuzhihang.doc.view.action.GenerateJavadocAction" text="生成注释或翻译选区">
                 <keyboard-shortcut keymap="$default" first-keystroke="ctrl BACK_SLASH"/>
@@ -185,14 +183,14 @@
                     text="AI 分析项目术语"/>
         </group>
 
-        <!-- Add your actions here -->
 
-        <group id="liuzhihang.doc" popup="false" compact="true">
-            <add-to-group group-id="EditorPopupMenu" anchor="first"/>
-            <action id="liuzhihang.doc.view" class="com.liuzhihang.doc.view.action.PreviewAction" text="Doc View"/>
-            <action id="liuzhihang.doc.editor" class="com.liuzhihang.doc.view.action.EditorAction" text="Doc Editor"
-                    description="Edit and copy documentation drafts without changing source"/>
-            <group id="liuzhihang.doc.copy.rest" text="Copy As" popup="true" compact="true">
+        <group id="liuzhihang.doc" class="com.intellij.ide.actions.NonTrivialActionGroup" text="Doc View" popup="true">
+            <add-to-group group-id="EditorPopupMenu" anchor="last"/>
+            <add-to-group group-id="ProjectViewPopupMenu" anchor="last"/>
+            <action id="liuzhihang.doc.view" class="com.liuzhihang.doc.view.action.PreviewAction" text="预览文档"/>
+            <action id="liuzhihang.doc.editor" class="com.liuzhihang.doc.view.action.EditorAction" text="编辑文档"
+                    description="编辑文档草稿和源码注释"/>
+            <group id="liuzhihang.doc.copy.rest" class="com.intellij.ide.actions.NonTrivialActionGroup" text="复制为" popup="true">
                 <action id="liuzhihang.doc.copy.curl" class="com.liuzhihang.doc.view.action.CopyCurlAction" text="cURL"/>
                 <action id="liuzhihang.doc.copy.rest.json" class="com.liuzhihang.doc.view.action.CopyRestRequestAction$Json" text="REST Request (JSON)"/>
                 <action id="liuzhihang.doc.copy.rest.json5" class="com.liuzhihang.doc.view.action.CopyRestRequestAction$Json5" text="REST Request (JSON5)"/>
@@ -201,40 +199,40 @@
                 <action id="liuzhihang.doc.grpc.copy.rest.json" class="com.liuzhihang.doc.view.action.ProtoGrpcCopyRestAction$Json" text="REST Request (JSON)"/>
                 <action id="liuzhihang.doc.grpc.copy.rest.json5" class="com.liuzhihang.doc.view.action.ProtoGrpcCopyRestAction$Json5" text="REST Request (with field comments)"/>
             </group>
-        </group>
+            <action id="liuzhihang.doc.export" class="com.liuzhihang.doc.view.action.ExportDocumentAction" text="导出 Markdown"/>
+            <group id="liuzhihang.doc.upload" class="com.intellij.ide.actions.NonTrivialActionGroup" text="上传到" popup="true">
+                <action id="liuzhihang.doc.yapi.upload" class="com.liuzhihang.doc.view.action.upload.YApiUploadAction"
+                        text="YApi"/>
 
-        <group id="liuzhihang.doc.upload" text="Doc Upload" popup="true">
-            <add-to-group group-id="liuzhihang.doc" anchor="last"/>
-            <action id="liuzhihang.doc.yapi.upload" class="com.liuzhihang.doc.view.action.upload.YApiUploadAction"
-                    text="Upload to YApi"/>
-
-            <action id="liuzhihang.doc.showdoc.upload" class="com.liuzhihang.doc.view.action.upload.ShowDocUploadAction"
-                    text="Upload to ShowDoc"/>
-            <action id="liuzhihang.doc.yuque.upload" class="com.liuzhihang.doc.view.action.upload.YuQueUploadAction"
-                    text="Upload to YuQue"/>
+                <action id="liuzhihang.doc.showdoc.upload" class="com.liuzhihang.doc.view.action.upload.ShowDocUploadAction"
+                        text="ShowDoc"/>
+                <action id="liuzhihang.doc.yuque.upload" class="com.liuzhihang.doc.view.action.upload.YuQueUploadAction"
+                        text="语雀"/>
+            </group>
+            <reference ref="liuzhihang.doc.sourceComments"/>
         </group>
 
         <!-- preview 界面目录左下角toolbar -->
         <group id="liuzhihang.doc.preview.toolbar.menu">
             <action id="liuzhihang.doc.preview.toolbar.menu.export"
                     class="com.liuzhihang.doc.view.action.toolbar.preview.MenuExportAllAction"
-                    text="Export All" description="Export Markdown" icon="AllIcons.Ide.IncomingChangesOn"/>
+                    text="导出全部文档" description="导出 Markdown" icon="AllIcons.Ide.IncomingChangesOn"/>
             <action id="liuzhihang.doc.preview.toolbar.menu.upload"
                     class="com.liuzhihang.doc.view.action.toolbar.preview.MenuUploadAllAction"
-                    text="Upload All" description="Upload all documents" icon="AllIcons.Ide.OutgoingChangesOn"/>
+                    text="上传全部文档" description="上传全部文档" icon="AllIcons.Ide.OutgoingChangesOn"/>
         </group>
 
         <!-- preview 界面目录右下角 右侧toolbar -->
         <group id="liuzhihang.doc.preview.toolbar.right">
             <action id="liuzhihang.doc.preview.toolbar.right.upload"
                     class="com.liuzhihang.doc.view.action.toolbar.preview.PreviewRightUploadAction"
-                    text="Upload" description="Upload documents" icon="AllIcons.Actions.Upload"/>
+                    text="Upload" description="上传文档" icon="AllIcons.Actions.Upload"/>
             <action id="liuzhihang.doc.preview.toolbar.right.export"
                     class="com.liuzhihang.doc.view.action.toolbar.preview.PreviewRightExportAction"
-                    text="Export" description="Export Markdown" icon="AllIcons.ToolbarDecorator.Export"/>
+                    text="导出" description="导出 Markdown" icon="AllIcons.ToolbarDecorator.Export"/>
             <action id="liuzhihang.doc.preview.toolbar.toolbar.copy"
                     class="com.liuzhihang.doc.view.action.toolbar.preview.PreviewRightCopyAction"
-                    text="Copy" description="Copy to clipboard" icon="AllIcons.Actions.Copy"/>
+                    text="复制" description="复制到剪贴板" icon="AllIcons.Actions.Copy"/>
         </group>
 
         <!-- editor 右键菜单 -->
@@ -242,7 +240,7 @@
 
             <action id="liuzhihang.doc.preview.editor.save"
                     class="com.liuzhihang.doc.view.action.toolbar.preview.MenuExportAllAction"
-                    text="Save" icon="AllIcons.Actions.MenuSaveall"/>
+                    text="保存" icon="AllIcons.Actions.MenuSaveall"/>
 
         </group>
 
@@ -252,38 +250,38 @@
 
             <action id="liuzhihang.doc.tool.window.toolbar.action.refresh"
                     class="com.liuzhihang.doc.view.action.toolbar.window.WindowRefreshAction"
-                    text="Refresh" description="Refresh" icon="DocViewIcons.REFRESH"/>
+                    text="刷新" description="刷新" icon="DocViewIcons.REFRESH"/>
             <separator/>
-            <group id="liuzhihang.doc.tool.window.toolbar.action.export.menu"
-                   popup="true" text="Export" description="Export Doc View documents"
+            <group id="liuzhihang.doc.tool.window.toolbar.action.export.menu" class="com.intellij.ide.actions.NonTrivialActionGroup"
+                   popup="true" text="导出" description="导出文档"
                    icon="AllIcons.ToolbarDecorator.Export">
                 <action id="liuzhihang.doc.tool.window.toolbar.action.export"
                         class="com.liuzhihang.doc.view.action.toolbar.window.WindowExportAction"
-                        text="Export Markdown" description="Export Markdown" icon="DocViewIcons.EXPORT"/>
+                        text="导出 Markdown" description="导出 Markdown" icon="DocViewIcons.EXPORT"/>
                 <action id="liuzhihang.doc.tool.window.toolbar.action.project.export"
                         class="com.liuzhihang.doc.view.action.toolbar.window.ProjectDocumentExportAction"
-                        text="Export Project Docs" description="Export project API documentation" icon="AllIcons.ToolbarDecorator.Export"/>
+                        text="导出项目文档" description="导出项目接口文档" icon="AllIcons.ToolbarDecorator.Export"/>
             </group>
             <action id="liuzhihang.doc.tool.window.toolbar.action.upload"
                     class="com.liuzhihang.doc.view.action.toolbar.window.WindowUploadAction"
-                    text="Upload" description="Upload documents" icon="DocViewIcons.UPLOAD"/>
+                    text="Upload" description="上传文档" icon="DocViewIcons.UPLOAD"/>
 
             <separator/>
             <action id="liuzhihang.doc.tool.window.toolbar.action.expand"
                     class="com.liuzhihang.doc.view.action.toolbar.window.WindowExpandAction"
-                    text="Expand" description="Expand" icon="DocViewIcons.EXPAND_ALL"/>
+                    text="展开" description="展开" icon="DocViewIcons.EXPAND_ALL"/>
             <action id="liuzhihang.doc.tool.window.toolbar.action.collapse"
                     class="com.liuzhihang.doc.view.action.toolbar.window.WindowCollapseAction"
-                    text="Collapse" description="Collapse" icon="DocViewIcons.COLLAPSE_ALL"/>
+                    text="折叠" description="折叠" icon="DocViewIcons.COLLAPSE_ALL"/>
 
             <separator/>
             <action id="liuzhihang.doc.tool.window.toolbar.action.clear"
                     class="com.liuzhihang.doc.view.action.toolbar.window.WindowClearAction"
-                    text="Clear Cache" description="Clear the current project's Doc View schema cache; generated documents are preserved." icon="DocViewIcons.CLEAR"/>
+                    text="清理缓存" description="清理当前项目的文档结构缓存" icon="DocViewIcons.CLEAR"/>
             <separator/>
             <action id="liuzhihang.doc.tool.window.toolbar.action.setting"
                     class="com.liuzhihang.doc.view.action.toolbar.window.WindowSettingsAction"
-                    text="Settings" description="Open Doc View settings" icon="DocViewIcons.SETTINGS"/>
+                    text="设置" description="打开 Doc View 设置" icon="DocViewIcons.SETTINGS"/>
             <separator/>
 
         </group>
@@ -296,37 +294,37 @@
 
             <action id="liuzhihang.doc.tool.window.catalog.action.open"
                     class="com.liuzhihang.doc.view.action.toolbar.window.catalog.CatalogOpenAction"
-                    text="Open" description="Open" icon="DocViewIcons.EDITOR_PREVIEW"/>
+                    text="打开 Markdown" description="打开导出的 Markdown 文件或展开目录" icon="DocViewIcons.EDITOR_PREVIEW"/>
 
             <action id="liuzhihang.doc.tool.window.catalog.action.previewSource"
                     class="com.liuzhihang.doc.view.action.toolbar.window.catalog.CatalogPreviewSourceAction"
-                    text="预览文档并调整注释" icon="DocViewIcons.EDITOR_PREVIEW"/>
+                    text="预览文档" icon="DocViewIcons.EDITOR_PREVIEW"/>
 
             <action id="liuzhihang.doc.tool.window.catalog.action.export"
                     class="com.liuzhihang.doc.view.action.toolbar.window.catalog.CatalogExportAction"
-                    text="Export" description="Export Markdown" icon="DocViewIcons.EXPORT"/>
+                    text="导出 Markdown" description="导出 Markdown" icon="DocViewIcons.EXPORT"/>
 
-            <group id="liuzhihang.doc.tool.window.catalog.action.upload" popup="true" text="Upload" description="Upload documents"
+            <group id="liuzhihang.doc.tool.window.catalog.action.upload" class="com.intellij.ide.actions.NonTrivialActionGroup" popup="true" text="上传到" description="上传文档"
                    icon="DocViewIcons.UPLOAD">
                 <action id="liuzhihang.doc.tool.window.catalog.action.upload.yapi"
                         class="com.liuzhihang.doc.view.action.toolbar.window.catalog.CatalogUploadYApiAction"
-                        text="Upload to YApi" description="YApi"/>
+                        text="YApi" description="YApi"/>
                 <action id="liuzhihang.doc.tool.window.catalog.action.upload.showdoc"
                         class="com.liuzhihang.doc.view.action.toolbar.window.catalog.CatalogUploadShowDocAction"
-                        text="Upload to ShowDoc" description="ShowDoc"/>
+                        text="ShowDoc" description="ShowDoc"/>
                 <action id="liuzhihang.doc.tool.window.catalog.action.upload.yuque"
                         class="com.liuzhihang.doc.view.action.toolbar.window.catalog.CatalogUploadYuQueAction"
-                        text="Upload to YuQue" description="YuQue"/>
+                        text="语雀" description="YuQue"/>
             </group>
             <separator/>
             <action id="liuzhihang.doc.tool.window.catalog.action.clear"
                     class="com.liuzhihang.doc.view.action.toolbar.window.catalog.CatalogClearAction"
-                    text="Clear Cache" description="Clear the current project's Doc View schema cache; generated documents are preserved." icon="DocViewIcons.CLEAR"/>
+                    text="清理缓存" description="清理当前项目的文档结构缓存" icon="DocViewIcons.CLEAR"/>
 
             <action id="liuzhihang.doc.view.action.toolbar.window.catalog.httpclient"
                     class="com.liuzhihang.doc.view.action.toolbar.window.catalog.CatalogHttpClientAction"
                     text="HTTP Client"
-                    description="Generate an HTTP client request" icon="DocViewIcons.HTTP_API">
+                    description="生成 HTTP Client 请求" icon="DocViewIcons.HTTP_API">
             </action>
         </group>
 

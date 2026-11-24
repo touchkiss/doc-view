@@ -15,15 +15,10 @@ import org.jetbrains.annotations.NotNull;
 
 import java.util.List;
 
-/**
- * 上传到 showDoc
- *
- * @author liuzhihang
- * @date 2021/7/27 12:00
- */
+/** Dispatches document uploads on a cancellable background task. */
 public interface DocViewUploadService {
 
-    public static final List<UploadPlatform> UPLOAD_OPTIONS = List.of(UploadPlatform.values());
+    List<UploadPlatform> UPLOAD_OPTIONS = List.of(UploadPlatform.values());
 
     @NotNull
     static DocViewUploadService getInstance(@NotNull UploadPlatform platform) {
@@ -34,12 +29,6 @@ public interface DocViewUploadService {
         };
     }
 
-    /**
-     * 批量上传, 都是循环调用的单个上传接口
-     *
-     * @param project
-     * @param docViewList
-     */
     default void upload(@NotNull Project project, @NotNull List<DocView> docViewList) {
         DocViewBackgroundTasks.runTask(project, DocViewBundle.message("task.docview.upload"), true, indicator -> {
             if (project.isDisposed()) throw new ProcessCanceledException();
@@ -52,39 +41,13 @@ public interface DocViewUploadService {
                 doUpload(project, docView);
             }
         }, throwable -> DocViewNotification.notifyError(project, DocViewBundle.message("notify.integration.upload.error")));
-
     }
 
-    /**
-     * 上传到 showDoc
-     *
-     * @param project
-     * @param docView
-     */
     default void upload(@NotNull Project project, @NotNull DocView docView) {
-        DocViewBackgroundTasks.runTask(project, DocViewBundle.message("task.docview.upload"), true,
-                indicator -> {
-                    if (project.isDisposed()) throw new ProcessCanceledException();
-                    if (checkSettings(project)) {
-                        doUpload(project, docView);
-                    }
-                },
-                throwable -> DocViewNotification.notifyError(project, DocViewBundle.message("notify.integration.upload.error")));
+        upload(project, List.of(docView));
     }
 
-    /**
-     * 检查配置
-     *
-     * @param project
-     * @return
-     */
     boolean checkSettings(@NotNull Project project);
 
-    /**
-     * 请求上传
-     *
-     * @param project
-     * @param docView
-     */
     void doUpload(@NotNull Project project, @NotNull DocView docView);
 }

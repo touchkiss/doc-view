@@ -1,144 +1,91 @@
 package com.liuzhihang.doc.view.action;
 
-import com.intellij.openapi.actionSystem.*;
-import com.intellij.openapi.diagnostic.Logger;
-import com.intellij.openapi.editor.Editor;
+import com.intellij.openapi.actionSystem.ActionUpdateThread;
+import com.intellij.openapi.actionSystem.AnAction;
+import com.intellij.openapi.actionSystem.AnActionEvent;
 import com.intellij.openapi.project.DumbService;
 import com.intellij.openapi.project.Project;
 import com.intellij.psi.PsiClass;
 import com.intellij.psi.PsiDocumentManager;
-import com.intellij.psi.PsiFile;
 import com.intellij.psi.PsiMethod;
+import com.intellij.psi.SyntheticElement;
+import com.intellij.psi.util.PsiTreeUtil;
 import com.liuzhihang.doc.view.DocViewBundle;
-import com.liuzhihang.doc.view.exception.DocViewException;
 import com.liuzhihang.doc.view.notification.DocViewNotification;
 import com.liuzhihang.doc.view.utils.CustomPsiUtils;
-import com.liuzhihang.doc.view.utils.DocViewUtils;
 import org.jetbrains.annotations.NotNull;
 
-/**
- * 抽象类，进行一些公共的验证操作
- *
- * @author liuzhihang
- * @since 2023/7/11 23:04
- */
-public class AbstractAction extends AnAction {
-
-    /**
-     * 日志
-     */
-    private static final Logger LOG = Logger.getInstance(AbstractAction.class);
-
-    /**
-     * 工程
-     */
-    protected Project project;
-    /**
-     * 文件
-     */
-    protected PsiFile psiFile;
-
-    /**
-     * 编辑器
-     */
-    protected Editor editor;
-
-    /**
-     * 当前类
-     */
-    protected PsiClass targetClass;
-
-    /**
-     * 当前方法
-     */
-    protected PsiMethod targetMethod;
-
-    /**
-     * @see AnAction#actionPerformed(AnActionEvent)
-     */
+/** Stateless adapter shared by commands which consume one source declaration. */
+public abstract class AbstractAction extends AnAction {
     @Override
-    public void actionPerformed(AnActionEvent e) {
-        // Registered action instances are reused across invocations. A failed validation
-        // must not expose a class or method selected by a previous invocation.
-        targetClass = null;
-        targetMethod = null;
-
-        try {
-            project = e.getData(PlatformDataKeys.PROJECT);
-            psiFile = e.getData(CommonDataKeys.PSI_FILE);
-            editor = e.getData(CommonDataKeys.EDITOR);
-
-            // 验证是否为空
-            if (editor == null || project == null || psiFile == null || project.isDisposed() || DumbService.isDumb(project)) {
-                throw new DocViewException(DocViewBundle.message("notify.action.invalid.context"));
-            }
-            // Parse the user's pending edits without saving any business file.
-            // This synchronizes only this project's editor documents with PSI.
-            PsiDocumentManager.getInstance(project).commitAllDocuments();
-            // 获取Java类或者接口; .proto 文件会将光标所在 message 合成为内存 Java 类
-            boolean protoFile = CustomPsiUtils.isProtoFile(psiFile);
-            targetClass = CustomPsiUtils.getTargetClass(editor, psiFile);
-
-            if (targetClass == null && protoFile) {
-                // proto 文件中光标不在 message 内, 给出可操作的提示, 而不是"请在 Java 类文件中使用"
-                throw new DocViewException(DocViewBundle.message("notify.error.proto.no.message"));
-            }
-
-            if (targetClass == null || targetClass.isAnnotationType() || targetClass.isEnum()) {
-                throw new DocViewException(DocViewBundle.message("notify.error.class"));
-            }
-
-            // 目标类没有方法
-            PsiMethod[] methods = targetClass.getMethods();
-
-//            if (methods.length == 0) {
-//                throw new DocViewException(DocViewBundle.message("notify.error.class.no.method"));
-//            }
-
-            // 当前方法
-            targetMethod = CustomPsiUtils.getTargetMethod(editor, psiFile);
-
-        } catch (DocViewException ex) {
-            targetClass = null;
-            targetMethod = null;
-            DocViewNotification.notifyError(project, ex.getMessage());
-            LOG.info("DocView 执行错误：" + ex.getMessage());
-        }
-
+    public final @NotNull ActionUpdateThread getActionUpdateThread() {
+        return ActionUpdateThread.BGT;
     }
 
-    /**
-     * 判断是否支持 Doc View
-     */
     @Override
-    public void update(@NotNull AnActionEvent e) {
-
-        Project project = e.getData(PlatformDataKeys.PROJECT);
-        PsiFile psiFile = e.getData(CommonDataKeys.PSI_FILE);
-        Editor editor = e.getData(CommonDataKeys.EDITOR);
-
-        Presentation presentation = e.getPresentation();
-
-        if (editor == null || project == null || psiFile == null || DumbService.isDumb(project)) {
-            presentation.setEnabledAndVisible(false);
-            return;
+    public final void update(@NotNull AnActionEvent event) {
+        boolean available = false;
+        Project project = event.getProject();
+        if (ready(project)) {
+            var selection = ActionSelection.from(event);
+            if (CustomPsiUtils.isProtoFile(selection.file())) {
+                available = supportsProto() && CustomPsiUtils.hasProtoMessage(selection.editor(), selection.file());
+            } else {
+                var target = javaTarget(project, selection);
+                available = target != null && supports(target);
+            }
         }
-
-//        PsiClass targetClass = CustomPsiUtils.getTargetClass(editor, psiFile);
-
-//        if (!DocViewUtils.isDocViewClass(targetClass)) {
-//            presentation.setEnabledAndVisible(false);
-//            return;
-//        }
-
-//        PsiMethod targetMethod = CustomPsiUtils.getTargetMethod(editor, psiFile);
-//
-//        if (targetMethod != null && !DocViewUtils.isDocViewMethod(targetMethod)) {
-//            presentation.setEnabledAndVisible(false);
-//            return;
-//        }
-
-        presentation.setEnabledAndVisible(true);
+        event.getPresentation().setEnabledAndVisible(available);
     }
 
+    @Override
+    public final void actionPerformed(@NotNull AnActionEvent event) {
+        Project project = event.getProject();
+        if (!ready(project)) return;
+        PsiDocumentManager.getInstance(project).commitAllDocuments();
+        var selection = ActionSelection.from(event);
+        DocumentTarget target;
+        if (CustomPsiUtils.isProtoFile(selection.file())) {
+            if (!supportsProto()) return;
+            PsiClass type = CustomPsiUtils.getProtoTargetClass(selection.editor(), selection.file());
+            if (type == null) {
+                DocViewNotification.notifyError(project, DocViewBundle.message("notify.error.proto.no.message"));
+                return;
+            }
+            target = new DocumentTarget(project, selection.file(), selection.editor(), type, null);
+        } else {
+            target = javaTarget(project, selection);
+        }
+        if (target != null && supports(target)) {
+            perform(target);
+        } else {
+            DocViewNotification.notifyError(project, DocViewBundle.message("notify.error.class"));
+        }
+    }
+
+    private static boolean ready(Project project) {
+        return project != null && !project.isDisposed() && !DumbService.isDumb(project);
+    }
+
+    private static DocumentTarget javaTarget(Project project, ActionSelection selection) {
+        var element = selection.declaration();
+        if (element == null || !element.isValid() || selection.file() == null) return null;
+        var type = PsiTreeUtil.getParentOfType(element, PsiClass.class, false);
+        if (type == null || type instanceof SyntheticElement || type.isAnnotationType() || type.isEnum()) return null;
+        var method = PsiTreeUtil.getParentOfType(element, PsiMethod.class, false);
+        if (method instanceof SyntheticElement || method != null && method.getContainingClass() != type) {
+            method = null;
+        }
+        return new DocumentTarget(project, selection.file(), selection.editor(), type, method);
+    }
+
+    protected boolean supportsProto() {
+        return true;
+    }
+
+    protected boolean supports(DocumentTarget target) {
+        return true;
+    }
+
+    protected abstract void perform(DocumentTarget target);
 }

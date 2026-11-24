@@ -168,7 +168,7 @@ tasks.named('verifyPlugin', VerifyPluginTask) {
     offline = providers.gradleProperty('pluginVerifierOffline').map { it.toBoolean() }.orElse(true)
 }
 
-// Prove the optional integration does not make Doc View depend on an enabled HTTP Client.
+// Exercise the base plugin with optional language and HTTP integrations disabled.
 intellijPlatformTesting {
     testIde.register('httpClientDisabled') {
         localPath = localIde
@@ -181,6 +181,8 @@ intellijPlatformTesting {
              'com.intellij.modules.jcef', 'com.intellij.platform.serviceView', 'com.intellij.navbar',
              'com.intellij.platform.vcs'].each { bundledPlugin(it) }
             disablePlugin('com.jetbrains.restClient')
+            disablePlugin('org.jetbrains.kotlin')
+            disablePlugin('idea.plugin.protoeditor')
         }
         task {
             testClassesDirs = sourceSets.test.output.classesDirs

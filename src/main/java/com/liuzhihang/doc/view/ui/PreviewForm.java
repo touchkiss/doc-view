@@ -3,7 +3,6 @@ package com.liuzhihang.doc.view.ui;
 import com.intellij.find.editorHeaderActions.Utils;
 import icons.DocViewIcons;
 import com.intellij.openapi.actionSystem.*;
-import com.intellij.openapi.actionSystem.toolbarLayout.ToolbarLayoutStrategy;
 import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.application.ReadAction;
 import com.intellij.openapi.project.DumbService;
@@ -11,27 +10,14 @@ import com.intellij.psi.PsiDocumentManager;
 import com.intellij.openapi.command.WriteCommandAction;
 import com.intellij.openapi.util.Disposer;
 import com.intellij.openapi.editor.Document;
-import com.intellij.openapi.editor.EditorFactory;
-import com.intellij.openapi.editor.EditorKind;
-import com.intellij.openapi.editor.ex.EditorEx;
-import com.intellij.openapi.editor.highlighter.EditorHighlighterFactory;
 import com.intellij.openapi.fileEditor.FileDocumentManager;
 import com.intellij.openapi.fileEditor.FileEditor;
-import com.intellij.openapi.fileTypes.FileType;
-import com.intellij.openapi.fileTypes.FileTypeManager;
 import com.intellij.openapi.options.ShowSettingsUtil;
-import com.intellij.openapi.progress.ProcessCanceledException;
-import com.intellij.openapi.progress.ProgressIndicator;
-import com.intellij.openapi.progress.Task;
 import com.intellij.openapi.project.Project;
-import com.intellij.openapi.util.Computable;
 import com.intellij.openapi.vfs.VirtualFile;
-import com.intellij.testFramework.LightVirtualFile;
 import com.intellij.openapi.Disposable;
 import com.intellij.openapi.ui.popup.JBPopup;
 import com.intellij.openapi.ui.popup.JBPopupFactory;
-import com.intellij.openapi.ui.popup.PopupStep;
-import com.intellij.openapi.ui.popup.util.BaseListPopupStep;
 import com.intellij.psi.PsiClass;
 import com.intellij.psi.PsiMethod;
 import com.intellij.psi.util.PsiModificationTracker;
@@ -45,18 +31,11 @@ import com.liuzhihang.doc.view.config.Settings;
 import com.liuzhihang.doc.view.config.SettingsConfigurable;
 import com.liuzhihang.doc.view.config.TemplateSettings;
 import com.liuzhihang.doc.view.dto.DocView;
-import com.liuzhihang.doc.view.dto.DocViewData;
-import com.liuzhihang.doc.view.enums.UploadPlatform;
+import com.liuzhihang.doc.view.render.DocumentMarkdownRenderer;
 import com.liuzhihang.doc.view.notification.DocViewNotification;
 import com.liuzhihang.doc.view.service.DocViewService;
-import com.liuzhihang.doc.view.service.DocViewUploadService;
 import com.liuzhihang.doc.view.service.SourceDescriptionService;
-import com.liuzhihang.doc.view.utils.EditorUtils;
 import com.liuzhihang.doc.view.utils.ExportUtils;
-import lombok.extern.slf4j.Slf4j;
-import org.intellij.plugins.markdown.ui.preview.MarkdownHtmlPanelProvider;
-import org.intellij.plugins.markdown.ui.preview.MarkdownPreviewFileEditor;
-import org.intellij.plugins.markdown.ui.preview.MarkdownPreviewFileEditorProvider;
 import org.jetbrains.annotations.Contract;
 import org.jetbrains.annotations.NonNls;
 import org.jetbrains.annotations.NotNull;
@@ -72,11 +51,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Vector;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.concurrent.atomic.AtomicLong;
-import java.util.concurrent.atomic.AtomicReference;
 import java.util.Collections;
 import java.util.IdentityHashMap;
 import java.util.function.BiFunction;
@@ -88,13 +63,11 @@ import java.util.stream.Collectors;
  * @author liuzhihang
  * @date 2020/2/26 19:40
  */
-@Slf4j
 public class PreviewForm implements Disposable {
 
     @NonNls
     public static final String DOC_VIEW_POPUP = "com.intellij.docview.popup";
     public static final AtomicBoolean myIsPinned = new AtomicBoolean(false);
-    private static final AtomicBoolean preferRenderedPreview = new AtomicBoolean(true);
 
     private Document markdownDocument;
 
@@ -133,8 +106,7 @@ public class PreviewForm implements Disposable {
      */
     private final JBPanel<?> previewToolbarPanel = new JBPanel<>(new BorderLayout());
 
-    private volatile FileEditor nativeMarkdownPreview;
-    private final BiFunction<Project, VirtualFile, FileEditor> previewFactory;
+    private final MarkdownPreviewPane markdownPane;
 
     /**
      * 根面板
@@ -156,11 +128,6 @@ public class PreviewForm implements Disposable {
      */
     private JLabel docNameLabel;
 
-
-    /**
-     * 当前 markdown 编辑器
-     */
-    private EditorEx markdownEditor;
 
     /**
      * 当前文本 text
@@ -202,16 +169,14 @@ public class PreviewForm implements Disposable {
     private ListSelectionListener catalogSelectionListener;
 
     private final Map<DocView, MarkdownCacheEntry> markdownCache = new IdentityHashMap<>();
-    private final AtomicLong renderRequest = new AtomicLong();
-    private final AtomicLong loadRequest = new AtomicLong();
-    private final ConcurrentMap<Long, ProgressIndicator> renderIndicators = new ConcurrentHashMap<>();
-    private final ConcurrentMap<Long, ProgressIndicator> loadIndicators = new ConcurrentHashMap<>();
+    private final PreviewRequests renderRequests = new PreviewRequests();
+    private final PreviewRequests loadRequests = new PreviewRequests();
     private boolean uiInitialized;
     private volatile boolean disposed;
 
 
     public PreviewForm(@NotNull PsiClass psiClass, PsiMethod psiMethod) {
-        this(psiClass, psiMethod, PreviewForm::createNativeMarkdownPreview);
+        this(psiClass, psiMethod, MarkdownPreviewPane::createNativeMarkdownPreview);
     }
 
     PreviewForm(@NotNull PsiClass psiClass, PsiMethod psiMethod,
@@ -219,7 +184,7 @@ public class PreviewForm implements Disposable {
         this.psiClass = psiClass;
         this.project = psiClass.getProject();
         this.psiMethod = psiMethod;
-        this.previewFactory = previewFactory;
+        this.markdownPane = new MarkdownPreviewPane(project, previewContentPanel, previewFactory);
     }
 
     /**
@@ -298,10 +263,9 @@ public class PreviewForm implements Disposable {
         }
 
         try {
-            var previewFile = createPreviewFile();
+            var previewFile = MarkdownPreviewPane.createPreviewFile(psiClass);
             markdownDocument = Objects.requireNonNull(FileDocumentManager.getInstance().getDocument(previewFile));
-            markdownSourcePanel();
-            initNativePreview(previewFile);
+            markdownPane.initialize(previewFile, markdownDocument);
             layout();
             addMouseListeners();
             uiInitialized = true;
@@ -317,10 +281,8 @@ public class PreviewForm implements Disposable {
             return;
         }
         disposed = true;
-        loadRequest.incrementAndGet();
-        renderRequest.incrementAndGet();
-        cancelIndicators(loadIndicators);
-        cancelIndicators(renderIndicators);
+        loadRequests.invalidate();
+        renderRequests.invalidate();
         markdownCache.clear();
         classPresentations = Map.of();
         if (catalogSelectionListener != null) {
@@ -328,20 +290,13 @@ public class PreviewForm implements Disposable {
             catalogSelectionListener = null;
         }
 
-        discardNativePreview();
-        if (markdownEditor != null && !markdownEditor.isDisposed()) {
-            EditorFactory.getInstance().releaseEditor(markdownEditor);
-            markdownEditor = null;
-        }
+        markdownPane.dispose();
 
         currentMarkdownText = null;
         currentDocView = null;
         docViewList = null;
     }
 
-    private static void cancelIndicators(@NotNull ConcurrentMap<Long, ProgressIndicator> indicators) {
-        indicators.values().forEach(ProgressIndicator::cancel);
-    }
 
 
     /**
@@ -389,7 +344,7 @@ public class PreviewForm implements Disposable {
         previewPanel.setBorder(JBUI.Borders.empty());
 
         // 选择原生 Markdown 预览或源码
-        choosePreviewPanel();
+        markdownPane.showSelectedView();
         // 预览面板操作栏
         previewLeftToolbar();
         // 预览面板右侧操作栏
@@ -459,124 +414,13 @@ public class PreviewForm implements Disposable {
         ActionToolbar toolbar = ActionManager.getInstance().createActionToolbar("DocViewRootToolbar", group, true);
         toolbar.setTargetComponent(headToolbarPanel);
 
-        keepToolbarPreferredMinimumSize(toolbar);
+        PopupToolbarLayout.keepPreferredMinimumSize(toolbar);
         Utils.setSmallerFontForChildren(toolbar.getComponent());
 
         headToolbarPanel.add(toolbar.getComponent(), BorderLayout.EAST);
     }
 
-    private static void keepToolbarPreferredMinimumSize(@NotNull ActionToolbar toolbar) {
-        ToolbarLayoutStrategy delegate = toolbar.getLayoutStrategy();
-        toolbar.setLayoutStrategy(new ToolbarLayoutStrategy() {
-            @Override
-            public @NotNull List<Rectangle> calculateBounds(@NotNull ActionToolbar actionToolbar) {
-                return delegate.calculateBounds(actionToolbar);
-            }
 
-            @Override
-            public @NotNull Dimension calcPreferredSize(@NotNull ActionToolbar actionToolbar) {
-                return delegate.calcPreferredSize(actionToolbar);
-            }
-
-            @Override
-            public @NotNull Dimension calcMinimumSize(@NotNull ActionToolbar actionToolbar) {
-                return delegate.calcPreferredSize(actionToolbar);
-            }
-        });
-    }
-
-
-    /**
-     * 初始化 Markdown 源码面板
-     */
-    private void markdownSourcePanel() {
-
-        markdownEditor = (EditorEx) EditorFactory.getInstance().createViewer(markdownDocument, project, EditorKind.UNTYPED);
-
-        FileType fileType = FileTypeManager.getInstance().getFileTypeByExtension("md");
-        markdownEditor.setHighlighter(EditorHighlighterFactory.getInstance().createEditorHighlighter(project, fileType));
-
-        EditorUtils.renderMarkdownEditor(markdownEditor);
-
-        markdownEditor.setBorder(JBUI.Borders.emptyLeft(5));
-    }
-
-    private LightVirtualFile createPreviewFile() {
-        FileType type = FileTypeManager.getInstance().getFileTypeByExtension("md");
-        VirtualFile folder = ReadAction.compute(() -> {
-            var psiFile = psiClass.getContainingFile();
-            var source = psiFile == null ? null : psiFile.getVirtualFile();
-            return source == null ? null : source.getParent();
-        });
-        // The source folder supplies the base for relative images and links without a disk write.
-        return new LightVirtualFile("Doc View.md", type, "") {
-            @Override
-            public VirtualFile getParent() {
-                return folder;
-            }
-
-            @Override
-            public String getPath() {
-                return folder == null ? super.getPath() : folder.getPath() + "/" + getName();
-            }
-        };
-    }
-
-    // Keep the version-specific Markdown plugin entry points together.
-    private static @Nullable FileEditor createNativeMarkdownPreview(Project project, VirtualFile file) {
-        return MarkdownHtmlPanelProvider.hasAvailableProviders()
-                ? new MarkdownPreviewFileEditorProvider().createEditor(project, file)
-                : null;
-    }
-
-    private void initNativePreview(VirtualFile file) {
-        try {
-            nativeMarkdownPreview = previewFactory.apply(project, file);
-            if (nativeMarkdownPreview instanceof MarkdownPreviewFileEditor preview) {
-                // The native renderer needs the editor's caret and document to submit its first render.
-                preview.setMainEditor(markdownEditor);
-            }
-        } catch (ProcessCanceledException canceled) {
-            throw canceled;
-        } catch (RuntimeException | LinkageError failure) {
-            disableNativePreview(failure);
-        }
-    }
-
-    private void discardNativePreview() {
-        FileEditor preview = nativeMarkdownPreview;
-        nativeMarkdownPreview = null;
-        if (preview != null) {
-            try {
-                Disposer.dispose(preview);
-            } catch (RuntimeException failure) {
-                log.warn("Could not dispose the native Markdown preview", failure);
-            }
-        }
-    }
-
-    private void disableNativePreview(Throwable failure) {
-        log.warn("Doc View native Markdown preview is unavailable; using Markdown source", failure);
-        discardNativePreview();
-    }
-
-    private void choosePreviewPanel() {
-        previewContentPanel.removeAll();
-        if (preferRenderedPreview.get() && nativeMarkdownPreview != null) {
-            try {
-                previewContentPanel.add(nativeMarkdownPreview.getComponent(), BorderLayout.CENTER);
-            } catch (ProcessCanceledException canceled) {
-                throw canceled;
-            } catch (RuntimeException | LinkageError failure) {
-                disableNativePreview(failure);
-            }
-        }
-        if (previewContentPanel.getComponentCount() == 0) {
-            previewContentPanel.add(ScrollPaneFactory.createScrollPane(markdownEditor.getComponent()), BorderLayout.CENTER);
-        }
-        previewContentPanel.revalidate();
-        previewContentPanel.repaint();
-    }
 
     /**
      * 预览面板左侧操作栏
@@ -595,18 +439,13 @@ public class PreviewForm implements Disposable {
 
             @Override
             public boolean isSelected(@NotNull AnActionEvent e) {
-                return nativeMarkdownPreview != null && preferRenderedPreview.get();
+                return markdownPane.isRendered();
             }
 
             @Override
             public void setSelected(@NotNull AnActionEvent e, boolean state) {
 
-                if (state && nativeMarkdownPreview == null) {
-                    DocViewNotification.notifyInfo(project, DocViewBundle.message("notify.markdown.preview.unavailable"));
-                    return;
-                }
-                preferRenderedPreview.set(state);
-                choosePreviewPanel();
+                markdownPane.selectRendered(state);
             }
 
             @Override
@@ -631,7 +470,7 @@ public class PreviewForm implements Disposable {
             public void update(@NotNull AnActionEvent event) {
                 event.getPresentation().setEnabled(!disposed && currentDocView != null
                         && !DumbService.isDumb(project));
-                            }
+            }
 
             @Override
             public void actionPerformed(@NotNull AnActionEvent event) {
@@ -639,7 +478,7 @@ public class PreviewForm implements Disposable {
                     return;
                 }
                 PsiDocumentManager.getInstance(project).commitAllDocuments();
-                var targets = ReadAction.compute(() -> SourceDescriptionService.targets(currentDocView));
+                var targets = ReadAction.computeBlocking(() -> SourceDescriptionService.targets(currentDocView));
                 if (targets.isEmpty()) {
                     DocViewNotification.notifyInfo(project, "当前文档没有可写入的 Java 源码注释。");
                     return;
@@ -659,7 +498,7 @@ public class PreviewForm implements Disposable {
         toolbar.setTargetComponent(previewToolbarPanel);
         toolbar.getComponent().setBackground(UIUtil.getPanelBackground());
 
-        keepToolbarPreferredMinimumSize(toolbar);
+        PopupToolbarLayout.keepPreferredMinimumSize(toolbar);
         Utils.setSmallerFontForChildren(toolbar.getComponent());
 
         previewToolbarPanel.setBackground(UIUtil.getPanelBackground());
@@ -684,25 +523,11 @@ public class PreviewForm implements Disposable {
                     return;
                 }
 
-                Point location = previewToolbarPanel.getLocationOnScreen();
-                location.x = MouseInfo.getPointerInfo().getLocation().x;
-                location.y += previewToolbarPanel.getHeight();
-                JBPopupFactory.getInstance().createListPopup(new BaseListPopupStep<>(null, DocViewUploadService.UPLOAD_OPTIONS) {
-
-                    @Override
-                    public @NotNull String getTextFor(UploadPlatform value) {
-                        return DocViewBundle.message("action.upload.platform", value.getDisplayName());
+                UploadPlatformPopup.show(project, previewToolbarPanel, service -> {
+                    if (!disposed) {
+                        service.upload(project, selectedDocView);
                     }
-
-                    @Override
-                    public @Nullable PopupStep<?> onChosen(UploadPlatform selectedValue, boolean finalChoice) {
-                        if (!disposed && !project.isDisposed()) {
-                            DocViewUploadService.getInstance(selectedValue).upload(project, selectedDocView);
-                        }
-
-                        return FINAL_CHOICE;
-                    }
-                }).showInScreenCoordinates(previewToolbarPanel, location);
+                });
             }
         });
 
@@ -749,7 +574,7 @@ public class PreviewForm implements Disposable {
         toolbar.setTargetComponent(previewToolbarPanel);
         toolbar.getComponent().setBackground(UIUtil.getPanelBackground());
 
-        keepToolbarPreferredMinimumSize(toolbar);
+        PopupToolbarLayout.keepPreferredMinimumSize(toolbar);
         Utils.setSmallerFontForChildren(toolbar.getComponent());
 
         previewToolbarPanel.setBackground(UIUtil.getPanelBackground());
@@ -792,27 +617,12 @@ public class PreviewForm implements Disposable {
                     return;
                 }
 
-                Point location = previewToolbarPanel.getLocationOnScreen();
-                location.x = MouseInfo.getPointerInfo().getLocation().x;
-                location.y += previewToolbarPanel.getHeight();
-
                 myIsPinned.set(true);
-
-                JBPopupFactory.getInstance().createListPopup(new BaseListPopupStep<>(null, DocViewUploadService.UPLOAD_OPTIONS) {
-                    @Override
-                    public @NotNull String getTextFor(UploadPlatform value) {
-                        return DocViewBundle.message("action.upload.platform", value.getDisplayName());
+                UploadPlatformPopup.show(project, catalogToolbarPane, service -> {
+                    if (!disposed) {
+                        service.upload(project, selectedDocViews);
                     }
-
-                    @Override
-                    public @Nullable PopupStep<?> onChosen(UploadPlatform selectedValue, boolean finalChoice) {
-                        if (!disposed && !project.isDisposed()) {
-                            DocViewUploadService.getInstance(selectedValue).upload(project, selectedDocViews);
-                        }
-
-                        return FINAL_CHOICE;
-                    }
-                }).showInScreenCoordinates(previewToolbarPanel, location);
+                });
             }
         });
 
@@ -822,7 +632,7 @@ public class PreviewForm implements Disposable {
         toolbar.setTargetComponent(catalogToolbarPane);
         toolbar.getComponent().setBackground(UIUtil.getTextFieldBackground());
 
-        keepToolbarPreferredMinimumSize(toolbar);
+        PopupToolbarLayout.keepPreferredMinimumSize(toolbar);
         Utils.setSmallerFontForChildren(toolbar.getComponent());
 
         catalogToolbarPane.setBackground(UIUtil.getTextFieldBackground());
@@ -834,50 +644,17 @@ public class PreviewForm implements Disposable {
      * 构造文档
      */
     private void buildDoc() {
-        long requestId = loadRequest.incrementAndGet();
-        cancelIndicators(loadIndicators);
+        long requestId = loadRequests.invalidate();
+        renderRequests.invalidate();
         showPreviewStatus(DocViewBundle.message("ui.preview.loading"));
 
-        AtomicReference<PreviewLoadResult> result = new AtomicReference<>();
-        new Task.Backgroundable(project, DocViewBundle.message("task.docview.preview"), true) {
-            @Override
-            public void run(@NotNull ProgressIndicator indicator) {
-                indicator.setIndeterminate(true);
-                trackIndicator(loadIndicators, requestId, indicator, loadRequest, project);
-                try {
-                    result.set(ApplicationManager.getApplication().runReadAction((Computable<PreviewLoadResult>) () -> {
-                        indicator.checkCanceled();
-                        List<DocView> docs = List.copyOf(DocViewService.getInstance(project, psiClass).buildDoc(psiClass, psiMethod));
-                        return new PreviewLoadResult(docs, captureClassPresentations(docs));
-                    }));
-                } finally {
-                    loadIndicators.remove(requestId, indicator);
-                }
-            }
-
-            @Override
-            public void onSuccess() {
-                if (isCurrentLoad(requestId)) {
-                    try {
-                        PreviewLoadResult loaded = result.get();
-                        classPresentations = loaded.classPresentations();
-                        applyDocViewList(loaded.documents(), requestId);
-                    } catch (RuntimeException exception) {
-                        handleLoadFailure(requestId, exception);
-                    }
-                }
-            }
-
-            @Override
-            public void onCancel() {
-                handleLoadCancellation(requestId);
-            }
-
-            @Override
-            public void onThrowable(@NotNull Throwable throwable) {
-                handleLoadFailure(requestId, throwable);
-            }
-        }.queue();
+        loadRequests.submit(project, DocViewBundle.message("task.docview.preview"), requestId, () -> {
+            List<DocView> docs = List.copyOf(DocViewService.getInstance(project, psiClass).buildDoc(psiClass, psiMethod));
+            return new PreviewLoadResult(docs, captureClassPresentations(docs));
+        }, loaded -> {
+            classPresentations = loaded.classPresentations();
+            applyDocViewList(loaded.documents(), requestId);
+        }, () -> handleLoadCancellation(requestId), error -> handleLoadFailure(requestId, error));
     }
 
     private void applyDocViewList(@NotNull List<DocView> loadedDocViewList, long requestId) {
@@ -940,8 +717,7 @@ public class PreviewForm implements Disposable {
         if (disposed) {
             return;
         }
-        long requestId = renderRequest.incrementAndGet();
-        cancelIndicators(renderIndicators);
+        long requestId = renderRequests.invalidate();
         currentMarkdownText = null;
         showPreviewStatus(DocViewBundle.message("ui.preview.rendering"));
 
@@ -949,55 +725,14 @@ public class PreviewForm implements Disposable {
         MarkdownCacheEntry entry = markdownCache.get(docView);
         String cachedMarkdown = entry != null && entry.key().equals(cacheKey) ? entry.markdown() : null;
 
-        AtomicReference<String> result = new AtomicReference<>();
-        new Task.Backgroundable(project, DocViewBundle.message("task.docview.markdown"), true) {
-            @Override
-            public void run(@NotNull ProgressIndicator indicator) {
-                if (ApplicationManager.getApplication().isDispatchThread()) {
-                    throw new AssertionError("Markdown preview generation must run outside the dispatch thread");
-                }
-                indicator.setIndeterminate(true);
-                trackIndicator(renderIndicators, requestId, indicator, renderRequest, project);
-                try {
-                    result.set(ApplicationManager.getApplication().runReadAction((Computable<String>) () -> {
-                        indicator.checkCanceled();
-                        if (ApplicationManager.getApplication().isDispatchThread()) {
-                            throw new AssertionError("Markdown preview generation must run outside the dispatch thread");
-                        }
-                        String markdownText = cachedMarkdown != null
-                                ? cachedMarkdown
-                                : DocViewData.markdownText(project, docView);
-                        indicator.checkCanceled();
-                        return markdownText;
-                    }));
-                } finally {
-                    renderIndicators.remove(requestId, indicator);
-                }
-            }
-
-            @Override
-            public void onSuccess() {
-                if (isCurrentRender(requestId, docView)) {
-                    String markdown = result.get();
-                    try {
+        renderRequests.submit(project, DocViewBundle.message("task.docview.markdown"), requestId,
+                () -> cachedMarkdown != null ? cachedMarkdown : DocumentMarkdownRenderer.render(project, docView),
+                markdown -> {
+                    if (isCurrentRender(requestId, docView)) {
                         markdownCache.put(docView, new MarkdownCacheEntry(cacheKey, markdown));
                         applyMarkdown(docView, markdown, requestId);
-                    } catch (RuntimeException exception) {
-                        handleRenderFailure(requestId, exception);
                     }
-                }
-            }
-
-            @Override
-            public void onCancel() {
-                handleRenderCancellation(requestId);
-            }
-
-            @Override
-            public void onThrowable(@NotNull Throwable throwable) {
-                handleRenderFailure(requestId, throwable);
-            }
-        }.queue();
+                }, () -> handleRenderCancellation(requestId), error -> handleRenderFailure(requestId, error));
     }
 
     private void applyMarkdown(@NotNull DocView docView,
@@ -1057,24 +792,14 @@ public class PreviewForm implements Disposable {
     }
 
     private boolean isCurrentLoad(long requestId) {
-        return !disposed && !project.isDisposed() && requestId == loadRequest.get();
+        return !disposed && !project.isDisposed() && loadRequests.isCurrent(requestId);
     }
 
     private boolean isCurrentRender(long requestId, @Nullable DocView docView) {
         return !disposed && !project.isDisposed()
-                && docView != null && requestId == renderRequest.get() && currentDocView == docView;
+                && docView != null && renderRequests.isCurrent(requestId) && currentDocView == docView;
     }
 
-    private static void trackIndicator(@NotNull ConcurrentMap<Long, ProgressIndicator> indicators,
-                                       long requestId,
-                                       @NotNull ProgressIndicator indicator,
-                                       @NotNull AtomicLong currentRequest,
-                                       @NotNull Project project) {
-        indicators.put(requestId, indicator);
-        if (requestId != currentRequest.get() || project.isDisposed()) {
-            indicator.cancel();
-        }
-    }
 
     private void setMarkdownText(@NotNull String markdownText) {
         if (disposed || markdownDocument == null) {

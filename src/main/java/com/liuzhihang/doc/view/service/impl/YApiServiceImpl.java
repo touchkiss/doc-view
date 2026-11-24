@@ -2,9 +2,7 @@ package com.liuzhihang.doc.view.service.impl;
 
 import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.components.Service;
-import com.intellij.openapi.options.ShowSettingsUtil;
 import com.intellij.openapi.progress.ProcessCanceledException;
-import com.intellij.openapi.progress.ProgressManager;
 import com.intellij.openapi.project.Project;
 import com.liuzhihang.doc.view.DocViewBundle;
 import com.liuzhihang.doc.view.config.YApiSettings;
@@ -12,10 +10,9 @@ import com.liuzhihang.doc.view.config.YApiSettingsConfigurable;
 import com.liuzhihang.doc.view.dto.DocView;
 import com.liuzhihang.doc.view.integration.YApiFacadeService;
 import com.liuzhihang.doc.view.integration.impl.YApiFacadeServiceImpl;
-import com.liuzhihang.doc.view.mcp.YApiUploadOrchestrator;
+import com.liuzhihang.doc.view.integration.YApiUploadOrchestrator;
 import com.liuzhihang.doc.view.notification.DocViewNotification;
 import com.liuzhihang.doc.view.service.DocViewUploadService;
-import com.liuzhihang.doc.view.utils.DocViewBackgroundTasks;
 import org.apache.commons.lang3.StringUtils;
 import org.jetbrains.annotations.NotNull;
 import java.util.List;
@@ -30,10 +27,7 @@ public final class YApiServiceImpl implements DocViewUploadService {
         YApiSettings settings = YApiSettings.getInstance(project);
         if (StringUtils.isBlank(settings.getUrl()) || settings.getProjectId() == null
                 || StringUtils.isBlank(settings.getToken())) {
-            DocViewBackgroundTasks.invokeLater(project, () -> {
-                DocViewNotification.notifyError(project, DocViewBundle.message("notify.yapi.info.settings"));
-                ShowSettingsUtil.getInstance().showSettingsDialog(project, YApiSettingsConfigurable.class);
-            });
+            UploadInteraction.showSettings(project, YApiSettingsConfigurable.class, "notify.yapi.info.settings");
             return false;
         }
         return true;
@@ -42,12 +36,10 @@ public final class YApiServiceImpl implements DocViewUploadService {
     @Override
     public void doUpload(@NotNull Project project, @NotNull DocView docView) {
         try {
-            ProgressManager.checkCanceled();
-            if (project.isDisposed()) throw new ProcessCanceledException();
+            UploadInteraction.checkCanceled(project);
             YApiFacadeService facade = ApplicationManager.getApplication().getService(YApiFacadeServiceImpl.class);
             var result = new YApiUploadOrchestrator(facade, saveFactory).upload(project, List.of(docView)).get(0);
-            ProgressManager.checkCanceled();
-            if (project.isDisposed()) throw new ProcessCanceledException();
+            UploadInteraction.checkCanceled(project);
             if ("failed".equals(result.getStatus())) {
                 DocViewNotification.notifyError(project, DocViewBundle.message("notify.integration.upload.error"));
             } else {

@@ -1,4 +1,4 @@
-package com.liuzhihang.doc.view.mcp;
+package com.liuzhihang.doc.view.integration;
 
 import com.intellij.openapi.application.ReadAction;
 import com.intellij.openapi.progress.ProcessCanceledException;
@@ -6,8 +6,6 @@ import com.intellij.openapi.progress.ProgressManager;
 import com.intellij.openapi.project.Project;
 import com.liuzhihang.doc.view.config.YApiSettings;
 import com.liuzhihang.doc.view.dto.DocView;
-import com.liuzhihang.doc.view.integration.YApiFacadeService;
-import com.liuzhihang.doc.view.integration.YApiRemoteException;
 import com.liuzhihang.doc.view.integration.dto.YApiCat;
 import com.liuzhihang.doc.view.integration.dto.YapiSave;
 import com.liuzhihang.doc.view.service.impl.YApiInterfaceUrlResolver;
@@ -88,7 +86,7 @@ public final class YApiUploadOrchestrator {
         } catch (ProcessCanceledException exception) {
             throw exception;
         } catch (Exception exception) {
-            return UploadItemResult.failure(reference, McpException.Code.DOC_GENERATION_FAILED,
+            return UploadItemResult.failure(reference, Failure.DOC_GENERATION_FAILED,
                     safeSummary(exception, settings.getToken()));
         }
         try {
@@ -129,7 +127,7 @@ public final class YApiUploadOrchestrator {
         YApiSettings settings = settingsProvider.apply(project);
         if (settings == null || StringUtils.isBlank(settings.getUrl())
                 || settings.getProjectId() == null || StringUtils.isBlank(settings.getToken())) {
-            throw new McpException(McpException.Code.YAPI_NOT_CONFIGURED, "YApi 尚未配置");
+            throw new MissingConfigurationException();
         }
         return settings;
     }
@@ -152,17 +150,9 @@ public final class YApiUploadOrchestrator {
     }
 
     private UploadItemResult remoteFailure(String reference, YApiSettings settings, Exception exception) {
-        McpException.Code code = McpException.Code.YAPI_REQUEST_FAILED;
-        if (exception instanceof McpException) {
-            McpException.Code mcpCode = ((McpException) exception).getCode();
-            if (mcpCode == McpException.Code.YAPI_RESPONSE_INVALID
-                    || mcpCode == McpException.Code.YAPI_REQUEST_FAILED) {
-                code = mcpCode;
-            }
-        } else if (exception instanceof YApiRemoteException
-                && ((YApiRemoteException) exception).getKind() == YApiRemoteException.Kind.RESPONSE_INVALID) {
-            code = McpException.Code.YAPI_RESPONSE_INVALID;
-        }
+        Failure code = exception instanceof YApiRemoteException remote
+                && remote.getKind() == YApiRemoteException.Kind.RESPONSE_INVALID
+                ? Failure.YAPI_RESPONSE_INVALID : Failure.YAPI_REQUEST_FAILED;
         return UploadItemResult.failure(reference, code, safeSummary(exception, settings.getToken()));
     }
 
@@ -186,6 +176,16 @@ public final class YApiUploadOrchestrator {
         YapiSave compute(Supplier<YapiSave> computation);
     }
 
+    public static final class MissingConfigurationException extends IllegalStateException {
+        private MissingConfigurationException() {
+            super("YApi 尚未配置");
+        }
+    }
+
+    private enum Failure {
+        DOC_GENERATION_FAILED, YAPI_REQUEST_FAILED, YAPI_RESPONSE_INVALID
+    }
+
     public static final class UploadItemResult {
         private final String reference;
         private final String status;
@@ -202,11 +202,11 @@ public final class YApiUploadOrchestrator {
             this.message = message;
         }
 
-        private static UploadItemResult success(String reference, String status, String yapiUrl, String warning) {
+        public static UploadItemResult success(String reference, String status, String yapiUrl, String warning) {
             return new UploadItemResult(reference, status, yapiUrl, null, warning);
         }
 
-        private static UploadItemResult failure(String reference, McpException.Code errorCode, String message) {
+        private static UploadItemResult failure(String reference, Failure errorCode, String message) {
             return new UploadItemResult(reference, "failed", null, errorCode.name(), message);
         }
 

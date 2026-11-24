@@ -1,10 +1,9 @@
-package com.liuzhihang.doc.view.mcp;
+package com.liuzhihang.doc.view.integration;
 
 import com.intellij.openapi.project.Project;
 import com.liuzhihang.doc.view.config.YApiSettings;
 import com.liuzhihang.doc.view.dto.DocView;
 import com.liuzhihang.doc.view.enums.ContentTypeEnum;
-import com.liuzhihang.doc.view.integration.YApiFacadeService;
 import com.liuzhihang.doc.view.integration.dto.YApiCat;
 import com.liuzhihang.doc.view.integration.dto.YapiSave;
 import org.junit.Test;
@@ -142,10 +141,6 @@ public class YApiUploadOrchestratorTest {
         assertTrue("A successful save with an unresolved detail link must carry a warning",
                 result.getMessage() != null && !result.getMessage().isBlank());
         assertFalse(result.getMessage().contains("token-value"));
-        var item = McpToolHandler.resultItem(result);
-        assertEquals(result.getMessage(), item.message());
-        assertTrue(McpResult.UploadBatch.of("/workspace", "Controller", List.of(item), List.of(), List.of(), List.of())
-                .structuredContent().toString().contains(result.getMessage()));
         assertEquals(1, facade.saved.size());
     }
 
@@ -167,7 +162,7 @@ public class YApiUploadOrchestratorTest {
     public void preservesInvalidYApiResponseClassification() {
         FakeFacade facade = new FakeFacade();
         facade.saveFailures.put("/invalid-response",
-                new McpException(McpException.Code.YAPI_RESPONSE_INVALID, "响应 JSON 无效"));
+                YApiRemoteException.responseInvalid("响应 JSON 无效"));
 
         YApiUploadOrchestrator.UploadItemResult result = upload(facade,
                 document("GET", "/invalid-response")).get(0);

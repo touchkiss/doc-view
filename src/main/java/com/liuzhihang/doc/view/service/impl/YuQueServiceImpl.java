@@ -1,16 +1,14 @@
 package com.liuzhihang.doc.view.service.impl;
 
 import com.intellij.openapi.progress.ProcessCanceledException;
-import com.intellij.openapi.progress.ProgressManager;
 import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.components.Service;
-import com.intellij.openapi.options.ShowSettingsUtil;
 import com.intellij.openapi.project.Project;
 import com.liuzhihang.doc.view.DocViewBundle;
 import com.liuzhihang.doc.view.config.YuQueSettingsConfigurable;
 import com.liuzhihang.doc.view.config.YuQueSettings;
 import com.liuzhihang.doc.view.dto.DocView;
-import com.liuzhihang.doc.view.dto.DocViewData;
+import com.liuzhihang.doc.view.render.DocumentMarkdownRenderer;
 import com.liuzhihang.doc.view.integration.YuQueFacadeService;
 import com.liuzhihang.doc.view.integration.dto.YuQueCreate;
 import com.liuzhihang.doc.view.integration.dto.YuQueResponse;
@@ -18,7 +16,6 @@ import com.liuzhihang.doc.view.integration.dto.YuQueUpdate;
 import com.liuzhihang.doc.view.integration.impl.YuQueFacadeServiceImpl;
 import com.liuzhihang.doc.view.notification.DocViewNotification;
 import com.liuzhihang.doc.view.service.DocViewUploadService;
-import com.liuzhihang.doc.view.utils.DocViewBackgroundTasks;
 import org.apache.commons.lang3.StringUtils;
 import org.jetbrains.annotations.NotNull;
 
@@ -38,31 +35,19 @@ public final class YuQueServiceImpl implements DocViewUploadService {
         if (StringUtils.isBlank(apiSettings.getUrl())
                 || StringUtils.isBlank(apiSettings.getApiUrl())
                 || StringUtils.isBlank(apiSettings.getRepos())
-                || StringUtils.isBlank(apiSettings.getLogin())) {
-            // 说明没有配置语雀上传地址, 跳转到配置页面
-            showConfiguration(project);
-            return false;
-        }
-        if (StringUtils.isBlank(apiSettings.getToken())) {
-            showConfiguration(project);
+                || StringUtils.isBlank(apiSettings.getLogin())
+                || StringUtils.isBlank(apiSettings.getToken())) {
+            UploadInteraction.showSettings(project, YuQueSettingsConfigurable.class, "notify.yuque.info.settings");
             return false;
         }
         return true;
-    }
-
-    private static void showConfiguration(Project project) {
-        DocViewBackgroundTasks.invokeLater(project, () -> {
-            DocViewNotification.notifyError(project, DocViewBundle.message("notify.yuque.info.settings"));
-            ShowSettingsUtil.getInstance().showSettingsDialog(project, YuQueSettingsConfigurable.class);
-        });
     }
 
     @Override
     public void doUpload(@NotNull Project project, @NotNull DocView docView) {
 
         try {
-            ProgressManager.checkCanceled();
-            if (project.isDisposed()) throw new ProcessCanceledException();
+            UploadInteraction.checkCanceled(project);
             YuQueSettings settings = YuQueSettings.getInstance(project);
             String token = settings.getToken();
             YuQueFacadeService facadeService = ApplicationManager.getApplication().getService(YuQueFacadeServiceImpl.class);
@@ -83,7 +68,7 @@ public final class YuQueServiceImpl implements DocViewUploadService {
                 YuQueCreate yuQueCreate = new YuQueCreate();
                 yuQueCreate.setTitle(docView.getName());
                 yuQueCreate.setSlug(slug);
-                yuQueCreate.setBody(DocViewData.markdownText(project, docView));
+                yuQueCreate.setBody(DocumentMarkdownRenderer.render(project, docView));
                 yuQueResponse = facadeService.create(settings.getApiUrl(), token, settings.getNamespace(), yuQueCreate);
 
             } else {
@@ -91,13 +76,12 @@ public final class YuQueServiceImpl implements DocViewUploadService {
                 YuQueUpdate yuQueCreate = new YuQueUpdate();
                 yuQueCreate.setTitle(docView.getName());
                 yuQueCreate.setSlug(slug);
-                yuQueCreate.setBody(DocViewData.markdownText(project, docView));
+                yuQueCreate.setBody(DocumentMarkdownRenderer.render(project, docView));
                 yuQueResponse = facadeService.update(settings.getApiUrl(), token, settings.getNamespace(), doc.getData().getId(), yuQueCreate);
             }
 
             String yuQueDocUrl = settings.getUrl() + "/" + settings.getNamespace() + "/" + yuQueResponse.getData().getSlug();
-            ProgressManager.checkCanceled();
-            if (project.isDisposed()) throw new ProcessCanceledException();
+            UploadInteraction.checkCanceled(project);
             DocViewNotification.uploadSuccess(project, DocViewBundle.message("platform.name.yuque"), yuQueDocUrl);
         } catch (ProcessCanceledException exception) {
             throw exception;

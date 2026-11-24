@@ -11,6 +11,7 @@ import com.intellij.openapi.vfs.VirtualFile;
 import com.liuzhihang.doc.view.DocViewBundle;
 import com.liuzhihang.doc.view.data.DocViewDataKeys;
 import com.liuzhihang.doc.view.dto.DocViewData;
+import com.liuzhihang.doc.view.render.DocumentMarkdownRenderer;
 import com.liuzhihang.doc.view.notification.DocViewNotification;
 import com.liuzhihang.doc.view.ui.window.RootNode;
 import com.liuzhihang.doc.view.utils.BatchMarkdownExportFile;
@@ -66,7 +67,7 @@ public class WindowExportAction extends AnAction {
                     StringBuilder markdown = new StringBuilder();
                     for (var docView : rootNode.docViewList()) {
                         indicator.checkCanceled();
-                        markdown.append(DocViewData.markdownText(project, docView));
+                        markdown.append(DocumentMarkdownRenderer.render(project, docView));
                     }
                     return markdown.toString();
                 }, markdown -> {

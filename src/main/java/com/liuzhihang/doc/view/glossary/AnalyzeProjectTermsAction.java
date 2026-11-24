@@ -34,7 +34,7 @@ public final class AnalyzeProjectTermsAction extends AnAction {
     @Override
     public void update(@NotNull AnActionEvent event) {
         Project project = event.getProject();
-        event.getPresentation().setEnabled(project != null && !DumbService.isDumb(project));
+        event.getPresentation().setEnabledAndVisible(project != null && !DumbService.isDumb(project));
     }
 
     @Override

@@ -1,16 +1,14 @@
 package com.liuzhihang.doc.view.service.impl;
 
 import com.intellij.openapi.progress.ProcessCanceledException;
-import com.intellij.openapi.progress.ProgressManager;
 import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.components.Service;
-import com.intellij.openapi.options.ShowSettingsUtil;
 import com.intellij.openapi.project.Project;
 import com.liuzhihang.doc.view.DocViewBundle;
 import com.liuzhihang.doc.view.config.ShowDocSettings;
 import com.liuzhihang.doc.view.config.ShowDocSettingsConfigurable;
 import com.liuzhihang.doc.view.dto.DocView;
-import com.liuzhihang.doc.view.dto.DocViewData;
+import com.liuzhihang.doc.view.render.DocumentMarkdownRenderer;
 import com.liuzhihang.doc.view.integration.ShowDocFacadeService;
 import com.liuzhihang.doc.view.integration.dto.ShowDocUpdateRequest;
 import com.liuzhihang.doc.view.integration.dto.ShowDocUpdateResponse;
@@ -19,7 +17,6 @@ import com.liuzhihang.doc.view.notification.DocViewNotification;
 import com.liuzhihang.doc.view.service.DocViewUploadService;
 import org.apache.commons.lang3.StringUtils;
 import org.jetbrains.annotations.NotNull;
-import com.liuzhihang.doc.view.utils.DocViewBackgroundTasks;
 
 /**
  * @author liuzhihang
@@ -32,31 +29,20 @@ public final class ShowDocServiceImpl implements DocViewUploadService {
     @Override
     public boolean checkSettings(@NotNull Project project) {
         ShowDocSettings apiSettings = ShowDocSettings.getInstance(project);
-        if (StringUtils.isBlank(apiSettings.getUrl())) {
-            showConfiguration(project);
-            return false;
-        }
-        if (StringUtils.isBlank(apiSettings.getApiKey()) || StringUtils.isBlank(apiSettings.getApiToken())) {
+        if (StringUtils.isBlank(apiSettings.getUrl())
+                || StringUtils.isBlank(apiSettings.getApiKey()) || StringUtils.isBlank(apiSettings.getApiToken())) {
             // 说明没有配置 ShowDoc 上传地址, 跳转到配置页面
-            showConfiguration(project);
+            UploadInteraction.showSettings(project, ShowDocSettingsConfigurable.class, "notify.showdoc.info.settings");
             return false;
         }
         return true;
-    }
-
-    private static void showConfiguration(Project project) {
-        DocViewBackgroundTasks.invokeLater(project, () -> {
-            DocViewNotification.notifyError(project, DocViewBundle.message("notify.showdoc.info.settings"));
-            ShowSettingsUtil.getInstance().showSettingsDialog(project, ShowDocSettingsConfigurable.class);
-        });
     }
 
     @Override
     public void doUpload(@NotNull Project project, @NotNull DocView docView) {
 
         try {
-            ProgressManager.checkCanceled();
-            if (project.isDisposed()) throw new ProcessCanceledException();
+            UploadInteraction.checkCanceled(project);
             ShowDocSettings settings = ShowDocSettings.getInstance(project);
             ShowDocUpdateRequest request = new ShowDocUpdateRequest();
             request.setShowDocUrl(settings.getUrl());
@@ -64,7 +50,7 @@ public final class ShowDocServiceImpl implements DocViewUploadService {
             request.setApiToken(settings.getApiToken());
             request.setCatName(docView.getDocTitle());
             request.setPageTitle(docView.getName());
-            request.setPageContent(DocViewData.markdownText(project, docView));
+            request.setPageContent(DocumentMarkdownRenderer.render(project, docView));
 
             ShowDocFacadeService facadeService = ApplicationManager.getApplication().getService(ShowDocFacadeServiceImpl.class);
             ShowDocUpdateResponse response = facadeService.updateByApi(request);
@@ -73,8 +59,7 @@ public final class ShowDocServiceImpl implements DocViewUploadService {
 
             String showDocInterfaceUrl = settings.getUrl() + "/" + data.getItemId() + "/" + data.getPageId();
 
-            ProgressManager.checkCanceled();
-            if (project.isDisposed()) throw new ProcessCanceledException();
+            UploadInteraction.checkCanceled(project);
             DocViewNotification.uploadSuccess(project, DocViewBundle.message("platform.name.showdoc"), showDocInterfaceUrl);
         } catch (ProcessCanceledException exception) {
             throw exception;

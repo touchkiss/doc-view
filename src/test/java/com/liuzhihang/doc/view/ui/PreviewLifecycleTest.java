@@ -44,7 +44,6 @@ import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
@@ -239,7 +238,7 @@ public final class PreviewLifecycleTest extends LightJavaCodeInsightFixtureTestC
             var file = FileDocumentManager.getInstance().getFile(document);
             assertInstanceOf(file, LightVirtualFile.class);
             assertEquals("md", file.getExtension());
-            assertSame(document, fieldValue(form, "markdownEditor", Editor.class).getDocument());
+            assertSame(document, fieldValue(markdownPane(form), "markdownEditor", Editor.class).getDocument());
         });
     }
 
@@ -250,13 +249,13 @@ public final class PreviewLifecycleTest extends LightJavaCodeInsightFixtureTestC
 
         EdtTestUtil.runInEdtAndWait(() -> {
             initializeUi(form);
-            FileEditor preview = fieldValue(form, "nativeMarkdownPreview", FileEditor.class);
+            FileEditor preview = fieldValue(markdownPane(form), "nativeMarkdownPreview", FileEditor.class);
             assertNotNull(preview);
             var panel = fieldValue(form, "previewContentPanel", javax.swing.JPanel.class);
             assertSame(preview.getComponent(), panel.getComponent(0));
             var mainEditor = fieldValue(preview, "mainEditor", StateFlow.class);
             assertSame("The native renderer requires the associated Markdown editor",
-                    fieldValue(form, "markdownEditor", Editor.class), mainEditor.getValue());
+                    fieldValue(markdownPane(form), "markdownEditor", Editor.class), mainEditor.getValue());
 
             String markdown = "# Heading\n\n| Name | Value |\n|---|---|\n| status | OK |\n\n" +
                     "> [!NOTE]\n> Sample\n\n" + "```java\nint example = 1;\n```\n";
@@ -274,8 +273,8 @@ public final class PreviewLifecycleTest extends LightJavaCodeInsightFixtureTestC
         PreviewForm form = createForm();
         EdtTestUtil.runInEdtAndWait(() -> initializeUi(form));
         assertNull("JCEF-disabled environments must use the Markdown source viewer",
-                fieldValue(form, "nativeMarkdownPreview", Object.class));
-        Editor previewEditor = fieldValue(form, "markdownEditor", Editor.class);
+                fieldValue(markdownPane(form), "nativeMarkdownPreview", Object.class));
+        Editor previewEditor = fieldValue(markdownPane(form), "markdownEditor", Editor.class);
         assertNotNull(previewEditor);
         assertFalse(previewEditor.isDisposed());
         EdtTestUtil.runInEdtAndWait(() -> {
@@ -283,7 +282,7 @@ public final class PreviewLifecycleTest extends LightJavaCodeInsightFixtureTestC
             form.dispose();
         });
         assertTrue("The source editor must be released once", previewEditor.isDisposed());
-        assertNull(fieldValue(form, "markdownEditor", Editor.class));
+        assertNull(fieldValue(markdownPane(form), "markdownEditor", Editor.class));
         assertTrue("Disposal must preserve unrelated editors", isEditorAlive(unrelatedEditor));
     }
 
@@ -306,7 +305,7 @@ public final class PreviewLifecycleTest extends LightJavaCodeInsightFixtureTestC
             initializeUi(form);
             dispatchThread.set(Thread.currentThread());
         });
-        assertNull(fieldValue(form, "nativeMarkdownPreview", Object.class));
+        assertNull(fieldValue(markdownPane(form), "nativeMarkdownPreview", Object.class));
         DocView doc = ApplicationManager.getApplication().runReadAction((Computable<DocView>) () ->
                 DocViewService.getInstance(project, owner).buildDoc(owner, null).getFirst());
         String expected = markdownText(doc);
@@ -400,8 +399,8 @@ public final class PreviewLifecycleTest extends LightJavaCodeInsightFixtureTestC
         PreviewForm form = createForm();
         EdtTestUtil.runInEdtAndWait(() -> {
             initializeUi(form);
-            fieldValue(form, "loadRequest", AtomicLong.class).set(1L);
-            invoke(form, "applyDocViewList", new Class<?>[]{List.class, long.class}, List.of(), 1L);
+            long id = fieldValue(form, "loadRequests", PreviewRequests.class).invalidate();
+            invoke(form, "applyDocViewList", new Class<?>[]{List.class, long.class}, List.of(), id);
         });
 
         assertEquals(DocViewBundle.message("ui.preview.empty"), documentText(form));
@@ -516,9 +515,9 @@ public final class PreviewLifecycleTest extends LightJavaCodeInsightFixtureTestC
 
         EdtTestUtil.runInEdtAndWait(() -> {
             setField(form, "currentDocView", selected);
-            fieldValue(form, "renderRequest", AtomicLong.class).set(2L);
+            long current = fieldValue(form, "renderRequests", PreviewRequests.class).invalidate();
             setDocumentText(form, DocViewBundle.message("ui.preview.rendering"));
-            invoke(form, "handleRenderCancellation", new Class<?>[]{long.class}, 2L);
+            invoke(form, "handleRenderCancellation", new Class<?>[]{long.class}, current);
         });
 
         String cancellation = documentText(form);
@@ -529,9 +528,9 @@ public final class PreviewLifecycleTest extends LightJavaCodeInsightFixtureTestC
         EdtTestUtil.runInEdtAndWait(() -> {
             setField(form, "currentMarkdownText", "# Latest document\n");
             setDocumentText(form, "# Latest document\n");
-            fieldValue(form, "renderRequest", AtomicLong.class).set(4L);
+            long current = fieldValue(form, "renderRequests", PreviewRequests.class).invalidate();
             invoke(form, "handleRenderFailure", new Class<?>[]{long.class, Throwable.class},
-                    3L, new IllegalStateException("stale failure"));
+                    current - 1, new IllegalStateException("stale failure"));
         });
 
         assertEquals("A late error from an older request must not overwrite the selected document",
@@ -539,12 +538,37 @@ public final class PreviewLifecycleTest extends LightJavaCodeInsightFixtureTestC
         assertEquals("# Latest document\n", fieldValue(form, "currentMarkdownText", String.class));
 
         EdtTestUtil.runInEdtAndWait(() ->
-                invoke(form, "handleRenderCancellation", new Class<?>[]{long.class}, 3L));
+                invoke(form, "handleRenderCancellation", new Class<?>[]{long.class}, 1L));
         assertEquals("A late cancellation from an older request must not clear the selected document",
                 "# Latest document\n", documentText(form));
         assertEquals("# Latest document\n", fieldValue(form, "currentMarkdownText", String.class));
         assertSame("A stale cancellation must retain the current document identity", selected,
                 fieldValue(form, "currentDocView", DocView.class));
+    }
+
+    public void testReloadInvalidatesRenderFromPreviousDocumentList() throws Exception {
+        Disposable owner = Disposer.newDisposable();
+        try {
+            replaceListService(owner, List::of);
+            PreviewForm form = createListForm();
+            EdtTestUtil.runInEdtAndWait(() -> {
+                initializeUi(form);
+                DocView previous = presentationFixture("previous", fixtureClass);
+                setField(form, "currentDocView", previous);
+                var requests = fieldValue(form, "renderRequests", PreviewRequests.class);
+                long oldRender = requests.invalidate();
+                invoke(form, "buildDoc", new Class<?>[0]);
+                assertFalse("Reload must invalidate the prior document's renderer", requests.isCurrent(oldRender));
+                var document = fieldValue(form, "markdownDocument", Document.class);
+                String reloadText = document.getText();
+                invoke(form, "applyMarkdown", new Class<?>[]{DocView.class, String.class, long.class},
+                        previous, "# Previous", oldRender);
+                assertEquals("A stale renderer cannot replace the reload status", reloadText, document.getText());
+            });
+            awaitMarkdown(form, DocViewBundle.message("ui.preview.empty"));
+        } finally {
+            Disposer.dispose(owner);
+        }
     }
 
     public void testStaleSuccessfulRenderAndClosedFailureCannotChangePreview() throws Exception {
@@ -557,20 +581,20 @@ public final class PreviewLifecycleTest extends LightJavaCodeInsightFixtureTestC
 
         EdtTestUtil.runInEdtAndWait(() -> {
             setField(form, "currentDocView", latest);
-            fieldValue(form, "renderRequest", AtomicLong.class).set(4L);
+            long current = fieldValue(form, "renderRequests", PreviewRequests.class).invalidate();
             setField(form, "currentMarkdownText", "# Latest document\n");
             setDocumentText(form, "# Latest document\n");
             invoke(form, "applyMarkdown", new Class<?>[]{DocView.class, String.class, long.class},
-                    older, "# Stale document\n", 3L);
+                    older, "# Stale document\n", current - 1);
         });
         assertEquals("# Latest document\n", documentText(form));
 
         EdtTestUtil.runInEdtAndWait(() -> {
             setField(form, "currentDocView", latest);
-            fieldValue(form, "renderRequest", AtomicLong.class).set(5L);
+            long current = fieldValue(form, "renderRequests", PreviewRequests.class).invalidate();
             invoke(form, "dispose", new Class<?>[0]);
             invoke(form, "handleRenderFailure", new Class<?>[]{long.class, Throwable.class},
-                    5L, new IllegalStateException("late failure"));
+                    current, new IllegalStateException("late failure"));
         });
         assertEquals("# Latest document\n", documentText(form));
     }
@@ -831,6 +855,10 @@ public final class PreviewLifecycleTest extends LightJavaCodeInsightFixtureTestC
         } catch (ReflectiveOperationException exception) {
             throw new AssertionError("Could not set preview test state " + name, exception);
         }
+    }
+
+    private static MarkdownPreviewPane markdownPane(PreviewForm form) {
+        return fieldValue(form, "markdownPane", MarkdownPreviewPane.class);
     }
 
     private void setDocumentText(PreviewForm form, String text) {

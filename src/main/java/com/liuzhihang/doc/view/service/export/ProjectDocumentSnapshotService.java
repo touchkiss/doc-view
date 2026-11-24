@@ -16,7 +16,7 @@ import com.intellij.psi.search.GlobalSearchScope;
 import com.intellij.psi.search.searches.AllClassesSearch;
 import com.liuzhihang.doc.view.config.Settings;
 import com.liuzhihang.doc.view.dto.DocView;
-import com.liuzhihang.doc.view.dto.DocViewData;
+import com.liuzhihang.doc.view.render.DocumentMarkdownRenderer;
 import com.liuzhihang.doc.view.service.DocViewService;
 import com.liuzhihang.doc.view.utils.DocViewUtils;
 import com.liuzhihang.doc.view.utils.DubboPsiUtils;
@@ -109,7 +109,7 @@ public final class ProjectDocumentSnapshotService {
 
                     DocView docView = DocViewService.getInstance(project, psiClass)
                             .buildClassMethodDoc(psiClass, psiMethod);
-                    String markdown = DocViewData.markdownText(project, docView);
+                    String markdown = DocumentMarkdownRenderer.render(project, docView);
                     ProjectDocumentPage page = new ProjectDocumentPage(identity, candidate.framework(), markdown);
                     ProjectDocumentPage previous = pagesByIdentity.putIfAbsent(identity.canonicalForm(), page);
                     if (previous != null && !previous.markdown().equals(markdown)) {

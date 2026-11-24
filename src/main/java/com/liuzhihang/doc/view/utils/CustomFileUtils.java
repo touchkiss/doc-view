@@ -15,7 +15,7 @@ import com.intellij.psi.PsiClass;
 import com.intellij.psi.PsiMethod;
 import com.liuzhihang.doc.view.DocViewBundle;
 import com.liuzhihang.doc.view.dto.DocView;
-import com.liuzhihang.doc.view.dto.DocViewData;
+import com.liuzhihang.doc.view.render.DocumentMarkdownRenderer;
 import com.liuzhihang.doc.view.enums.ContentTypeEnum;
 import com.liuzhihang.doc.view.notification.DocViewNotification;
 import com.liuzhihang.doc.view.service.DocViewService;
@@ -68,7 +68,7 @@ public class CustomFileUtils {
 
             DocView docView = service.buildClassMethodDoc(psiClass, psiMethod);
             indicator.checkCanceled();
-            String markdownText = DocViewData.markdownText(project, docView);
+            String markdownText = DocumentMarkdownRenderer.render(project, docView);
             indicator.checkCanceled();
             String pathName = node.docPath(project);
             indicator.checkCanceled();

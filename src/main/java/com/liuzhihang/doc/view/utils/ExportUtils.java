@@ -9,7 +9,7 @@ import com.intellij.openapi.vfs.VirtualFile;
 import com.liuzhihang.doc.view.DocViewBundle;
 import com.liuzhihang.doc.view.config.Settings;
 import com.liuzhihang.doc.view.dto.DocView;
-import com.liuzhihang.doc.view.dto.DocViewData;
+import com.liuzhihang.doc.view.render.DocumentMarkdownRenderer;
 import com.liuzhihang.doc.view.notification.DocViewNotification;
 
 import java.io.File;
@@ -105,7 +105,7 @@ public class ExportUtils {
             StringBuilder combined = new StringBuilder();
             for (DocView docView : docViews) {
                 indicator.checkCanceled();
-                combined.append(DocViewData.markdownText(project, docView));
+                combined.append(DocumentMarkdownRenderer.render(project, docView));
             }
             markdownByFileName.put(safeFileBase(className) + ".md", combined);
         } else {
@@ -113,7 +113,7 @@ public class ExportUtils {
                 indicator.checkCanceled();
                 String fileName = safeFileBase(String.valueOf(docView.getName())) + ".md";
                 markdownByFileName.computeIfAbsent(fileName, ignored -> new StringBuilder())
-                        .append(DocViewData.markdownText(project, docView));
+                        .append(DocumentMarkdownRenderer.render(project, docView));
             }
         }
         return markdownByFileName.entrySet().stream()

@@ -17,8 +17,7 @@ import java.util.function.Function;
 public final class Json5CurlExporter {
     private Json5CurlExporter() {}
     public static String convert(HttpRequest request, HttpRequestVariableSubstitutor substitutor) throws HttpRequestValidationException {
-        boolean json = HttpJsonBodies.isSupported(request) && JsonBodyNormalizer.isJsonMediaType(
-            request.getHeaderField("Content-Type") == null ? null : request.getHeaderField("Content-Type").getValue(substitutor));
+        boolean json = HttpJsonBodies.isSupported(request) && HttpJsonBodies.hasJsonContentType(request, substitutor);
         if (!json) return HttpRequestPsiConverter.convertFromHttpRequest(request, substitutor, new CurlRequestBuilder(false));
         return HttpRequestPsiConverter.convertFromHttpRequest(request, CommentAwareSubstitutor.wrap(request, substitutor), new NormalizingBuilder());
     }

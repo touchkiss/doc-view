@@ -49,14 +49,13 @@ public final class ProtoMessageResolver {
      * @return 光标所在的 message, 无法确定时返回 null
      */
     @Nullable
-    public static PbMessageType findTargetMessage(@NotNull Editor editor, @NotNull PsiFile psiFile) {
+    public static PbMessageType findTargetMessage(@Nullable Editor editor, @NotNull PsiFile psiFile) {
 
         if (!isProtoFile(psiFile)) {
             return null;
         }
 
-        int offset = editor.getCaretModel().getOffset();
-        PsiElement element = psiFile.findElementAt(offset);
+        PsiElement element = editor == null ? null : psiFile.findElementAt(editor.getCaretModel().getOffset());
 
         if (element != null) {
             // getParentOfType 返回最近的祖先, 因此嵌套 message 内会命中内层 message
@@ -88,7 +87,7 @@ public final class ProtoMessageResolver {
      * @return 合成出来的 PsiClass; 光标不在 message 内或转换失败时返回 null
      */
     @Nullable
-    public static PsiClass findTargetPsiClass(@NotNull Editor editor, @NotNull PsiFile psiFile) {
+    public static PsiClass findTargetPsiClass(@Nullable Editor editor, @NotNull PsiFile psiFile) {
 
         PbMessageType message = findTargetMessage(editor, psiFile);
 

@@ -3,7 +3,6 @@ package com.liuzhihang.doc.view.action;
 import com.intellij.openapi.actionSystem.ActionUpdateThread;
 import com.intellij.openapi.actionSystem.AnAction;
 import com.intellij.openapi.actionSystem.AnActionEvent;
-import com.intellij.openapi.actionSystem.CommonDataKeys;
 import com.intellij.openapi.project.DumbService;
 import com.intellij.psi.PsiDirectory;
 import com.intellij.psi.PsiJavaFile;
@@ -35,16 +34,25 @@ public class GenerateJavadocAction extends AnAction {
     public void update(@NotNull AnActionEvent event) {
         var project = event.getProject();
         if (project == null || DumbService.isDumb(project)) {
-            event.getPresentation().setEnabled(false);
+            event.getPresentation().setEnabledAndVisible(false);
             return;
         }
-        var editor = event.getData(CommonDataKeys.EDITOR);
-        var context = context(event);
+        var selection = ActionSelection.from(event);
+        var editor = selection.editor();
+        var context = selection.declaration();
         var kotlin = service(KdocSupport.class);
         var proto = service(ProtoCommentSupport.class);
-        event.getPresentation().setEnabled(editor != null && editor.getSelectionModel().hasSelection()
-                || context instanceof PsiDirectory
-                || projectFile(context) && (context.getContainingFile() instanceof PsiJavaFile
+        String selectedText = editor == null ? null : editor.getSelectionModel().getSelectedText();
+        boolean translate = selectedText != null && !selectedText.isBlank();
+        var packages = service(PackageInfoService.class);
+        var directory = packages.packageDirectory(context);
+        event.getPresentation().setText(translate ? "翻译选区" : directory == null ? "生成注释" : "生成包注释");
+        event.getPresentation().setEnabledAndVisible(translate
+                || directory != null && packages.sourcePackage(directory) != null
+                || projectFile(context) && (context.getContainingFile() instanceof PsiJavaFile && (javaTarget(context) != null
+                            || editor != null && editor.getCaretModel().getCaretCount() > 1
+                                    && editor.getCaretModel().getAllCarets().stream().anyMatch(caret ->
+                                            javaTarget(context.getContainingFile().findElementAt(caret.getOffset())) != null))
                         || kotlin != null && kotlin.supports(context)
                         || proto != null && proto.supports(context)));
     }
@@ -56,8 +64,9 @@ public class GenerateJavadocAction extends AnAction {
             return;
         }
         PsiDocumentManager.getInstance(project).commitAllDocuments();
-        var context = context(event);
-        var editor = event.getData(CommonDataKeys.EDITOR);
+        var selection = ActionSelection.from(event);
+        var editor = selection.editor();
+        var context = selection.declaration();
         String selectedText = editor == null ? null : editor.getSelectionModel().getSelectedText();
         var writer = service(WriterService.class);
         var translator = service(TranslatorService.class);

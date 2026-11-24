@@ -5,6 +5,7 @@ import com.intellij.psi.PsiClass;
 import com.intellij.psi.PsiMethod;
 import com.liuzhihang.doc.view.dto.DocView;
 import io.modelcontextprotocol.spec.McpSchema;
+import com.liuzhihang.doc.view.integration.YApiUploadOrchestrator;
 import org.junit.Test;
 
 import java.util.ArrayList;
@@ -17,6 +18,16 @@ import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
 public class McpToolHandlerTest {
+
+    @Test
+    public void exposesUploadWarningsInStructuredContent() {
+        var uploaded = YApiUploadOrchestrator.UploadItemResult
+                .success("GET /orders", "created", "http://yapi.test/category", "详情链接不可用");
+        var item = McpToolHandler.resultItem(uploaded);
+        assertEquals(uploaded.getMessage(), item.message());
+        assertTrue(McpResult.UploadBatch.of("/workspace", "Controller", List.of(item), List.of(), List.of(), List.of())
+                .structuredContent().toString().contains(uploaded.getMessage()));
+    }
 
     @Test
     public void advertisesExactlyTheRequiredTypedInputFields() {

@@ -30,7 +30,7 @@ public class McpServerServiceTest {
 
     @Test
     public void providesJsonSchemaValidatorWithoutServiceLoaderDiscovery() {
-        JsonSchemaValidator validator = McpServerService.jsonSchemaValidator();
+        JsonSchemaValidator validator = SdkMcpTransport.jsonSchemaValidator();
 
         assertTrue(validator != null);
     }
@@ -138,12 +138,7 @@ public class McpServerServiceTest {
     @Test
     public void realListenerValidatesMcpHttpRequestsAndReleasesItsPort() throws Exception {
         // Exercise the actual listener on an OS-assigned port without competing with the user's IDE.
-        McpServerService service = new McpServerService(() -> {
-            Class<?> type = Class.forName(McpServerService.class.getName() + "$SdkMcpTransport");
-            var constructor = type.getDeclaredConstructor(McpToolHandler.class);
-            constructor.setAccessible(true);
-            return (McpServerService.McpTransport) constructor.newInstance(new McpToolHandler());
-        });
+        McpServerService service = new McpServerService(() -> new SdkMcpTransport(new McpToolHandler(), 0));
         service.start();
         URI endpoint = service.getEndpoint();
 

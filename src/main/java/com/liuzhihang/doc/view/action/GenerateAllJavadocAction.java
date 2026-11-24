@@ -41,11 +41,11 @@ public class GenerateAllJavadocAction extends AnAction {
         var project = event.getProject();
         boolean enabled = false;
         if (project != null && !DumbService.isDumb(project)) {
-            var context = context(event);
+            var context = ActionSelection.from(event).declaration();
             enabled = service(PackageInfoService.class).packageDirectory(context) != null
                     || projectFile(context) && PsiTreeUtil.getParentOfType(context, PsiClass.class, false) != null;
         }
-        event.getPresentation().setEnabled(enabled);
+        event.getPresentation().setEnabledAndVisible(enabled);
     }
 
     @Override
@@ -55,7 +55,7 @@ public class GenerateAllJavadocAction extends AnAction {
             return;
         }
         PsiDocumentManager.getInstance(project).commitAllDocuments();
-        PsiElement context = context(event);
+        PsiElement context = ActionSelection.from(event).declaration();
         var packages = service(PackageInfoService.class);
         PsiDirectory directory = packages.packageDirectory(context);
         if (directory != null) {

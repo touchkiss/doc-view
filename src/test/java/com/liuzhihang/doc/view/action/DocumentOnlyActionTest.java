@@ -92,6 +92,13 @@ public final class DocumentOnlyActionTest extends LightJavaCodeInsightFixtureTes
     }
 
     private static final class InspectableAction extends AbstractAction {
+        private PsiClass targetClass;
+
+        @Override
+        protected void perform(DocumentTarget target) {
+            targetClass = target.type();
+        }
+
         private PsiClass target() { return targetClass; }
     }
 }

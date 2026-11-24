@@ -123,7 +123,7 @@ final class JacksonPropertyProjection {
     PsiType memberType(PsiMember member, PsiType type, Map<String, PsiType> generics) {
         PsiClass declaringClass = member.getContainingClass();
         if (included == null || declaringClass == null || declaringClass.equals(owner)) {
-            return ParamPsiUtils.replaceFieldType(generics, type);
+            return DtoPropertyTypes.replaceFieldType(generics, type);
         }
         PsiSubstitutor substitutor = PsiSubstitutor.EMPTY;
         if (generics != null) {
