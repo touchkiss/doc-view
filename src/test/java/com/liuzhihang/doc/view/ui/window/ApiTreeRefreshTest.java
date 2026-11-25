@@ -23,10 +23,18 @@ public final class ApiTreeRefreshTest extends LightJavaCodeInsightFixtureTestCas
         super.setUp();
         ToolWindow window = (ToolWindow) Proxy.newProxyInstance(ToolWindow.class.getClassLoader(),
                 new Class<?>[]{ToolWindow.class}, (proxy, method, arguments) -> {
-                    if (method.getName().equals("show")) showCalls.incrementAndGet();
-                    if (method.getName().equals("getProject")) return getProject();
-                    if (method.getName().equals("toString")) return "Hidden test tool window";
-                    if (method.getReturnType() == boolean.class) return false;
+                    if ("show".equals(method.getName())) {
+                        showCalls.incrementAndGet();
+                    }
+                    if ("getProject".equals(method.getName())) {
+                        return getProject();
+                    }
+                    if ("toString".equals(method.getName())) {
+                        return "Hidden test tool window";
+                    }
+                    if (method.getReturnType() == boolean.class) {
+                        return false;
+                    }
                     return null;
                 });
         panel = new DocViewWindowPanel(getProject(), window);

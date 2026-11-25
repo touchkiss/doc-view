@@ -18,8 +18,6 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 
-import static com.liuzhihang.doc.view.constant.JsonPropertyConstant.SNAKE_CASE;
-
 /**
  * 配置持久保存
  * <p>
@@ -73,90 +71,68 @@ public class Settings implements PersistentStateComponent<Settings> {
     /**
      * 包含类注解名称
      */
-    private Set<String> containClassAnnotationName = new HashSet<>() {{
-        add(SpringConstant.CONTROLLER);
-        add(SpringConstant.REST_CONTROLLER);
-        add(SpringConstant.FEIGN_CLIENT);
-    }};
+    private Set<String> containClassAnnotationName = new HashSet<>(List.of(SpringConstant.CONTROLLER, SpringConstant.REST_CONTROLLER, SpringConstant.FEIGN_CLIENT));
 
     /**
      * 包含方法注解名称
      */
-    private Set<String> containMethodAnnotationName = new HashSet<>() {{
-        add(SpringConstant.GET_MAPPING);
-        add(SpringConstant.POST_MAPPING);
-        add(SpringConstant.PUT_MAPPING);
-        add(SpringConstant.DELETE_MAPPING);
-        add(SpringConstant.PATCH_MAPPING);
-        add(SpringConstant.REQUEST_MAPPING);
-    }};
+    private Set<String> containMethodAnnotationName = new HashSet<>(List.of(
+            SpringConstant.GET_MAPPING,
+            SpringConstant.POST_MAPPING,
+            SpringConstant.PUT_MAPPING,
+            SpringConstant.DELETE_MAPPING,
+            SpringConstant.PATCH_MAPPING,
+            SpringConstant.REQUEST_MAPPING));
 
     /**
      * 包含lombok.data，认为是pojo类
      */
-    private Set<String> containPojoClassAnnotationName = new HashSet<>() {{
-        add(SpringConstant.DATA);
-    }};
+    private Set<String> containPojoClassAnnotationName = new HashSet<>(List.of(SpringConstant.DATA));
 
 
     /**
      * 字段必填注解
      */
-    private Set<String> requiredFieldAnnotation = new HashSet<>() {{
-        addAll(Arrays.asList(ValidationConstant.NOT_BLANK));
-        addAll(Arrays.asList(ValidationConstant.NOT_EMPTY));
-        addAll(Arrays.asList(ValidationConstant.NOT_NULL));
-        add(LombokConstant.NON_NULL);
-    }};
+    private Set<String> requiredFieldAnnotation = defaultRequiredFieldAnnotations();
 
     /**
      * 字段名称注解
      */
-    private Set<String> fieldNameAnnotation = new HashSet<>() {{
-        add("com.fasterxml.jackson.annotation.JsonProperty");
-    }};
+    private Set<String> fieldNameAnnotation = new HashSet<>(List.of("com.fasterxml.jackson.annotation.JsonProperty"));
 
 
     /**
      * 排除字段
      */
-    private Set<String> excludeFieldNames = new HashSet<>() {{
-        add("serialVersionUID");
-    }};
+    private Set<String> excludeFieldNames = new HashSet<>(List.of("serialVersionUID"));
 
     /**
      * 排除字段
      */
-    private Set<String> excludeParameterType = new HashSet<>() {{
-        add("javax.servlet.ServletResponse");
-        add("javax.servlet.ServletRequest");
-        add("javax.servlet.http.HttpServletResponse");
-        add("javax.servlet.http.HttpServletRequest");
-        // jakarta
-        add("jakarta.servlet.ServletResponse");
-        add("jakarta.servlet.ServletRequest");
-        add("jakarta.servlet.http.HttpServletResponse");
-        add("jakarta.servlet.http.HttpServletRequest");
-    }};
+    private Set<String> excludeParameterType = new HashSet<>(List.of(
+            "javax.servlet.ServletResponse",
+            "javax.servlet.ServletRequest",
+            "javax.servlet.http.HttpServletResponse",
+            "javax.servlet.http.HttpServletRequest",
+            "jakarta.servlet.ServletResponse",
+            "jakarta.servlet.ServletRequest",
+            "jakarta.servlet.http.HttpServletResponse",
+            "jakarta.servlet.http.HttpServletRequest"));
 
     /**
      * 被注解的字段需要过滤掉
      */
-    private Set<String> excludeFieldAnnotation = new HashSet<>() {{
-        add("javax.annotation.Resource");
-        // jakarta
-        add("jakarta.annotation.Resource");
-        add("org.springframework.beans.factory.annotation.Autowired");
-        add("org.apache.dubbo.config.annotation.Reference");
-        add("org.apache.dubbo.config.annotation.DubboReference");
-    }};
+    private Set<String> excludeFieldAnnotation = new HashSet<>(List.of(
+            "javax.annotation.Resource",
+            "jakarta.annotation.Resource",
+            "org.springframework.beans.factory.annotation.Autowired",
+            "org.apache.dubbo.config.annotation.Reference",
+            "org.apache.dubbo.config.annotation.DubboReference"));
 
     /**
      * 被注解的字段需要过滤掉
      */
-    private Set<String> excludeClassPackage = new HashSet<>() {{
-        add("com.baomidou.mybatisplus.extension.activerecord.Model");
-    }};
+    private Set<String> excludeClassPackage = new HashSet<>(List.of("com.baomidou.mybatisplus.extension.activerecord.Model"));
 
     /**
      * 子属性缩进符
@@ -204,6 +180,15 @@ public class Settings implements PersistentStateComponent<Settings> {
      */
     private String grpcCurlHost = DEFAULT_GRPC_CURL_HOST;
 
+
+    private static Set<String> defaultRequiredFieldAnnotations() {
+        Set<String> annotations = new HashSet<>();
+        annotations.addAll(Arrays.asList(ValidationConstant.NOT_BLANK));
+        annotations.addAll(Arrays.asList(ValidationConstant.NOT_EMPTY));
+        annotations.addAll(Arrays.asList(ValidationConstant.NOT_NULL));
+        annotations.add(LombokConstant.NON_NULL);
+        return annotations;
+    }
 
     public static Settings getInstance(@NotNull Project project) {
         return project.getService(Settings.class);

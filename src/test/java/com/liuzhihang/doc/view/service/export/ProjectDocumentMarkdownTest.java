@@ -11,7 +11,6 @@ import com.liuzhihang.doc.view.testsupport.LocalProjectJavaSources;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.List;
 
 public final class ProjectDocumentMarkdownTest extends LightJavaCodeInsightFixtureTestCase {
 

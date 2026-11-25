@@ -66,7 +66,7 @@ public class AliyunTranslator extends AbstractTranslator {
             json = sendPost(URL, JSON.toJSONString(request), getConfig().getAccessKeyId(), getConfig().getAccessKeySecret());
             AliyunResponseVO response = JSON.parseObject(json, AliyunResponseVO.class);
             return Objects.requireNonNull(response).getData().getTranslated();
-        } catch (Exception e) {
+        } catch (Exception _) {
             LOGGER.warn("aliyun translate error: please check your appkey and network");
             return StringUtils.EMPTY;
         }
@@ -86,7 +86,6 @@ public class AliyunTranslator extends AbstractTranslator {
      * 计算 HMAC-SHA1
      */
     private String hmacSha1(String data, String key) throws NoSuchAlgorithmException, InvalidKeyException {
-        String result;
         SecretKeySpec signingKey = new SecretKeySpec(key.getBytes(), "HmacSHA1");
         Mac mac = Mac.getInstance("HmacSHA1");
         mac.init(signingKey);

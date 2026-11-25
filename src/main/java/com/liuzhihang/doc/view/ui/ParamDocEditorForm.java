@@ -27,7 +27,7 @@ import com.intellij.ui.treeStructure.treetable.ListTreeTableModelOnColumns;
 import com.intellij.util.ui.JBUI;
 import com.liuzhihang.doc.view.DocViewBundle;
 import com.liuzhihang.doc.view.config.Settings;
-import com.liuzhihang.doc.view.config.SettingsConfigurable;
+import com.liuzhihang.doc.view.ui.settings.SettingsConfigurable;
 import com.liuzhihang.doc.view.dto.DocViewData;
 import com.liuzhihang.doc.view.dto.DocViewParamData;
 import com.liuzhihang.doc.view.notification.DocViewNotification;
@@ -65,7 +65,6 @@ import java.util.concurrent.atomic.AtomicBoolean;
 public class ParamDocEditorForm {
 
     private final Project project;
-    private final PsiFile psiFile;
     private final PsiClass psiClass;
     private final String entityName;
     private final SmartPsiElementPointer<PsiElement> initialField;
@@ -86,13 +85,12 @@ public class ParamDocEditorForm {
 
     @NonNls
     public static final String DOC_VIEW_POPUP = "com.intellij.docview.param.editor.popup";
-    private static final AtomicBoolean myIsPinned = new AtomicBoolean(true);
+    private static final AtomicBoolean PINNED = new AtomicBoolean(true);
 
     public ParamDocEditorForm(@NotNull Project project, @NotNull PsiFile psiFile,
                               @Nullable Editor editor, @NotNull PsiClass psiClass) {
 
         this.project = project;
-        this.psiFile = psiFile;
         this.psiClass = psiClass;
         this.entityName = psiClass.getName();
         PsiElement caret = editor == null ? null : psiFile.findElementAt(editor.getCaretModel().getOffset());
@@ -100,7 +98,7 @@ public class ParamDocEditorForm {
         this.initialField = field == null ? null : SmartPointerManager.createPointer(field);
 
         // UI调整
-        initUI();
+        initUi();
         initHeadToolbar();
         initTailLeftToolbar();
         initTailRightToolbar();
@@ -142,7 +140,7 @@ public class ParamDocEditorForm {
                 .setDimensionServiceKey(null, DOC_VIEW_POPUP, true)
                 .setLocateWithinScreenBounds(false)
                 // 鼠标点击外部时是否取消弹窗 外部单击, 未处于 pin 状态则可关闭
-                .setCancelOnMouseOutCallback(event -> event.getID() == MouseEvent.MOUSE_PRESSED && !myIsPinned.get())
+                .setCancelOnMouseOutCallback(event -> event.getID() == MouseEvent.MOUSE_PRESSED && !PINNED.get())
 
                 // 单击外部时取消弹窗
                 .setCancelOnClickOutside(false)
@@ -156,7 +154,7 @@ public class ParamDocEditorForm {
     }
 
 
-    private void initUI() {
+    private void initUi() {
         // 边框
         paramScrollPane.setBackground(null);
         paramScrollPane.setOpaque(false);
@@ -189,12 +187,12 @@ public class ParamDocEditorForm {
 
             @Override
             public boolean isSelected(@NotNull AnActionEvent e) {
-                return myIsPinned.get();
+                return PINNED.get();
             }
 
             @Override
             public void setSelected(@NotNull AnActionEvent e, boolean state) {
-                myIsPinned.set(state);
+                PINNED.set(state);
             }
 
             @Override
@@ -380,8 +378,10 @@ public class ParamDocEditorForm {
     }
 
     private void showClassDialog() {
-        if (project.isDisposed() || DumbService.isDumb(project) || popup != null && popup.isDisposed()
-                || tableView.isEditing() && !tableView.getCellEditor().stopCellEditing()) {
+        if (project.isDisposed() || DumbService.isDumb(project) || isPopupDisposed()) {
+            return;
+        }
+        if (tableView.isEditing() && !tableView.getCellEditor().stopCellEditing()) {
             return;
         }
         PsiDocumentManager.getInstance(project).commitAllDocuments();
@@ -408,7 +408,7 @@ public class ParamDocEditorForm {
             return;
         }
         ++markdownCopyRequest;
-        boolean wasPinned = myIsPinned.getAndSet(true);
+        boolean wasPinned = PINNED.getAndSet(true);
         try {
             var dialog = new ClassDescriptionDialog(project, rows);
             if (dialog.showAndGet()) {
@@ -422,7 +422,7 @@ public class ParamDocEditorForm {
                 tableView.repaint();
             }
         } finally {
-            myIsPinned.set(wasPinned);
+            PINNED.set(wasPinned);
         }
     }
 
@@ -439,8 +439,12 @@ public class ParamDocEditorForm {
         return text -> writeRow(row, draft, text);
     }
 
+    private boolean isPopupDisposed() {
+        return popup != null && popup.isDisposed();
+    }
+
     private SourceDescriptionService.Draft captureRow(SourceDescriptionService.Target target) {
-        if (project.isDisposed() || DumbService.isDumb(project) || popup != null && popup.isDisposed()) {
+        if (project.isDisposed() || DumbService.isDumb(project) || isPopupDisposed()) {
             return null;
         }
         PsiDocumentManager.getInstance(project).commitAllDocuments();
@@ -448,7 +452,7 @@ public class ParamDocEditorForm {
     }
 
     private void writeRow(DocViewParamData row, SourceDescriptionService.Draft draft, String description) {
-        if (project.isDisposed() || popup != null && popup.isDisposed()) {
+        if (project.isDisposed() || isPopupDisposed()) {
             return;
         }
         PsiDocumentManager.getInstance(project).commitAllDocuments();

@@ -44,7 +44,7 @@ import java.awt.BorderLayout;
  */
 public class DocViewWindowPanel extends SimpleToolWindowPanel implements Disposable {
 
-    private volatile RootNode rootNode = new RootNode();
+    private RootNode rootNode = new RootNode();
 
     private final Project project;
     private final SimpleTree catalogTree;
@@ -53,7 +53,7 @@ public class DocViewWindowPanel extends SimpleToolWindowPanel implements Disposa
     private final JLabel refreshStatus = new JBLabel();
     private volatile long refreshGeneration;
     private volatile boolean disposed;
-    private volatile ProgressIndicator refreshIndicator;
+    private ProgressIndicator refreshIndicator;
 
     public DocViewWindowPanel(@NotNull Project project, @NotNull ToolWindow toolWindow) {
         super(Boolean.TRUE, Boolean.TRUE);
@@ -71,7 +71,7 @@ public class DocViewWindowPanel extends SimpleToolWindowPanel implements Disposa
             @NotNull
             @Override
             public Object getRootElement() {
-                return rootNode;
+                return currentRoot();
             }
         }, null, this);
         catalogTree = new SimpleTree(new AsyncTreeModel(treeModel, this));
@@ -102,18 +102,28 @@ public class DocViewWindowPanel extends SimpleToolWindowPanel implements Disposa
     }
 
     public void updateCatalogTree() {
-        if (disposed || project.isDisposed() || toolWindow.isDisposed()) return;
+        if (disposed || project.isDisposed() || toolWindow.isDisposed()) {
+            return;
+        }
         long request = beginRefresh();
         DumbService.getInstance(project).smartInvokeLater(() -> {
-            if (isCurrent(request)) doUpdateCatalogTree(request);
+            if (isCurrent(request)) {
+                doUpdateCatalogTree(request);
+            }
         });
+    }
+
+    private synchronized RootNode currentRoot() {
+        return rootNode;
     }
 
     private synchronized long beginRefresh() {
         long request = ++refreshGeneration;
         ProgressIndicator previous = refreshIndicator;
         refreshIndicator = null;
-        if (previous != null) previous.cancel();
+        if (previous != null) {
+            previous.cancel();
+        }
         setStatus(DocViewBundle.message(DumbService.isDumb(project)
                 ? "catalog.status.indexing" : "catalog.status.searching"));
         return request;
@@ -140,7 +150,9 @@ public class DocViewWindowPanel extends SimpleToolWindowPanel implements Disposa
 
             @Override
             public void run(@NotNull ProgressIndicator indicator) {
-                if (!registerIndicator(request, indicator)) return;
+                if (!registerIndicator(request, indicator)) {
+                    return;
+                }
                 result = ApplicationManager.getApplication().runReadAction((Computable<RootNode>) () -> {
                     indicator.checkCanceled();
                     RootNode snapshot = new RootNode();
@@ -167,8 +179,10 @@ public class DocViewWindowPanel extends SimpleToolWindowPanel implements Disposa
         });
     }
 
-    private void completeRefresh(long request, RootNode result, Throwable failure, boolean cancelled) {
-        if (!isCurrent(request)) return;
+    private synchronized void completeRefresh(long request, RootNode result, Throwable failure, boolean cancelled) {
+        if (!isCurrent(request)) {
+            return;
+        }
         refreshIndicator = null;
         if (cancelled) {
             setStatus(DocViewBundle.message("catalog.status.cancelled"));
@@ -188,8 +202,12 @@ public class DocViewWindowPanel extends SimpleToolWindowPanel implements Disposa
     }
 
     static PsiElement sourceElement(SimpleNode node) {
-        PsiElement element = node instanceof MethodNode method ? method.getPsiMethod()
-                : node instanceof ClassNode type ? type.getPsiClass() : null;
+        PsiElement element = null;
+        if (node instanceof MethodNode method) {
+            element = method.getPsiMethod();
+        } else if (node instanceof ClassNode type) {
+            element = type.getPsiClass();
+        }
         return element != null && element.isValid() ? element : null;
     }
 
@@ -199,7 +217,9 @@ public class DocViewWindowPanel extends SimpleToolWindowPanel implements Disposa
         refreshGeneration++;
         ProgressIndicator indicator = refreshIndicator;
         refreshIndicator = null;
-        if (indicator != null) indicator.cancel();
+        if (indicator != null) {
+            indicator.cancel();
+        }
     }
 
 
@@ -207,7 +227,7 @@ public class DocViewWindowPanel extends SimpleToolWindowPanel implements Disposa
     public void uiDataSnapshot(@NotNull DataSink sink) {
         super.uiDataSnapshot(sink);
         sink.set(DocViewDataKeys.WINDOW_PANE, this);
-        sink.set(DocViewDataKeys.WINDOW_ROOT_NODE, rootNode);
+        sink.set(DocViewDataKeys.WINDOW_ROOT_NODE, currentRoot());
         sink.set(DocViewDataKeys.WINDOW_CATALOG_TREE, catalogTree);
         sink.set(DocViewDataKeys.WINDOW_TOOLBAR, getToolbar());
         SimpleNode selected = catalogTree.getSelectedNode();

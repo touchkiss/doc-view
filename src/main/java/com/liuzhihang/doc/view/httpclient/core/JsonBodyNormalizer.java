@@ -9,31 +9,42 @@ import java.util.regex.Pattern;
 
 /** Stateless, lossless-number JSON5 to strict JSON conversion shared by every output path. */
 public final class JsonBodyNormalizer {
+    private static final int MAX_NESTING_DEPTH = 512;
     private static final Json5Options OPTIONS = Json5Options.builder().build();
     private static final Pattern JSON_TOKEN = Pattern.compile(
-        "\"(?:[^\"\\\\\\x00-\\x1f]|\\\\(?:[\"\\\\/bfnrt]|u[0-9a-fA-F]{4}))*\"|" +
-        "-?(?:0|[1-9][0-9]*)(?:\\.[0-9]+)?(?:[eE][+-]?[0-9]+)?|true|false|null|[{}\\[\\]:,]");
+        "\"(?:[^\"\\\\\\x00-\\x1f]|\\\\(?:[\"\\\\/bfnrt]|u[0-9a-fA-F]{4}))*+\"|" +
+        "-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?|true|false|null|[{}\\[\\]:,]");
     private JsonBodyNormalizer() {}
 
     public static boolean isJsonMediaType(String type) {
-        if (type == null) return false;
+        if (type == null) {
+            return false;
+        }
         String mime = type.split(";", 2)[0].trim().toLowerCase(Locale.ROOT);
-        return mime.equals("application/json") || (mime.startsWith("application/") && mime.endsWith("+json"));
+        return "application/json".equals(mime) || (mime.startsWith("application/") && mime.endsWith("+json"));
     }
 
     public static String normalize(String body) {
-        if (body.isBlank()) return body;
+        if (body.isBlank()) {
+            return body;
+        }
         try {
             var numbers = Json5Numbers.prepare(body);
             Json5Lexer lexer = new Json5Lexer(new StringReader(numbers.source() + "\n]"), OPTIONS);
             Json5Element value = lexer.nextValue();
-            if (value == null || lexer.nextClean() != ']' || lexer.nextClean() != 0) throw new IllegalArgumentException("请求体含有多余内容");
+            if (value == null || lexer.nextClean() != ']' || lexer.nextClean() != 0) {
+                throw new IllegalArgumentException("请求体含有多余内容");
+            }
             // Parsing first also validates JSON and rejects duplicate keys. Keep valid strict JSON byte-for-byte.
-            if (isStrictJson(body)) return body;
+            if (isStrictJson(body)) {
+                return body;
+            }
             StringBuilder out = new StringBuilder(body.length());
             var numericValues = numbers.values().iterator();
             write(value, out, 0, numericValues);
-            if (numericValues.hasNext()) throw new IllegalArgumentException("JSON5 数字只能出现在值的位置");
+            if (numericValues.hasNext()) {
+                throw new IllegalArgumentException("JSON5 数字只能出现在值的位置");
+            }
             return out.toString();
         } catch (IllegalArgumentException e) {
             throw e;
@@ -52,10 +63,17 @@ public final class JsonBodyNormalizer {
             char c = text.charAt(offset);
             if (c == ' ' || c == '\t' || c == '\r' || c == '\n') { offset++; continue; }
             matcher.region(offset, text.length());
-            if (!matcher.lookingAt()) return false;
+            if (!matcher.lookingAt()) {
+                return false;
+            }
             String token = matcher.group();
-            if ((token.equals("}") || token.equals("]")) && previous.equals(",")) return false;
-            if (token.equals(":") && !previous.startsWith("\"")) return false;
+            boolean closingContainer = "}".equals(token) || "]".equals(token);
+            if (closingContainer && ",".equals(previous)) {
+                return false;
+            }
+            if (":".equals(token) && !previous.startsWith("\"")) {
+                return false;
+            }
             previous = token;
             offset = matcher.end();
         }
@@ -63,32 +81,49 @@ public final class JsonBodyNormalizer {
     }
 
     private static void write(Json5Element value, StringBuilder out, int depth, java.util.Iterator<String> numbers) {
-        if (depth > 512) throw new IllegalArgumentException("JSON5 请求体嵌套超过 512 层");
-        if (value.isJson5Null()) { out.append("null"); return; }
-        if (value.isJson5Object()) {
+        if (depth > MAX_NESTING_DEPTH) {
+            throw new IllegalArgumentException("JSON5 请求体嵌套超过 " + MAX_NESTING_DEPTH + " 层");
+        }
+        if (value.isJson5Null()) {
+            out.append("null");
+        } else if (value.isJson5Object()) {
             out.append('{');
             boolean first = true;
             for (var entry : value.getAsJson5Object().entrySet()) {
-                if (!first) out.append(',');
-                quote(entry.getKey(), out); out.append(':');
-                write(entry.getValue(), out, depth + 1, numbers); first = false;
+                if (!first) {
+                    out.append(',');
+                }
+                quote(entry.getKey(), out);
+                out.append(':');
+                write(entry.getValue(), out, depth + 1, numbers);
+                first = false;
             }
             out.append('}');
         } else if (value.isJson5Array()) {
-            out.append('['); boolean first = true;
+            out.append('[');
+            boolean first = true;
             for (var child : value.getAsJson5Array()) {
-                if (!first) out.append(',');
-                write(child, out, depth + 1, numbers); first = false;
+                if (!first) {
+                    out.append(',');
+                }
+                write(child, out, depth + 1, numbers);
+                first = false;
             }
             out.append(']');
         } else {
-            Json5Primitive p = value.getAsJson5Primitive();
-            if (p.isString()) quote(p.getAsString(), out);
-            else if (p.isBoolean()) out.append(p.getAsBoolean());
-            else {
-                if (!numbers.hasNext()) throw new IllegalArgumentException("JSON5 数字映射不一致");
-                out.append(numbers.next());
-            }
+            writePrimitive(value.getAsJson5Primitive(), out, numbers);
+        }
+    }
+
+    private static void writePrimitive(Json5Primitive value, StringBuilder out, java.util.Iterator<String> numbers) {
+        if (value.isString()) {
+            quote(value.getAsString(), out);
+        } else if (value.isBoolean()) {
+            out.append(value.getAsBoolean());
+        } else if (numbers.hasNext()) {
+            out.append(numbers.next());
+        } else {
+            throw new IllegalArgumentException("JSON5 数字映射不一致");
         }
     }
 
@@ -105,8 +140,11 @@ public final class JsonBodyNormalizer {
                 case '\r' -> out.append("\\r");
                 case '\t' -> out.append("\\t");
                 default -> {
-                    if (c < 0x20) out.append(String.format("\\u%04x", (int) c));
-                    else out.append(c);
+                    if (c < 0x20) {
+                        out.append(String.format("\\u%04x", (int) c));
+                    } else {
+                        out.append(c);
+                    }
                 }
             }
         }

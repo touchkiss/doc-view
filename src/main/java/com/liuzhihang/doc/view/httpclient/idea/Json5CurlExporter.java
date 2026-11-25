@@ -18,7 +18,9 @@ public final class Json5CurlExporter {
     private Json5CurlExporter() {}
     public static String convert(HttpRequest request, HttpRequestVariableSubstitutor substitutor) throws HttpRequestValidationException {
         boolean json = HttpJsonBodies.isSupported(request) && HttpJsonBodies.hasJsonContentType(request, substitutor);
-        if (!json) return HttpRequestPsiConverter.convertFromHttpRequest(request, substitutor, new CurlRequestBuilder(false));
+        if (!json) {
+            return HttpRequestPsiConverter.convertFromHttpRequest(request, substitutor, new CurlRequestBuilder(false));
+        }
         return HttpRequestPsiConverter.convertFromHttpRequest(request, CommentAwareSubstitutor.wrap(request, substitutor), new NormalizingBuilder());
     }
 
@@ -33,7 +35,11 @@ public final class Json5CurlExporter {
         @Override public <E extends Throwable> void withQueryParameters(ThrowableConsumer<QueryBuilder,E> c) throws E { delegate.withQueryParameters(c); }
         @Override public void withAuthData(HttpClientAuthData auth) { delegate.withAuthData(auth); }
         @Override public void withHeader(String name, String value, Function<String,String> f) {
-            headers.add(() -> { if (!changed || !name.equalsIgnoreCase("Content-Length")) delegate.withHeader(name, value, f); });
+            headers.add(() -> {
+                if (!changed || !"Content-Length".equalsIgnoreCase(name)) {
+                    delegate.withHeader(name, value, f);
+                }
+            });
         }
         @Override public void withFileToSend(File file) { delegate.withFileToSend(file); }
         @Override public void withTextToSend(String body) {

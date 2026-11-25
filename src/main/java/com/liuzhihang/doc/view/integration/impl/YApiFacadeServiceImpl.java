@@ -25,6 +25,12 @@ import java.util.Optional;
 
 /** HTTP-backed YApi facade with explicit transport and response failure categories. */
 public class YApiFacadeServiceImpl implements YApiFacadeService {
+    private static final String CATEGORY_ID_PARAM = "catid";
+    private static final String INCONSISTENT_PAGINATION = "读取接口列表分页信息不一致";
+    private static final String METHOD_KEY = "method";
+    private static final String MISSING_ERROR_CODE = "响应缺少 errcode";
+    private static final String ERROR_CODE_KEY = "errcode";
+
 
     private static final Gson GSON = new GsonBuilder().serializeNulls().create();
     private static final int INTERFACE_PAGE_SIZE = 100;
@@ -87,21 +93,12 @@ public class YApiFacadeServiceImpl implements YApiFacadeService {
         for (long page = 1; ; page++) {
             ProgressManager.checkCanceled();
             String url = new URIBuilder(yapiUrl + "/api/interface/list_cat")
-                    .addParameter("catid", String.valueOf(catId)).addParameter("token", token)
+                    .addParameter(CATEGORY_ID_PARAM, String.valueOf(catId)).addParameter("token", token)
                     .addParameter("page", String.valueOf(page)).addParameter("limit", String.valueOf(INTERFACE_PAGE_SIZE))
                     .build().toString();
             InterfacePage result = parseInterfaceList(get(url));
             List<YApiInterfaceSummary> interfaces = result.items();
-            for (YApiInterfaceSummary item : interfaces) {
-                ProgressManager.checkCanceled();
-                if (!seenIds.add(item.getId())) {
-                    throw YApiRemoteException.responseInvalid("读取接口列表返回重复分页");
-                }
-            }
-            if ((result.totalPages() != null && page > result.totalPages() && !interfaces.isEmpty())
-                    || (result.count() != null && seenIds.size() > result.count())) {
-                throw YApiRemoteException.responseInvalid("读取接口列表分页信息不一致");
-            }
+            validatePage(result, page, seenIds);
             Optional<Long> match = interfaces.stream()
                     // list_cat scopes rows to catId; some servers omit the redundant row field.
                     .filter(item -> item.getCatId() == null || catId.equals(item.getCatId()))
@@ -112,19 +109,41 @@ public class YApiFacadeServiceImpl implements YApiFacadeService {
             if (match.isPresent()) {
                 return match;
             }
-            boolean hasMore = result.totalPages() != null ? page < result.totalPages()
-                    : result.count() != null ? seenIds.size() < result.count()
-                    : interfaces.size() >= INTERFACE_PAGE_SIZE;
+            boolean hasMore = hasMorePages(result, page, seenIds.size(), interfaces.size());
             if (!hasMore) {
                 if (result.count() != null && seenIds.size() != result.count()) {
-                    throw YApiRemoteException.responseInvalid("读取接口列表分页信息不一致");
+                    throw YApiRemoteException.responseInvalid(INCONSISTENT_PAGINATION);
                 }
                 return Optional.empty();
             }
             if (interfaces.isEmpty()) {
-                throw YApiRemoteException.responseInvalid("读取接口列表分页信息不一致");
+                throw YApiRemoteException.responseInvalid(INCONSISTENT_PAGINATION);
             }
         }
+    }
+
+    private static void validatePage(InterfacePage result, long page, Set<Long> seenIds)
+            throws YApiRemoteException {
+        for (YApiInterfaceSummary item : result.items()) {
+            ProgressManager.checkCanceled();
+            if (!seenIds.add(item.getId())) {
+                throw YApiRemoteException.responseInvalid("读取接口列表返回重复分页");
+            }
+        }
+        if ((result.totalPages() != null && page > result.totalPages() && !result.items().isEmpty())
+                || (result.count() != null && seenIds.size() > result.count())) {
+            throw YApiRemoteException.responseInvalid(INCONSISTENT_PAGINATION);
+        }
+    }
+
+    private static boolean hasMorePages(InterfacePage result, long page, int seenCount, int pageSize) {
+        if (result.totalPages() != null) {
+            return page < result.totalPages();
+        }
+        if (result.count() != null) {
+            return seenCount < result.count();
+        }
+        return pageSize >= INTERFACE_PAGE_SIZE;
     }
 
     @Override
@@ -145,45 +164,57 @@ public class YApiFacadeServiceImpl implements YApiFacadeService {
         requireSuccess(response, "读取接口列表");
         try {
             JsonElement data = response.get("data");
-            if (data == null || data.isJsonNull()) throw YApiRemoteException.responseInvalid("读取接口列表响应缺少 data");
+            if (data == null || data.isJsonNull()) {
+                throw YApiRemoteException.responseInvalid("读取接口列表响应缺少 data");
+            }
             JsonElement list = data.isJsonArray() ? data : data.getAsJsonObject().get("list");
-            if (list == null || !list.isJsonArray()) throw YApiRemoteException.responseInvalid("读取接口列表响应缺少 list");
+            if (list == null || !list.isJsonArray()) {
+                throw YApiRemoteException.responseInvalid("读取接口列表响应缺少 list");
+            }
             Long totalPages = data.isJsonObject() ? paginationNumber(data.getAsJsonObject(), "total") : null;
             Long count = data.isJsonObject() ? paginationNumber(data.getAsJsonObject(), "count") : null;
             List<YApiInterfaceSummary> items = new ArrayList<>();
             for (JsonElement entry : list.getAsJsonArray()) {
                 ProgressManager.checkCanceled();
-                if (!entry.isJsonObject()) throw YApiRemoteException.responseInvalid("读取接口列表响应包含无效接口");
-                JsonObject row = entry.getAsJsonObject();
-                Long id = positiveId(row.get("_id"));
-                JsonElement catIdValue = row.get("catid");
-                Long catId = positiveId(catIdValue);
-                String method = stringValue(row.get("method"));
-                String path = stringValue(row.get("path"));
-                if (id == null || (catIdValue != null && !catIdValue.isJsonNull() && catId == null)
-                        || StringUtils.isBlank(method) || StringUtils.isBlank(path)) {
-                    throw YApiRemoteException.responseInvalid("读取接口列表响应包含无效接口");
-                }
-                YApiInterfaceSummary item = new YApiInterfaceSummary();
-                item.setId(id);
-                item.setCatId(catId);
-                item.setMethod(method);
-                item.setPath(path);
-                items.add(item);
+                items.add(parseInterfaceItem(entry));
             }
             return new InterfacePage(items, totalPages, count);
         } catch (ProcessCanceledException canceled) {
             throw canceled;
         } catch (YApiRemoteException invalid) {
             throw invalid;
-        } catch (RuntimeException invalid) {
+        } catch (RuntimeException _) {
             throw YApiRemoteException.responseInvalid("读取接口列表响应不是有效 JSON");
         }
     }
 
+    private static YApiInterfaceSummary parseInterfaceItem(JsonElement entry) throws YApiRemoteException {
+        if (!entry.isJsonObject()) {
+            throw YApiRemoteException.responseInvalid("读取接口列表响应包含无效接口");
+        }
+        JsonObject row = entry.getAsJsonObject();
+        Long id = positiveId(row.get("_id"));
+        JsonElement catIdValue = row.get(CATEGORY_ID_PARAM);
+        Long catId = positiveId(catIdValue);
+        String method = stringValue(row.get(METHOD_KEY));
+        String path = stringValue(row.get("path"));
+        if (id == null || (catIdValue != null && !catIdValue.isJsonNull() && catId == null)
+                || StringUtils.isBlank(method) || StringUtils.isBlank(path)) {
+            throw YApiRemoteException.responseInvalid("读取接口列表响应包含无效接口");
+        }
+        YApiInterfaceSummary item = new YApiInterfaceSummary();
+        item.setId(id);
+        item.setCatId(catId);
+        item.setMethod(method);
+        item.setPath(path);
+        return item;
+    }
+
     private static Long paginationNumber(JsonObject data, String name) throws YApiRemoteException {
         JsonElement value = data.get(name);
-        if (value == null || value.isJsonNull()) return null;
+        if (value == null || value.isJsonNull()) {
+            return null;
+        }
         Long parsed = integerValue(value);
         if (parsed == null || parsed < 0) {
             throw YApiRemoteException.responseInvalid("读取接口列表分页信息无效");
@@ -192,26 +223,42 @@ public class YApiFacadeServiceImpl implements YApiFacadeService {
     }
 
     private static Long savedInterfaceId(JsonElement data, YapiSave save) {
-        if (data == null || data.isJsonNull()) return null;
+        if (data == null || data.isJsonNull()) {
+            return null;
+        }
         // Official save can return a one-row _id array for updates and [] for creates.
         // A scalar write count is not an interface ID; ambiguous arrays require lookup.
         if (data.isJsonArray()) {
-            if (data.getAsJsonArray().size() != 1) return null;
+            if (data.getAsJsonArray().size() != 1) {
+                return null;
+            }
             data = data.getAsJsonArray().get(0);
         }
-        if (!data.isJsonObject()) return null;
+        if (!data.isJsonObject()) {
+            return null;
+        }
         JsonObject row = data.getAsJsonObject();
         Long underscoredId = positiveId(row.get("_id"));
         Long plainId = positiveId(row.get("id"));
-        if (underscoredId != null && plainId != null && !underscoredId.equals(plainId)) return null;
+        if (underscoredId != null && plainId != null && !underscoredId.equals(plainId)) {
+            return null;
+        }
         Long id = underscoredId == null ? plainId : underscoredId;
-        if (id == null) return null;
-        if (row.has("catid") && !row.get("catid").isJsonNull()
-                && !java.util.Objects.equals(save.getCatId(), positiveId(row.get("catid")))) return null;
-        if (row.has("method") && !row.get("method").isJsonNull()
-                && (save.getMethod() == null || !save.getMethod().equalsIgnoreCase(stringValue(row.get("method"))))) return null;
+        if (id == null) {
+            return null;
+        }
+        if (row.has(CATEGORY_ID_PARAM) && !row.get(CATEGORY_ID_PARAM).isJsonNull()
+                && !java.util.Objects.equals(save.getCatId(), positiveId(row.get(CATEGORY_ID_PARAM)))) {
+            return null;
+        }
+        if (row.has(METHOD_KEY) && !row.get(METHOD_KEY).isJsonNull()
+                && (save.getMethod() == null || !save.getMethod().equalsIgnoreCase(stringValue(row.get(METHOD_KEY))))) {
+            return null;
+        }
         if (row.has("path") && !row.get("path").isJsonNull()
-                && !java.util.Objects.equals(save.getPath(), stringValue(row.get("path")))) return null;
+                && !java.util.Objects.equals(save.getPath(), stringValue(row.get("path")))) {
+            return null;
+        }
         return id;
     }
 
@@ -226,10 +273,12 @@ public class YApiFacadeServiceImpl implements YApiFacadeService {
     }
 
     private static Long integerValue(JsonElement value) {
-        if (value == null || !value.isJsonPrimitive() || value.getAsJsonPrimitive().isBoolean()) return null;
+        if (value == null || !value.isJsonPrimitive() || value.getAsJsonPrimitive().isBoolean()) {
+            return null;
+        }
         try {
             return new BigDecimal(value.getAsString()).longValueExact();
-        } catch (NumberFormatException | ArithmeticException invalid) {
+        } catch (NumberFormatException | ArithmeticException _) {
             return null;
         }
     }
@@ -239,9 +288,7 @@ public class YApiFacadeServiceImpl implements YApiFacadeService {
     private String get(String url) throws Exception {
         try {
             return getRequester.get(url);
-        } catch (YApiRemoteException exception) {
-            throw exception;
-        } catch (ProcessCanceledException exception) {
+        } catch (YApiRemoteException | ProcessCanceledException exception) {
             throw exception;
         } catch (Exception exception) {
             throw YApiRemoteException.requestFailed(exception);
@@ -251,9 +298,7 @@ public class YApiFacadeServiceImpl implements YApiFacadeService {
     private String post(String url, String body) throws Exception {
         try {
             return postRequester.post(url, body);
-        } catch (YApiRemoteException exception) {
-            throw exception;
-        } catch (ProcessCanceledException exception) {
+        } catch (YApiRemoteException | ProcessCanceledException exception) {
             throw exception;
         } catch (Exception exception) {
             throw YApiRemoteException.requestFailed(exception);
@@ -272,7 +317,7 @@ public class YApiFacadeServiceImpl implements YApiFacadeService {
             return response;
         } catch (YApiRemoteException exception) {
             throw exception;
-        } catch (RuntimeException exception) {
+        } catch (RuntimeException _) {
             throw YApiRemoteException.responseInvalid(operation + "响应不是有效 JSON");
         }
     }
@@ -285,35 +330,35 @@ public class YApiFacadeServiceImpl implements YApiFacadeService {
         try {
             YApiResponse<T> response = GSON.fromJson(body, type);
             if (response == null || response.getErrcode() == null) {
-                throw YApiRemoteException.responseInvalid(operation + "响应缺少 errcode");
+                throw YApiRemoteException.responseInvalid(operation + MISSING_ERROR_CODE);
             }
             return response;
         } catch (YApiRemoteException exception) {
             throw exception;
-        } catch (RuntimeException exception) {
+        } catch (RuntimeException _) {
             throw YApiRemoteException.responseInvalid(operation + "响应不是有效 JSON");
         }
     }
 
     private static void requireSuccess(JsonObject response, String operation) throws YApiRemoteException {
-        if (!response.has("errcode") || response.get("errcode").isJsonNull()) {
-            throw YApiRemoteException.responseInvalid(operation + "响应缺少 errcode");
+        if (!response.has(ERROR_CODE_KEY) || response.get(ERROR_CODE_KEY).isJsonNull()) {
+            throw YApiRemoteException.responseInvalid(operation + MISSING_ERROR_CODE);
         }
         try {
-            if (response.get("errcode").getAsLong() != 0) {
+            if (response.get(ERROR_CODE_KEY).getAsLong() != 0) {
                 throw YApiRemoteException.responseInvalid(operation + "响应失败，errcode="
-                        + response.get("errcode").getAsLong());
+                        + response.get(ERROR_CODE_KEY).getAsLong());
             }
         } catch (YApiRemoteException exception) {
             throw exception;
-        } catch (RuntimeException exception) {
+        } catch (RuntimeException _) {
             throw YApiRemoteException.responseInvalid(operation + "响应 errcode 无效");
         }
     }
 
     private static void requireSuccess(YApiResponse<?> response, String operation) throws YApiRemoteException {
         if (response == null || response.getErrcode() == null) {
-            throw YApiRemoteException.responseInvalid(operation + "响应缺少 errcode");
+            throw YApiRemoteException.responseInvalid(operation + MISSING_ERROR_CODE);
         }
         if (response.getErrcode() != 0) {
             throw YApiRemoteException.responseInvalid(operation + "响应失败，errcode=" + response.getErrcode());

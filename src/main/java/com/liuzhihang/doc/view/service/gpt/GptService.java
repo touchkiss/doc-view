@@ -27,29 +27,24 @@ import org.apache.commons.lang3.StringUtils;
 public class GptService {
 
     private static final Pattern SOURCE_IDENTIFIER = Pattern.compile("[A-Za-z_$][A-Za-z0-9_$]*");
-    private volatile EasyDocConfig config;
+    private EasyDocConfig config;
     private Map<String, GptSupplier> gptSupplierMap;
-    private static final Object LOCK = new Object();
 
     /**
      * 初始化
      *
      * @param config 配置
      */
-    public void init(EasyDocConfig config) {
-        if (gptSupplierMap != null && this.config != null) {
+    public synchronized void init(EasyDocConfig config) {
+        if (this.config != null) {
             return;
         }
-        synchronized (LOCK) {
-            if (gptSupplierMap != null && this.config != null) {
-                return;
-            }
-            gptSupplierMap = ImmutableMap.<String, GptSupplier>builder()
-                .put(Consts.CHATGLM_GPT, new ChatGlmGptSupplier().init(config))
-                .put(Consts.OPENAI_GPT, new OpenAiGptSupplier().init(config))
-                .build();
-            this.config = config;
-        }
+        Objects.requireNonNull(config, "config");
+        gptSupplierMap = ImmutableMap.<String, GptSupplier>builder()
+            .put(Consts.CHATGLM_GPT, new ChatGlmGptSupplier().init(config))
+            .put(Consts.OPENAI_GPT, new OpenAiGptSupplier().init(config))
+            .build();
+        this.config = config;
     }
 
     /**
@@ -128,7 +123,7 @@ public class GptService {
         try {
             String host = java.net.URI.create(endpoint).getHost();
             return host == null ? "已配置的模型地址" : host;
-        } catch (IllegalArgumentException | NullPointerException e) {
+        } catch (IllegalArgumentException | NullPointerException _) {
             return "已配置的模型地址";
         }
     }
@@ -140,7 +135,7 @@ public class GptService {
         }
     }
 
-    private void ensureInitialized() {
+    private synchronized void ensureInitialized() {
         if (config == null) {
             init(ApplicationManager.getApplication().getService(EasyDocConfigComponent.class).getState());
         }

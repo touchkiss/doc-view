@@ -12,12 +12,12 @@ import com.intellij.ui.components.JBTextField;
 import com.intellij.util.xmlb.XmlSerializer;
 import com.liuzhihang.doc.view.DocViewBundle;
 import com.liuzhihang.doc.view.config.DocViewSearchableOptionContributor;
-import com.liuzhihang.doc.view.config.GenerationRulesConfigurable;
-import com.liuzhihang.doc.view.config.IntegrationSettingsConfigurable;
+import com.liuzhihang.doc.view.ui.settings.GenerationRulesConfigurable;
+import com.liuzhihang.doc.view.ui.settings.IntegrationSettingsConfigurable;
 import com.liuzhihang.doc.view.config.ShowDocSettings;
 import com.liuzhihang.doc.view.config.Settings;
-import com.liuzhihang.doc.view.config.SettingsConfigurable;
-import com.liuzhihang.doc.view.config.TemplateConfigurable;
+import com.liuzhihang.doc.view.ui.settings.SettingsConfigurable;
+import com.liuzhihang.doc.view.ui.settings.TemplateConfigurable;
 import com.liuzhihang.doc.view.config.TemplateSettings;
 import com.liuzhihang.doc.view.config.YApiSettings;
 import com.liuzhihang.doc.view.config.YuQueSettings;
@@ -121,7 +121,7 @@ public final class ConfigurationExperienceTest extends LightJavaCodeInsightFixtu
         settings.setIncludeNormalInterface(false);
 
         Class<?> configurableType = Class.forName(
-                "com.liuzhihang.doc.view.config.SettingsConfigurable");
+                "com.liuzhihang.doc.view.ui.settings.SettingsConfigurable");
         Constructor<?> constructor = configurableType.getConstructor(Project.class);
         Object configurable = constructor.newInstance(getProject());
         JComponent component = (JComponent) configurableType.getMethod("createComponent").invoke(configurable);
@@ -157,22 +157,22 @@ public final class ConfigurationExperienceTest extends LightJavaCodeInsightFixtu
             }
         });
 
-        assertTrue(entries.stream().anyMatch(entry -> entry.option().equals("普通接口")
-                && entry.configurableId().equals("liuzhihang.api.doc.SettingsConfigurable")));
-        SearchEntry rootEntry = entries.stream().filter(entry -> entry.option().equals("行标记")
-                && entry.configurableId().equals("liuzhihang.api.doc.SettingsConfigurable"))
+        assertTrue(entries.stream().anyMatch(entry -> "普通接口".equals(entry.option())
+                && "liuzhihang.api.doc.SettingsConfigurable".equals(entry.configurableId())));
+        SearchEntry rootEntry = entries.stream().filter(entry -> "行标记".equals(entry.option())
+                && "liuzhihang.api.doc.SettingsConfigurable".equals(entry.configurableId()))
                 .findFirst().orElseThrow();
         assertEquals("Doc View", rootEntry.path());
         assertEquals("Doc View", rootEntry.hit());
         assertEquals("Doc View", rootEntry.displayName());
-        assertTrue(entries.stream().anyMatch(entry -> entry.option().equals("模板变量")
-                && entry.configurableId().equals("liuzhihang.api.doc.TemplateConfigurable")));
-        assertTrue(entries.stream().anyMatch(entry -> entry.option().equals("变量")
-                && entry.configurableId().equals("liuzhihang.api.doc.TemplateConfigurable")));
-        assertTrue(entries.stream().anyMatch(entry -> entry.option().equals("导出")
-                && entry.configurableId().equals("liuzhihang.api.doc.TemplateConfigurable")));
-        assertTrue(entries.stream().anyMatch(entry -> entry.option().equals("platform integrations")
-                && entry.configurableId().equals("liuzhihang.api.doc.IntegrationSettingsConfigurable")));
+        assertTrue(entries.stream().anyMatch(entry -> "模板变量".equals(entry.option())
+                && "liuzhihang.api.doc.TemplateConfigurable".equals(entry.configurableId())));
+        assertTrue(entries.stream().anyMatch(entry -> "变量".equals(entry.option())
+                && "liuzhihang.api.doc.TemplateConfigurable".equals(entry.configurableId())));
+        assertTrue(entries.stream().anyMatch(entry -> "导出".equals(entry.option())
+                && "liuzhihang.api.doc.TemplateConfigurable".equals(entry.configurableId())));
+        assertTrue(entries.stream().anyMatch(entry -> "platform integrations".equals(entry.option())
+                && "liuzhihang.api.doc.IntegrationSettingsConfigurable".equals(entry.configurableId())));
     }
 
     public void testSharedSettingsGuideBaseTargetsMaster() throws Exception {
@@ -332,10 +332,14 @@ public final class ConfigurationExperienceTest extends LightJavaCodeInsightFixtu
 
     private static Component findComponentByName(Container root, String name) {
         for (Component child : root.getComponents()) {
-            if (name.equals(child.getName())) return child;
+            if (name.equals(child.getName())) {
+                return child;
+            }
             if (child instanceof Container container) {
                 Component result = findComponentByName(container, name);
-                if (result != null) return result;
+                if (result != null) {
+                    return result;
+                }
             }
         }
         return null;

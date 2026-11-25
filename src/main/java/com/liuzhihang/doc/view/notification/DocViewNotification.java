@@ -59,15 +59,18 @@ public class DocViewNotification {
         }
         boolean hasWarning = warning != null && !warning.isBlank();
         String info = DocViewBundle.message("notify.upload.success.info", docPlatform);
-        if (hasWarning) info += "<br/>" + warning;
+        if (hasWarning) {
+            info += "<br/>" + warning;
+        }
         String linkText = DocViewBundle.message(categoryFallback
                 ? "notify.upload.category.link.text" : "notify.upload.success.link.text");
         String copy = DocViewBundle.message("notify.upload.success.link.copy");
 
-        notificationGroup()
+        Notification notification = notificationGroup()
                 .createNotification(DocViewBundle.message("title"), info, hasWarning ? NotificationType.WARNING : NotificationType.INFORMATION)
-                .setIcon(DocViewIcons.DOC_VIEW)
-                .addAction(new BrowseNotificationAction(linkText, link))
+                .setIcon(DocViewIcons.DOC_VIEW);
+        if (link != null && !link.isBlank()) {
+            notification.addAction(new BrowseNotificationAction(linkText, link))
                 .addAction(new NotificationAction(copy) {
                     @Override
                     public void actionPerformed(@NotNull AnActionEvent e, @NotNull Notification notification) {
@@ -76,8 +79,9 @@ public class DocViewNotification {
                         StringSelection selection = new StringSelection(link);
                         clipboard.setContents(selection, selection);
                     }
-                })
-                .notify(project);
+                });
+        }
+        notification.notify(project);
     }
 
 }

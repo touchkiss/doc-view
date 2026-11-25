@@ -109,31 +109,40 @@ public class NativeActionsEndToEndTest extends BasePlatformTestCase {
             var contents = com.intellij.execution.ExecutionManager.getInstance(getProject()).getContentManager();
             for (var descriptor : allDescriptors()) {
                 var handler = descriptor.getProcessHandler();
-                if (handler != null && !handler.isProcessTerminated()) handler.destroyProcess();
+                if (handler != null && !handler.isProcessTerminated()) {
+                    handler.destroyProcess();
+                }
                 var console = descriptor.getExecutionConsole();
-                if (console != null && !com.intellij.openapi.util.Disposer.isDisposed(console))
+                if (console != null && !com.intellij.openapi.util.Disposer.isDisposed(console)) {
                     com.intellij.openapi.util.Disposer.dispose(console);
+                }
                 contents.removeRunContent(com.intellij.execution.executors.DefaultRunExecutor.getRunExecutorInstance(), descriptor);
-                if (!com.intellij.openapi.util.Disposer.isDisposed(descriptor)) com.intellij.openapi.util.Disposer.dispose(descriptor);
+                if (!com.intellij.openapi.util.Disposer.isDisposed(descriptor)) {
+                    com.intellij.openapi.util.Disposer.dispose(descriptor);
+                }
             }
             PlatformTestUtil.dispatchAllEventsInIdeEventQueue();
             // Some native request-preview views outlive their RunContent descriptor in light fixtures.
             // Dispose the owners through the disposer, rather than releasing their editors independently.
             List<com.intellij.openapi.Disposable> nativeConsoles = new ArrayList<>();
             com.intellij.openapi.util.Disposer.getTree().assertNoReferenceKeptInTree(object -> {
-                if (object instanceof com.intellij.httpClient.http.request.run.console.HttpResponseConsole console)
+                if (object instanceof com.intellij.httpClient.http.request.run.console.HttpResponseConsole console) {
                     nativeConsoles.add(console.getConsole());
+                }
                 if (object instanceof com.intellij.openapi.Disposable disposable) {
                     String chain = com.intellij.openapi.util.Disposer.getTree().printParentChainToRoot(disposable);
                     if (object instanceof com.intellij.httpClient.http.request.run.console.HttpSingleRequestConsoleRequestTabHolder
                         || object instanceof com.intellij.httpClient.http.request.run.console.single.HttpSingleRequestConsoleAuthLogTabHolder
-                        || (chain != null && chain.contains("com.intellij.httpClient.http.request.run.console.single.HttpResponseConsoleView")))
+                        || (chain != null && chain.contains("com.intellij.httpClient.http.request.run.console.single.HttpResponseConsoleView"))) {
                         nativeConsoles.add(disposable);
+                    }
                 }
                 return false;
             });
             for (var console : nativeConsoles) {
-                if (!com.intellij.openapi.util.Disposer.isDisposed(console)) com.intellij.openapi.util.Disposer.dispose(console);
+                if (!com.intellij.openapi.util.Disposer.isDisposed(console)) {
+                    com.intellij.openapi.util.Disposer.dispose(console);
+                }
             }
             PlatformTestUtil.dispatchAllEventsInIdeEventQueue();
             server.stop(0); serverThreads.shutdownNow();
@@ -144,7 +153,9 @@ public class NativeActionsEndToEndTest extends BasePlatformTestCase {
         Set<com.intellij.execution.ui.RunContentDescriptor> result = new LinkedHashSet<>(manager.getContentManager().getAllDescriptors());
         result.addAll(manager.getRunningDescriptors(settings -> true));
         for (var service : com.intellij.platform.execution.dashboard.RunDashboardManagerImpl.getInstance(getProject()).getRunConfigurations()) {
-            if (service.getDescriptor() != null) result.add(service.getDescriptor());
+            if (service.getDescriptor() != null) {
+                result.add(service.getDescriptor());
+            }
         }
         return result;
     }

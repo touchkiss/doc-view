@@ -2,7 +2,6 @@ package com.liuzhihang.doc.view.action.toolbar.preview;
 
 import com.intellij.openapi.actionSystem.AnAction;
 import com.intellij.openapi.actionSystem.AnActionEvent;
-import com.intellij.openapi.actionSystem.PlatformDataKeys;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.ui.popup.JBPopup;
 import com.liuzhihang.doc.view.data.DocViewDataKeys;
@@ -21,7 +20,7 @@ public class PreviewRightExportAction extends AnAction {
     public void actionPerformed(@NotNull AnActionEvent e) {
 
         // 获取当前project对象
-        Project project = e.getData(PlatformDataKeys.PROJECT);
+        Project project = e.getProject();
         JBPopup popup = e.getData(DocViewDataKeys.PREVIEW_POPUP);
         DocView currentDocView = e.getData(DocViewDataKeys.PREVIEW_CURRENT_DOC_VIEW);
         String currentMarkdownText = e.getData(DocViewDataKeys.PREVIEW_MARKDOWN_TEXT);

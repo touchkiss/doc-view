@@ -278,7 +278,9 @@ public final class DocumentOnlyParamEditorTest extends LightJavaCodeInsightFixtu
             actions.addAll(List.of(toolbar.getActionGroup().getChildren(null)));
         }
         if (component instanceof Container container) {
-            for (Component child : container.getComponents()) collectActions(child, actions);
+            for (Component child : container.getComponents()) {
+                collectActions(child, actions);
+            }
         }
     }
 

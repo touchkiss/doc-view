@@ -42,8 +42,10 @@ record ActionSelection(@Nullable PsiElement element, @Nullable Editor editor) {
         }
         PsiElement selection = elements != null && elements.length == 1
                 ? elements[0] : event.getData(CommonDataKeys.PSI_ELEMENT);
-        var selectedFile = selection instanceof PsiFileSystemItem item ? item.getVirtualFile()
-                : selection == null || selection.getContainingFile() == null ? null : selection.getContainingFile().getVirtualFile();
+        var selectedFile = selection instanceof PsiFileSystemItem item ? item.getVirtualFile() : null;
+        if (selectedFile == null && selection != null && selection.getContainingFile() != null) {
+            selectedFile = selection.getContainingFile().getVirtualFile();
+        }
         if (files != null && files.length == 1 && !files[0].equals(selectedFile) && event.getProject() != null) {
             var manager = PsiManager.getInstance(event.getProject());
             selection = files[0].isDirectory() ? manager.findDirectory(files[0]) : manager.findFile(files[0]);
@@ -55,9 +57,13 @@ record ActionSelection(@Nullable PsiElement element, @Nullable Editor editor) {
     @Nullable PsiElement declaration() {
         if (element instanceof PsiJavaFile javaFile) {
             PsiClass[] classes = javaFile.getClasses();
-            if (classes.length == 1) return classes[0];
+            if (classes.length == 1) {
+                return classes[0];
+            }
             for (PsiClass candidate : classes) {
-                if ((candidate.getName() + ".java").equals(javaFile.getName())) return candidate;
+                if ((candidate.getName() + ".java").equals(javaFile.getName())) {
+                    return candidate;
+                }
             }
         }
         return element;

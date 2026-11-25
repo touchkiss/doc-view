@@ -34,7 +34,9 @@ public final class Json5RequestConverter extends RequestConverter<RestClientRequ
         if (supported && request.haveTextToSend && JsonBodyNormalizer.isJsonMediaType(request.getHeaderValue("Content-Type", null)) && !hasActiveVariables(request.textToSend)) {
             try {
                 String normalized = JsonBodyNormalizer.normalize(request.textToSend);
-                if (!normalized.equals(request.textToSend)) request.deleteHeader("Content-Length");
+                if (!normalized.equals(request.textToSend)) {
+                    request.deleteHeader("Content-Length");
+                }
                 request.textToSend = normalized;
             } catch (IllegalArgumentException e) { throw new HttpRequestValidationException(e.getMessage()); }
         }

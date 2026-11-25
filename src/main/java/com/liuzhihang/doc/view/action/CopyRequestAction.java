@@ -42,7 +42,18 @@ abstract class CopyRequestAction extends AbstractAction {
         }, error -> DocViewNotification.notifyError(project, "生成请求失败：" + error.getMessage()));
     }
 
+    /**
+     * Renders a request example from the resolved document.
+     * @param target resolved source target
+     * @param document parsed document
+     * @return request example
+     */
     protected abstract String render(DocumentTarget target, DocView document);
 
+    /**
+     * Returns the notification shown after copying succeeds.
+     * @param target resolved source target
+     * @return notification text
+     */
     protected abstract String successMessage(DocumentTarget target);
 }

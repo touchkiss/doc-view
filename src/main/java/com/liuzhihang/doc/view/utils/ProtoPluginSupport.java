@@ -38,7 +38,7 @@ public final class ProtoPluginSupport {
                 }
             }
         }
-        return result;
+        return Boolean.TRUE.equals(result);
     }
 
     /**

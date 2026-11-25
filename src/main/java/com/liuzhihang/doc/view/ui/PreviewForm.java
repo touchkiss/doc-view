@@ -28,7 +28,7 @@ import com.intellij.util.ui.JBUI;
 import com.intellij.util.ui.UIUtil;
 import com.liuzhihang.doc.view.DocViewBundle;
 import com.liuzhihang.doc.view.config.Settings;
-import com.liuzhihang.doc.view.config.SettingsConfigurable;
+import com.liuzhihang.doc.view.ui.settings.SettingsConfigurable;
 import com.liuzhihang.doc.view.config.TemplateSettings;
 import com.liuzhihang.doc.view.dto.DocView;
 import com.liuzhihang.doc.view.render.DocumentMarkdownRenderer;
@@ -64,6 +64,7 @@ import java.util.stream.Collectors;
  * @date 2020/2/26 19:40
  */
 public class PreviewForm implements Disposable {
+    private static final String LOADING_RETRY = "ui.docview.loading.retry";
 
     @NonNls
     public static final String DOC_VIEW_POPUP = "com.intellij.docview.popup";
@@ -450,7 +451,7 @@ public class PreviewForm implements Disposable {
 
             @Override
             public @NotNull ActionUpdateThread getActionUpdateThread() {
-                return ActionUpdateThread.BGT;
+                return ActionUpdateThread.EDT;
             }
 
         });
@@ -519,7 +520,7 @@ public class PreviewForm implements Disposable {
 
                 DocView selectedDocView = currentDocView;
                 if (selectedDocView == null) {
-                    DocViewNotification.notifyInfo(project, DocViewBundle.message("ui.docview.loading.retry"));
+                    DocViewNotification.notifyInfo(project, DocViewBundle.message(LOADING_RETRY));
                     return;
                 }
 
@@ -541,7 +542,7 @@ public class PreviewForm implements Disposable {
 
                 SingleExportSnapshot snapshot = captureSingleExport();
                 if (snapshot == null) {
-                    DocViewNotification.notifyInfo(project, DocViewBundle.message("ui.docview.loading.retry"));
+                    DocViewNotification.notifyInfo(project, DocViewBundle.message(LOADING_RETRY));
                     return;
                 }
 
@@ -557,7 +558,7 @@ public class PreviewForm implements Disposable {
             public void actionPerformed(@NotNull AnActionEvent e) {
 
                 if (currentDocView == null || currentMarkdownText == null) {
-                    DocViewNotification.notifyInfo(project, DocViewBundle.message("ui.docview.loading.retry"));
+                    DocViewNotification.notifyInfo(project, DocViewBundle.message(LOADING_RETRY));
                     return;
                 }
 
@@ -596,7 +597,7 @@ public class PreviewForm implements Disposable {
 
                 AllExportSnapshot snapshot = captureAllExport();
                 if (snapshot == null) {
-                    DocViewNotification.notifyInfo(project, DocViewBundle.message("ui.docview.loading.retry"));
+                    DocViewNotification.notifyInfo(project, DocViewBundle.message(LOADING_RETRY));
                     return;
                 }
 
@@ -613,7 +614,7 @@ public class PreviewForm implements Disposable {
 
                 List<DocView> selectedDocViews = docViewList == null ? null : List.copyOf(docViewList);
                 if (selectedDocViews == null) {
-                    DocViewNotification.notifyInfo(project, DocViewBundle.message("ui.docview.loading.retry"));
+                    DocViewNotification.notifyInfo(project, DocViewBundle.message(LOADING_RETRY));
                     return;
                 }
 
@@ -675,42 +676,41 @@ public class PreviewForm implements Disposable {
         catalogList.setListData(nameVector);
 
         catalogSelectionListener = catalog -> {
-
-            if (catalog.getValueIsAdjusting() || disposed) {
-                return;
+            if (!catalog.getValueIsAdjusting() && !disposed) {
+                updateCatalogSelection();
             }
-
-            int selectedIndex = catalogList.getSelectedIndex();
-            currentDocView = selectedIndex >= 0 && selectedIndex < docViewList.size()
-                    ? docViewList.get(selectedIndex) : null;
-
-            if (currentDocView == null) {
-                return;
-            }
-
-            ClassPresentation presentation = classPresentations.get(currentDocView);
-            docNameLabel.setText(presentation == null ? "" : presentation.qualifiedName());
-
-            renderMarkdown(currentDocView);
-
         };
         catalogList.addListSelectionListener(catalogSelectionListener);
 
         if (!docViewList.isEmpty()) {
-            int selection = 0;
-            if (previous != null && previous.getPsiMethod() != null) {
-                for (int i = 0; i < docViewList.size(); i++) {
-                    if (Objects.equals(previous.getPsiMethod(), docViewList.get(i).getPsiMethod())) {
-                        selection = i;
-                        break;
-                    }
-                }
-            }
-            catalogList.setSelectedIndex(selection);
+            catalogList.setSelectedIndex(previousSelection(previous));
         } else {
             currentDocView = null;
             showPreviewStatus(DocViewBundle.message("ui.preview.empty"));
         }
+    }
+
+    private void updateCatalogSelection() {
+        int selectedIndex = catalogList.getSelectedIndex();
+        currentDocView = selectedIndex >= 0 && selectedIndex < docViewList.size()
+                ? docViewList.get(selectedIndex) : null;
+        if (currentDocView == null) {
+            return;
+        }
+        ClassPresentation presentation = classPresentations.get(currentDocView);
+        docNameLabel.setText(presentation == null ? "" : presentation.qualifiedName());
+        renderMarkdown(currentDocView);
+    }
+
+    private int previousSelection(DocView previous) {
+        if (previous != null && previous.getPsiMethod() != null) {
+            for (int i = 0; i < docViewList.size(); i++) {
+                if (Objects.equals(previous.getPsiMethod(), docViewList.get(i).getPsiMethod())) {
+                    return i;
+                }
+            }
+        }
+        return 0;
     }
 
     private void renderMarkdown(@NotNull DocView docView) {
@@ -805,10 +805,7 @@ public class PreviewForm implements Disposable {
         if (disposed || markdownDocument == null) {
             return;
         }
-        WriteCommandAction.runWriteCommandAction(project, () -> {
-            // 光标放在顶部
-            markdownDocument.setText(markdownText);
-        });
+        WriteCommandAction.runWriteCommandAction(project, () -> markdownDocument.setText(markdownText));
     }
 
     private @Nullable SingleExportSnapshot captureSingleExport() {

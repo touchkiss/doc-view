@@ -11,6 +11,8 @@ import com.intellij.openapi.editor.ex.EditorEx;
  * @since 2023/8/5 18:56
  */
 public class EditorUtils {
+    private EditorUtils() {}
+
 
     /**
      * 对 markdown 编辑器进行渲染

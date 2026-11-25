@@ -1,7 +1,6 @@
 package com.liuzhihang.doc.view.ui.editor;
 
 import com.intellij.openapi.editor.toolbar.floating.AbstractFloatingToolbarProvider;
-import org.jetbrains.annotations.NotNull;
 
 /**
  * @author liuzhihang

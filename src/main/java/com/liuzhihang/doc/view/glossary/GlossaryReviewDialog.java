@@ -16,7 +16,10 @@ import java.util.Map;
 
 final class GlossaryReviewDialog extends DialogWrapper {
     private enum Scope {
-        PROJECT("当前项目"), GLOBAL("全局");
+        /** Persist the selected terms for this project. */
+        PROJECT("当前项目"),
+        /** Persist the selected terms for all projects. */
+        GLOBAL("全局");
 
         private final String label;
 

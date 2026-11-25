@@ -33,6 +33,10 @@ import java.util.Set;
  * @date 2021/6/10 20:10
  */
 public class DocViewUtils {
+    private static final String ANNOTATION_REQUIRED = "required";
+
+    private static final String ANNOTATION_VALUE = "value";
+
 
     private DocViewUtils() {
     }
@@ -84,13 +88,7 @@ public class DocViewUtils {
             return true;
         }
 
-        if (DubboPsiUtils.isDubboMethod(psiMethod)) {
-            return true;
-        }
-
-        // 其他判断在下面添加
-
-        return false;
+        return DubboPsiUtils.isDubboMethod(psiMethod);
     }
 
     /**
@@ -169,7 +167,7 @@ public class DocViewUtils {
             if (settings.getNameUseSwagger()) {
                 PsiAnnotation apiAnnotation = psiMethod.getAnnotation(SwaggerConstant.API_OPERATION);
                 if (apiAnnotation != null) {
-                    String value = AnnotationUtil.getStringAttributeValue(apiAnnotation, "value");
+                    String value = AnnotationUtil.getStringAttributeValue(apiAnnotation, ANNOTATION_VALUE);
                     if (StringUtils.isNotBlank(value)) {
                         return value;
                     }
@@ -333,11 +331,7 @@ public class DocViewUtils {
             }
         }
 
-        if (settings.getExcludeFieldNames().contains(psiParameter.getName())) {
-            return true;
-        }
-
-        return false;
+        return settings.getExcludeFieldNames().contains(psiParameter.getName());
     }
 
     /**
@@ -349,11 +343,15 @@ public class DocViewUtils {
     public static boolean isRequired(@NotNull PsiField field) {
 
         return ApplicationManager.getApplication().runReadAction((Computable<Boolean>) () -> {
-            if (ProtoUtils.isRequiredSyntheticField(field)) return true;
+            if (ProtoUtils.isRequiredSyntheticField(field)) {
+                return true;
+            }
             Settings settings = Settings.getInstance(field.getProject());
 
             Boolean schemaRequired = explicitSchemaRequired(field);
-            if (schemaRequired != null) return schemaRequired;
+            if (schemaRequired != null) {
+                return schemaRequired;
+            }
 
             if (AnnotationUtil.isAnnotated(field, settings.getRequiredFieldAnnotation(), 0)) {
                 return true;
@@ -361,7 +359,7 @@ public class DocViewUtils {
             // swagger @ApiModelProperty
             PsiAnnotation apiModelPropertyAnnotation = field.getAnnotation(SwaggerConstant.API_MODEL_PROPERTY);
             if (apiModelPropertyAnnotation != null) {
-                PsiAnnotationMemberValue value = apiModelPropertyAnnotation.findAttributeValue("required");
+                PsiAnnotationMemberValue value = apiModelPropertyAnnotation.findAttributeValue(ANNOTATION_REQUIRED);
                 if (value != null && StringUtils.isNotBlank(value.getText()) && value.getText().contains("true")) {
                     return true;
                 }
@@ -389,7 +387,7 @@ public class DocViewUtils {
                 // 没有设置注解参数
                 PsiNameValuePair[] nameValuePairs = annotation.getParameterList().getAttributes();
                 for (PsiNameValuePair nameValuePair : nameValuePairs) {
-                    if (nameValuePair.getAttributeName().equalsIgnoreCase("required") && Objects.requireNonNull(nameValuePair.getLiteralValue()).equalsIgnoreCase("false")) {
+                    if (nameValuePair.getAttributeName().equalsIgnoreCase(ANNOTATION_REQUIRED) && Objects.requireNonNull(nameValuePair.getLiteralValue()).equalsIgnoreCase("false")) {
                         return false;
                     }
                 }
@@ -426,7 +424,7 @@ public class DocViewUtils {
             // 从注解中解析字段名称
             PsiAnnotation jsonPropertyAnnotation = field.getAnnotation(JsonPropertyConstant.JSON_PROPERTY);
             if (jsonPropertyAnnotation != null) {
-                PsiAnnotationMemberValue value = jsonPropertyAnnotation.findAttributeValue("value");
+                PsiAnnotationMemberValue value = jsonPropertyAnnotation.findAttributeValue(ANNOTATION_VALUE);
                 Object resolved = PsiConstantUtils.constantValue(value);
                 if (resolved instanceof String name && !name.isEmpty()) {
                     return name;
@@ -542,7 +540,7 @@ public class DocViewUtils {
         }
         var property = field.getAnnotation(SwaggerConstant.API_MODEL_PROPERTY);
         if (property != null) {
-            var value = property.findAttributeValue("value");
+            var value = property.findAttributeValue(ANNOTATION_VALUE);
             if (value != null && StringUtils.isNotBlank(value.getText())) {
                 return value.getText().replace("\"", "");
             }
@@ -554,13 +552,10 @@ public class DocViewUtils {
         return ApplicationManager.getApplication().runReadAction((Computable<String>) () -> {
             PsiComment comment = PsiTreeUtil.findChildOfType(psiField, PsiComment.class);
 
-            if (comment != null) {
-                // 参数举例, 优先使用 @value 注释 tag
-                if (comment instanceof PsiDocComment) {
-                    String tagValue = CustomPsiCommentUtils.tagValueFromDocComment((PsiDocComment) comment, "value");
-                    if (StringUtils.isNotBlank(tagValue)) {
-                        return tagValue;
-                    }
+            if (comment instanceof PsiDocComment docComment) {
+                String tagValue = CustomPsiCommentUtils.tagValueFromDocComment(docComment, ANNOTATION_VALUE);
+                if (StringUtils.isNotBlank(tagValue)) {
+                    return tagValue;
                 }
             }
 
@@ -611,7 +606,7 @@ public class DocViewUtils {
             }
             PsiAnnotation jsonPropertyAnnotation = component.getAnnotation(JsonPropertyConstant.JSON_PROPERTY);
             if (jsonPropertyAnnotation != null) {
-                PsiAnnotationMemberValue value = jsonPropertyAnnotation.findAttributeValue("value");
+                PsiAnnotationMemberValue value = jsonPropertyAnnotation.findAttributeValue(ANNOTATION_VALUE);
                 Object resolved = PsiConstantUtils.constantValue(value);
                 if (resolved instanceof String name && !name.isEmpty()) {
                     return name;
@@ -625,13 +620,15 @@ public class DocViewUtils {
         return ApplicationManager.getApplication().runReadAction((Computable<Boolean>) () -> {
             Settings settings = Settings.getInstance(component.getProject());
             Boolean schemaRequired = explicitSchemaRequired(component);
-            if (schemaRequired != null) return schemaRequired;
+            if (schemaRequired != null) {
+                return schemaRequired;
+            }
             if (AnnotationUtil.isAnnotated(component, settings.getRequiredFieldAnnotation(), 0)) {
                 return true;
             }
             PsiAnnotation apiModelPropertyAnnotation = component.getAnnotation(SwaggerConstant.API_MODEL_PROPERTY);
             if (apiModelPropertyAnnotation != null) {
-                PsiAnnotationMemberValue value = apiModelPropertyAnnotation.findAttributeValue("required");
+                PsiAnnotationMemberValue value = apiModelPropertyAnnotation.findAttributeValue(ANNOTATION_REQUIRED);
                 if (value != null && StringUtils.isNotBlank(value.getText()) && value.getText().contains("true")) {
                     return true;
                 }
@@ -644,19 +641,27 @@ public class DocViewUtils {
     @Nullable
     private static Boolean explicitSchemaRequired(PsiModifierListOwner owner) {
         PsiAnnotation schema = owner.getAnnotation(SwaggerConstant.SCHEMA);
-        if (schema == null) return null;
+        if (schema == null) {
+            return null;
+        }
         PsiAnnotationMemberValue mode = schema.findAttributeValue("requiredMode");
         if (mode instanceof PsiReferenceExpression reference && reference.resolve() instanceof PsiEnumConstant constant) {
             PsiClass enumClass = constant.getContainingClass();
             if (enumClass != null && (SwaggerConstant.SCHEMA + ".RequiredMode").equals(enumClass.getQualifiedName())) {
-                if ("REQUIRED".equals(constant.getName())) return true;
-                if ("NOT_REQUIRED".equals(constant.getName())) return false;
+                if ("REQUIRED".equals(constant.getName())) {
+                    return true;
+                }
+                if ("NOT_REQUIRED".equals(constant.getName())) {
+                    return false;
+                }
             }
         }
         PsiClass schemaClass = schema.resolveAnnotationType();
         if (schemaClass != null && schemaClass.findMethodsByName("requiredMode", false).length == 0) {
-            Object required = PsiConstantUtils.constantValue(schema.findAttributeValue("required"));
-            if (Boolean.TRUE.equals(required)) return true;
+            Object required = PsiConstantUtils.constantValue(schema.findAttributeValue(ANNOTATION_REQUIRED));
+            if (Boolean.TRUE.equals(required)) {
+                return true;
+            }
         }
         return null;
     }

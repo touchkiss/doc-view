@@ -28,6 +28,10 @@ final class PreviewRequests {
         return id == generation.get();
     }
 
+    private boolean canPublish(Project project, long id) {
+        return isCurrent(id) && !project.isDisposed();
+    }
+
     <T> void submit(Project project, String title, long id, Supplier<T> read,
                     Consumer<T> publish, Runnable canceled, Consumer<Throwable> failed) {
         new Task.Backgroundable(project, title, true) {
@@ -57,7 +61,7 @@ final class PreviewRequests {
 
             @Override
             public void onSuccess() {
-                if (isCurrent(id) && !project.isDisposed()) {
+                if (canPublish(project, id)) {
                     try {
                         publish.accept(result);
                     } catch (RuntimeException exception) {
@@ -68,14 +72,14 @@ final class PreviewRequests {
 
             @Override
             public void onCancel() {
-                if (isCurrent(id) && !project.isDisposed()) {
+                if (canPublish(project, id)) {
                     canceled.run();
                 }
             }
 
             @Override
             public void onThrowable(@NotNull Throwable error) {
-                if (isCurrent(id) && !project.isDisposed()) {
+                if (canPublish(project, id)) {
                     failed.accept(error);
                 }
             }

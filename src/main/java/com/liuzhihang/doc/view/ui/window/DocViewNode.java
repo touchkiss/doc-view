@@ -18,6 +18,10 @@ public abstract class DocViewNode extends CachingSimpleNode {
 
     }
 
+    /**
+     * 构建当前节点的子节点。
+     * @return 子节点数组
+     */
     @Override
     protected abstract SimpleNode[] buildChildren();
 
@@ -31,8 +35,16 @@ public abstract class DocViewNode extends CachingSimpleNode {
         return getName();
     }
 
+    /**
+     * 返回当前节点对应的文档。
+     * @return 文档列表
+     */
     public abstract List<DocView> docViewList();
 
+    /**
+     * 按当前项目刷新节点内容。
+     * @param project 当前项目
+     */
     public abstract void updateNode(Project project);
 
     /**

@@ -10,7 +10,7 @@ import com.intellij.openapi.diagnostic.Logger;
 import com.intellij.psi.PsiElement;
 import com.liuzhihang.doc.view.common.util.HttpUtil;
 import org.apache.commons.codec.digest.DigestUtils;
-import org.apache.commons.lang3.RandomStringUtils;
+import java.security.SecureRandom;
 
 /**
  * 百度翻译
@@ -19,6 +19,7 @@ import org.apache.commons.lang3.RandomStringUtils;
  * @date 2019/09/01
  */
 public class BaiduTranslator extends AbstractTranslator {
+    private static final SecureRandom SALT_RANDOM = new SecureRandom();
     private static final Logger LOGGER = Logger.getInstance(BaiduTranslator.class);
 
     private static final String URL
@@ -40,7 +41,11 @@ public class BaiduTranslator extends AbstractTranslator {
         String result = "";
         try {
             for (int i = 0; i < 10; i++) {
-                String salt = RandomStringUtils.randomNumeric(16);
+                StringBuilder saltBuilder = new StringBuilder(16);
+                for (int digit = 0; digit < 16; digit++) {
+                    saltBuilder.append(SALT_RANDOM.nextInt(10));
+                }
+                String salt = saltBuilder.toString();
                 String sign = DigestUtils.md5Hex(getConfig().getAppId() + text + salt + getConfig().getToken());
                 String eText = HttpUtil.encode(text);
                 json = HttpUtil.get(String.format(URL, getConfig().getAppId(), salt, sign, eText),
@@ -53,9 +58,9 @@ public class BaiduTranslator extends AbstractTranslator {
                     break;
                 }
             }
-        } catch (InterruptedException e) {
+        } catch (InterruptedException _) {
             Thread.currentThread().interrupt();
-        } catch (Exception e) {
+        } catch (Exception _) {
             LOGGER.warn("baidu translate error: please check your key and network");
         }
         return result;

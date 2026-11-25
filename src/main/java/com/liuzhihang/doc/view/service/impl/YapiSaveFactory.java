@@ -132,17 +132,29 @@ public final class YapiSaveFactory {
     }
 
     private static String toYapiSchemaType(@NotNull Body body) {
-        if (body.isCollection() || isCollectionType(body.getType())) return "array";
-        if (body.isMap() || isMapBody(body)) return "object";
+        if (body.isCollection() || isCollectionType(body.getType())) {
+            return "array";
+        }
+        if (body.isMap() || isMapBody(body)) {
+            return "object";
+        }
         String type = rawType(body.getType());
-        if (StringUtils.isBlank(type)) return "object";
+        if (StringUtils.isBlank(type)) {
+            return "object";
+        }
         if ("byte".equals(type) || "short".equals(type) || "int".equals(type) || "long".equals(type)
                 || "float".equals(type) || "double".equals(type) || "Byte".equals(type)
                 || "Short".equals(type) || "Integer".equals(type) || "Long".equals(type)
                 || "Float".equals(type) || "Double".equals(type) || "BigDecimal".equals(type)
-                || "BigInteger".equals(type) || "Number".equals(type)) return "number";
-        if ("boolean".equals(type) || "Boolean".equals(type)) return "boolean";
-        if (FieldTypeConstant.FIELD_TYPE.containsKey(type) || CommonClassNames.JAVA_LANG_STRING_SHORT.equals(type)) return "string";
+                || "BigInteger".equals(type) || "Number".equals(type)) {
+            return "number";
+        }
+        if ("boolean".equals(type) || "Boolean".equals(type)) {
+            return "boolean";
+        }
+        if (FieldTypeConstant.FIELD_TYPE.containsKey(type) || CommonClassNames.JAVA_LANG_STRING_SHORT.equals(type)) {
+            return "string";
+        }
         return "object";
     }
 
@@ -150,20 +162,26 @@ public final class YapiSaveFactory {
         Body element = syntheticChild(body, "element");
         Body item = schemaValueBody(body, element, extractCollectionItemType(body.getType()));
         // Older/flat parser paths already hold item fields directly. Only unwrap marked nodes.
-        if (element == null) item.setChildList(body.getChildList());
+        if (element == null) {
+            item.setChildList(body.getChildList());
+        }
         return buildValueSchema(item);
     }
 
     private static Body schemaValueBody(Body container, Body synthetic, String declaredType) {
-        String type = StringUtils.isNotBlank(declaredType) ? declaredType
-                : synthetic == null ? "Object" : synthetic.getType();
+        String type = declaredType;
+        if (StringUtils.isBlank(type)) {
+            type = synthetic == null ? "Object" : synthetic.getType();
+        }
         Body value = new Body();
         value.setType(type);
         value.setDescription(container.getDescription());
         value.setExample(container.getExample());
         if (synthetic != null) {
             value.setChildList(synthetic.getChildList());
-            if (synthetic.getExample() != null) value.setExample(synthetic.getExample());
+            if (synthetic.getExample() != null) {
+                value.setExample(synthetic.getExample());
+            }
         }
         // Do not copy collection/map flags from a synthetic node: they describe its container,
         // not the value's JSON shape. Infer nested containers from the actual generic type.
@@ -174,7 +192,9 @@ public final class YapiSaveFactory {
 
     private static Body syntheticChild(Body body, String name) {
         for (Body child : body.getChildList()) {
-            if (child.isSyntheticContainerNode() && name.equals(child.getName())) return child;
+            if (child.isSyntheticContainerNode() && name.equals(child.getName())) {
+                return child;
+            }
         }
         return null;
     }
@@ -185,7 +205,9 @@ public final class YapiSaveFactory {
     }
 
     private static boolean isCollectionType(String type) {
-        if (type != null && type.trim().endsWith("[]")) return true;
+        if (type != null && type.trim().endsWith("[]")) {
+            return true;
+        }
         return switch (rawType(type)) {
             case "Iterable", "Collection", "List", "Set", "SortedSet", "NavigableSet", "ArrayList", "LinkedList",
                     "HashSet", "LinkedHashSet", "TreeSet", "Vector", "Queue", "Deque", "ArrayDeque" -> true;
@@ -202,10 +224,14 @@ public final class YapiSaveFactory {
     }
 
     private static String rawType(String type) {
-        if (type == null) return "";
+        if (type == null) {
+            return "";
+        }
         String raw = type.trim();
         int genericStart = raw.indexOf('<');
-        if (genericStart >= 0) raw = raw.substring(0, genericStart);
+        if (genericStart >= 0) {
+            raw = raw.substring(0, genericStart);
+        }
         int packageEnd = raw.lastIndexOf('.');
         return packageEnd < 0 ? raw : raw.substring(packageEnd + 1);
     }
@@ -225,18 +251,24 @@ public final class YapiSaveFactory {
 
     /** Splits top-level Java generic arguments without breaking Map<String, List<Value>>. */
     private static List<String> genericArguments(String type) {
-        if (type == null) return List.of();
+        if (type == null) {
+            return List.of();
+        }
         int start = type.indexOf('<');
         int end = type.lastIndexOf('>');
-        if (start < 0 || end <= start) return List.of();
+        if (start < 0 || end <= start) {
+            return List.of();
+        }
         List<String> result = new ArrayList<>();
         int depth = 0;
         int itemStart = start + 1;
         for (int i = itemStart; i < end; i++) {
             char current = type.charAt(i);
-            if (current == '<') depth++;
-            else if (current == '>') depth--;
-            else if (current == ',' && depth == 0) {
+            if (current == '<') {
+                depth++;
+            } else if (current == '>') {
+                depth--;
+            } else if (current == ',' && depth == 0) {
                 result.add(type.substring(itemStart, i).trim());
                 itemStart = i + 1;
             }
@@ -246,7 +278,9 @@ public final class YapiSaveFactory {
     }
 
     private List<YApiQuery> buildReqQuery(List<Param> paramList) {
-        if (CollectionUtils.isEmpty(paramList)) return new ArrayList<>();
+        if (CollectionUtils.isEmpty(paramList)) {
+            return new ArrayList<>();
+        }
         return paramList.stream().map(param -> {
             YApiQuery query = new YApiQuery();
             query.setName(param.getName());
@@ -259,7 +293,9 @@ public final class YapiSaveFactory {
     }
 
     private List<YApiHeader> buildReqHeaders(List<Header> headerList) {
-        if (CollectionUtils.isEmpty(headerList)) return new ArrayList<>();
+        if (CollectionUtils.isEmpty(headerList)) {
+            return new ArrayList<>();
+        }
         return headerList.stream().map(header -> {
             YApiHeader yapiHeader = new YApiHeader();
             yapiHeader.setName(header.getName());

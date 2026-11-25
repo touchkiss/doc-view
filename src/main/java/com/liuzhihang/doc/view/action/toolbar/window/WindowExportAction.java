@@ -2,7 +2,6 @@ package com.liuzhihang.doc.view.action.toolbar.window;
 
 import com.intellij.openapi.actionSystem.AnAction;
 import com.intellij.openapi.actionSystem.AnActionEvent;
-import com.intellij.openapi.actionSystem.PlatformDataKeys;
 import com.intellij.openapi.fileChooser.FileChooser;
 import com.intellij.openapi.fileChooser.FileChooserDescriptor;
 import com.intellij.openapi.fileChooser.FileChooserDescriptorFactory;
@@ -10,7 +9,6 @@ import com.intellij.openapi.project.Project;
 import com.intellij.openapi.vfs.VirtualFile;
 import com.liuzhihang.doc.view.DocViewBundle;
 import com.liuzhihang.doc.view.data.DocViewDataKeys;
-import com.liuzhihang.doc.view.dto.DocViewData;
 import com.liuzhihang.doc.view.render.DocumentMarkdownRenderer;
 import com.liuzhihang.doc.view.notification.DocViewNotification;
 import com.liuzhihang.doc.view.ui.window.RootNode;
@@ -35,7 +33,7 @@ public class WindowExportAction extends AnAction {
     public void actionPerformed(@NotNull AnActionEvent e) {
 
         // 获取当前project对象
-        Project project = e.getData(PlatformDataKeys.PROJECT);
+        Project project = e.getProject();
         JComponent toolbar = e.getData(DocViewDataKeys.WINDOW_TOOLBAR);
         RootNode rootNode = e.getData(DocViewDataKeys.WINDOW_ROOT_NODE);
 

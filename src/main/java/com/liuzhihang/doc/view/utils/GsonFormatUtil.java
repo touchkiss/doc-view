@@ -20,6 +20,8 @@ import java.util.Collection;
  * @date 2019/5/9 11:07
  */
 public class GsonFormatUtil {
+    private GsonFormatUtil() {}
+
 
     @NotNull
     public static String gsonFormat(Gson gson, JsonElement jsonElement) throws IOException {

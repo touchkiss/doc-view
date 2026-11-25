@@ -18,19 +18,21 @@ import java.util.Map;
  * 解析 Jackson {@code @JsonSerialize} / {@code @JsonDeserialize} 注解，推断 JSON 实际类型
  */
 public final class JacksonPsiUtils {
+    private static final String STRING_TYPE = "String";
+
 
     private static final Map<String, String> WELL_KNOWN_SERIALIZERS = new HashMap<>();
     private static final Map<String, String> WELL_KNOWN_DESERIALIZERS = new HashMap<>();
 
     static {
-        WELL_KNOWN_SERIALIZERS.put(JacksonConstant.TO_STRING_SERIALIZER, "String");
+        WELL_KNOWN_SERIALIZERS.put(JacksonConstant.TO_STRING_SERIALIZER, STRING_TYPE);
         WELL_KNOWN_SERIALIZERS.put(JacksonConstant.NUMBER_SERIALIZER, "Number");
-        WELL_KNOWN_SERIALIZERS.put(JacksonConstant.DATE_SERIALIZER, "String");
+        WELL_KNOWN_SERIALIZERS.put(JacksonConstant.DATE_SERIALIZER, STRING_TYPE);
         WELL_KNOWN_SERIALIZERS.put(JacksonConstant.NULL_SERIALIZER, "null");
-        WELL_KNOWN_SERIALIZERS.put(JacksonConstant.STRING_SERIALIZER, "String");
+        WELL_KNOWN_SERIALIZERS.put(JacksonConstant.STRING_SERIALIZER, STRING_TYPE);
         WELL_KNOWN_SERIALIZERS.put(JacksonConstant.BOOLEAN_SERIALIZER, "Boolean");
 
-        WELL_KNOWN_DESERIALIZERS.put(JacksonConstant.STRING_DESERIALIZER, "String");
+        WELL_KNOWN_DESERIALIZERS.put(JacksonConstant.STRING_DESERIALIZER, STRING_TYPE);
     }
 
     private JacksonPsiUtils() {
@@ -109,7 +111,7 @@ public final class JacksonPsiUtils {
         }
 
         if (InheritanceUtil.isInheritor(serializerClass, JacksonConstant.TO_STRING_SERIALIZER)) {
-            return "String";
+            return STRING_TYPE;
         }
 
         String fromGeneric = resolveGenericHandledType(serializerClass, JacksonConstant.JSON_SERIALIZER);
@@ -133,11 +135,11 @@ public final class JacksonPsiUtils {
         }
 
         if (InheritanceUtil.isInheritor(deserializerClass, JacksonConstant.FROM_STRING_DESERIALIZER)) {
-            return "String";
+            return STRING_TYPE;
         }
 
-        if (deserializerClass.getName() != null && deserializerClass.getName().contains("String")) {
-            return "String";
+        if (deserializerClass.getName() != null && deserializerClass.getName().contains(STRING_TYPE)) {
+            return STRING_TYPE;
         }
 
         String fromGeneric = resolveGenericHandledType(deserializerClass, JacksonConstant.JSON_DESERIALIZER);
@@ -222,7 +224,7 @@ public final class JacksonPsiUtils {
 
     @NotNull
     private static JsonWireType buildOverridden(@NotNull String jsonType, @NotNull PsiType javaType) {
-        if ("String".equals(jsonType) && isNumericJavaType(javaType)) {
+        if (STRING_TYPE.equals(jsonType) && isNumericJavaType(javaType)) {
             return JsonWireType.overridden(jsonType, "0", "0");
         }
         if ("null".equals(jsonType)) {

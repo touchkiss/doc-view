@@ -25,7 +25,7 @@ public final class YApiInterfaceUrlResolver {
             return new LinkResolution(url, true, null);
         } catch (ProcessCanceledException canceled) {
             throw canceled;
-        } catch (Exception failure) {
+        } catch (Exception _) {
             // Neither transport exceptions nor remote response text belong in a notification.
             return new LinkResolution(categoryUrl(save), false, "接口已保存，但接口详情查询失败，当前链接打开分类。");
         }
@@ -47,11 +47,13 @@ public final class YApiInterfaceUrlResolver {
     }
 
     private static Long positiveId(String value) {
-        if (value == null || !value.matches("[0-9]+")) return null;
+        if (value == null || !value.matches("[0-9]+")) {
+            return null;
+        }
         try {
             long id = Long.parseLong(value);
             return id > 0 ? id : null;
-        } catch (NumberFormatException invalid) {
+        } catch (NumberFormatException _) {
             return null;
         }
     }
@@ -61,7 +63,12 @@ public final class YApiInterfaceUrlResolver {
     }
 
     private static String baseUrl(YapiSave save) {
-        return save.getYapiUrl().replaceAll("/+$", "") + "/project/" + save.getProjectId() + "/interface/api/";
+        String url = save.getYapiUrl();
+        int end = url.length();
+        while (end > 0 && url.charAt(end - 1) == '/') {
+            end--;
+        }
+        return url.substring(0, end) + "/project/" + save.getProjectId() + "/interface/api/";
     }
 
     public record LinkResolution(String url, boolean interfaceDetail, String warning) { }

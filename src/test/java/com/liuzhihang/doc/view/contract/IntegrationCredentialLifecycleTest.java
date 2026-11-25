@@ -8,11 +8,11 @@ import com.intellij.ui.components.JBPasswordField;
 import com.intellij.util.xmlb.XmlSerializer;
 import com.liuzhihang.doc.view.DocViewBundle;
 import com.liuzhihang.doc.view.config.ShowDocSettings;
-import com.liuzhihang.doc.view.config.ShowDocSettingsConfigurable;
+import com.liuzhihang.doc.view.ui.settings.ShowDocSettingsConfigurable;
 import com.liuzhihang.doc.view.config.YApiSettings;
-import com.liuzhihang.doc.view.config.YApiSettingsConfigurable;
+import com.liuzhihang.doc.view.ui.settings.YApiSettingsConfigurable;
 import com.liuzhihang.doc.view.config.YuQueSettings;
-import com.liuzhihang.doc.view.config.YuQueSettingsConfigurable;
+import com.liuzhihang.doc.view.ui.settings.YuQueSettingsConfigurable;
 import com.liuzhihang.doc.view.ui.ShowDocSettingForm;
 import com.liuzhihang.doc.view.ui.YApiSettingForm;
 import com.liuzhihang.doc.view.ui.YuQueSettingForm;
@@ -56,7 +56,7 @@ public final class IntegrationCredentialLifecycleTest extends LightJavaCodeInsig
         for (Class<?> type : List.of(ShowDocSettingForm.class, YApiSettingForm.class, YuQueSettingForm.class)) {
             for (Field field : type.getDeclaredFields()) {
                 assertFalse("Direct project settings must not expose a PasswordSafe status control",
-                        field.getName().equals("credentialStatusLabel"));
+                        "credentialStatusLabel".equals(field.getName()));
                 assertFalse("Blank Apply directly clears a saved project value",
                         field.getName().startsWith("clear") && field.getName().endsWith("CheckBox"));
             }

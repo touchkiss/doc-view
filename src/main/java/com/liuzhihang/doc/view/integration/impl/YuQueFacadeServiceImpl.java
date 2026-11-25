@@ -19,19 +19,25 @@ import java.util.List;
  */
 public class YuQueFacadeServiceImpl implements YuQueFacadeService {
 
-    private static final Gson gson = new GsonBuilder().serializeNulls().create();
+    private static final int HTTP_NOT_FOUND = 404;
+    private static final String TOKEN_HEADER = "X-Auth-Token";
+    private static final String REPOSITORIES_PATH = "/repos/";
+    private static final String DOCUMENTS_PATH = "/docs/";
+    private static final Gson GSON = new GsonBuilder().serializeNulls().create();
 
     @Override
     public YuQueResponse getDoc(String url, String token, String namespace, String slug) throws Exception {
 
-        Header header = new BasicHeader("X-Auth-Token", token);
+        Header header = new BasicHeader(TOKEN_HEADER, token);
 
 
         String resp;
         try {
-            resp = HttpUtils.get(url + "/repos/" + namespace + "/docs/" + slug, null, List.of(header));
+            resp = HttpUtils.get(url + REPOSITORIES_PATH + namespace + DOCUMENTS_PATH + slug, null, List.of(header));
         } catch (HttpUtils.HttpStatusException exception) {
-            if (exception.getStatusCode() == 404) return null;
+            if (exception.getStatusCode() == HTTP_NOT_FOUND) {
+                return null;
+            }
             throw exception;
         }
         return parseResponse(resp, false);
@@ -40,9 +46,9 @@ public class YuQueFacadeServiceImpl implements YuQueFacadeService {
     @Override
     public YuQueResponse create(String url, String token, String namespace, YuQueCreate yuQueCreate) throws Exception {
 
-        Header header = new BasicHeader("X-Auth-Token", token);
+        Header header = new BasicHeader(TOKEN_HEADER, token);
 
-        String resp = HttpUtils.post(url + "/repos/" + namespace + "/docs/", gson.toJson(yuQueCreate), List.of(header));
+        String resp = HttpUtils.post(url + REPOSITORIES_PATH + namespace + DOCUMENTS_PATH, GSON.toJson(yuQueCreate), List.of(header));
 
         return parseResponse(resp, true);
     }
@@ -50,21 +56,21 @@ public class YuQueFacadeServiceImpl implements YuQueFacadeService {
     @Override
     public YuQueResponse update(String url, String token, String namespace, Long id, YuQueUpdate yuQueUpdate) throws Exception {
 
-        Header header = new BasicHeader("X-Auth-Token", token);
+        Header header = new BasicHeader(TOKEN_HEADER, token);
 
-        String resp = HttpUtils.put(url + "/repos/" + namespace + "/docs/" + id, gson.toJson(yuQueUpdate), List.of(header));
+        String resp = HttpUtils.put(url + REPOSITORIES_PATH + namespace + DOCUMENTS_PATH + id, GSON.toJson(yuQueUpdate), List.of(header));
 
         return parseResponse(resp, true);
     }
     private static YuQueResponse parseResponse(String body, boolean requireSlug) throws Exception {
         try {
-            YuQueResponse response = gson.fromJson(body, YuQueResponse.class);
+            YuQueResponse response = GSON.fromJson(body, YuQueResponse.class);
             if (response != null && response.getData() != null
                     && response.getData().getId() != null && response.getData().getId() > 0
                     && (!requireSlug || StringUtils.isNotBlank(response.getData().getSlug()))) {
                 return response;
             }
-        } catch (com.google.gson.JsonParseException | IllegalStateException exception) {
+        } catch (com.google.gson.JsonParseException | IllegalStateException _) {
             // Malformed JSON may contain credentials or document contents.
         }
         throw new Exception("语雀接口响应无效");

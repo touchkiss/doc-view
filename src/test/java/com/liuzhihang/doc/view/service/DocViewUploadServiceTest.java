@@ -52,7 +52,7 @@ public final class DocViewUploadServiceTest extends LightJavaCodeInsightFixtureT
 
         assertFalse("Upload dispatch must not depend on a localized display label", java.util.Arrays.stream(
                         DocViewUploadService.class.getDeclaredMethods())
-                .anyMatch(method -> method.getName().equals("getInstance")
+                .anyMatch(method -> "getInstance".equals(method.getName())
                         && java.util.Arrays.equals(method.getParameterTypes(), new Class<?>[]{String.class})));
     }
 
@@ -103,7 +103,9 @@ public final class DocViewUploadServiceTest extends LightJavaCodeInsightFixtureT
             ProcessCanceledException cancellation = new ProcessCanceledException();
             Project canceledReadProject = (Project) Proxy.newProxyInstance(Project.class.getClassLoader(),
                     new Class<?>[]{Project.class}, (proxy, method, args) -> {
-                        if (method.getName().equals("isDisposed")) return false;
+                        if ("isDisposed".equals(method.getName())) {
+                            return false;
+                        }
                         if (method.getName().equals("getService") && args != null && args.length == 1
                                 && (args[0] == YApiSettings.class || args[0] == ShowDocSettings.class
                                 || args[0] == YuQueSettings.class)) {

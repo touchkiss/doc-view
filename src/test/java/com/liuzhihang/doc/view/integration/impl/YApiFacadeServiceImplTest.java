@@ -34,8 +34,8 @@ public class YApiFacadeServiceImplTest {
             var uri = new org.apache.http.client.utils.URIBuilder(url);
             assertEquals("/api/interface/list_cat", uri.getPath());
             var params = uri.getQueryParams();
-            assertEquals("1376", params.stream().filter(v -> v.getName().equals("catid")).findFirst().orElseThrow().getValue());
-            assertTrue(params.stream().noneMatch(v -> v.getName().equals("project_id")));
+            assertEquals("1376", params.stream().filter(v -> "catid".equals(v.getName())).findFirst().orElseThrow().getValue());
+            assertTrue(params.stream().noneMatch(v -> "project_id".equals(v.getName())));
             return "{\"errcode\":0,\"data\":{\"count\":1,\"total\":1,\"list\":["
                     + "{\"_id\":4396,\"path\":\"/target\",\"method\":\"GET\"}]}}";
         });
@@ -146,7 +146,7 @@ public class YApiFacadeServiceImplTest {
         service.findInterfaceId("http://yapi.example", 299L, token, 1L, "GET", "/target");
         for (String url : urls) {
             var params = new org.apache.http.client.utils.URIBuilder(url).getQueryParams();
-            assertEquals(token, params.stream().filter(v -> v.getName().equals("token")).findFirst().orElseThrow().getValue());
+            assertEquals(token, params.stream().filter(v -> "token".equals(v.getName())).findFirst().orElseThrow().getValue());
         }
     }
 

@@ -2,6 +2,9 @@ package com.liuzhihang.doc.view.ui;
 
 final class IntegrationSettingValues {
 
+    private static final String URL_PATH_SEPARATOR = "/";
+    private static final String URL_SCHEME_SEPARATOR = "://";
+
     private IntegrationSettingValues() {
     }
 
@@ -15,7 +18,7 @@ final class IntegrationSettingValues {
 
     static String normalizedUrl(String value) {
         String normalized = trimmedOrEmpty(value);
-        while (normalized.endsWith("/") && !normalized.endsWith("://")) {
+        while (normalized.endsWith(URL_PATH_SEPARATOR) && !normalized.endsWith(URL_SCHEME_SEPARATOR)) {
             normalized = normalized.substring(0, normalized.length() - 1);
         }
         return normalized;

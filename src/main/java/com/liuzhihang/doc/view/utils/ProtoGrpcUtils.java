@@ -2,7 +2,6 @@ package com.liuzhihang.doc.view.utils;
 
 import com.intellij.openapi.editor.Editor;
 import com.intellij.openapi.fileTypes.FileType;
-import com.intellij.openapi.fileTypes.FileTypes;
 import com.intellij.psi.*;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
@@ -35,11 +34,6 @@ public final class ProtoGrpcUtils {
     private static final Pattern SERVICE_PATTERN = Pattern.compile(
             "\\s*service\\s+(\\w+)\\s*\\{");
 
-    /**
-     * Pattern to match message definition: message MessageName {
-     */
-    private static final Pattern MESSAGE_PATTERN = Pattern.compile(
-            "\\s*message\\s+(\\w+)\\s*\\{");
 
     /**
      * Pattern to match field definition: type fieldName = number;
@@ -59,12 +53,7 @@ public final class ProtoGrpcUtils {
             return false;
         }
 
-        String line = getCurrentLine(editor);
-        if (line == null) {
-            return false;
-        }
-
-        return RPC_METHOD_PATTERN.matcher(line).find();
+        return RPC_METHOD_PATTERN.matcher(getCurrentLine(editor)).find();
     }
 
     /**
@@ -83,9 +72,9 @@ public final class ProtoGrpcUtils {
      * Extract the current line from editor.
      *
      * @param editor the editor
-     * @return current line text or null
+     * @return current line text
      */
-    @Nullable
+    @NotNull
     public static String getCurrentLine(@NotNull Editor editor) {
         int offset = editor.getCaretModel().getOffset();
         int lineStart = editor.getDocument().getLineStartOffset(
@@ -104,12 +93,7 @@ public final class ProtoGrpcUtils {
      */
     @Nullable
     public static String[] extractMethodSignature(@NotNull Editor editor, @NotNull PsiFile psiFile) {
-        String line = getCurrentLine(editor);
-        if (line == null) {
-            return null;
-        }
-
-        Matcher matcher = RPC_METHOD_PATTERN.matcher(line);
+        Matcher matcher = RPC_METHOD_PATTERN.matcher(getCurrentLine(editor));
         if (!matcher.find()) {
             return null;
         }
@@ -272,23 +256,23 @@ public final class ProtoGrpcUtils {
         // Numeric types
         if (lowerType.contains("int") || lowerType.contains("uint") ||
                 lowerType.contains("sint") || lowerType.contains("fixed") ||
-                lowerType.contains("sfixed") || lowerType.equals("float") ||
-                lowerType.equals("double")) {
+                lowerType.contains("sfixed") || "float".equals(lowerType) ||
+                "double".equals(lowerType)) {
             return "0";
         }
 
         // Boolean
-        if (lowerType.equals("bool")) {
+        if ("bool".equals(lowerType)) {
             return "false";
         }
 
         // String
-        if (lowerType.equals("string")) {
+        if ("string".equals(lowerType)) {
             return "\"\"";
         }
 
         // Bytes
-        if (lowerType.equals("bytes")) {
+        if ("bytes".equals(lowerType)) {
             return "\"\"";
         }
 

@@ -71,14 +71,19 @@ final class SourceCommentActionSupport {
         String mode = settings.getCoverMode();
         var writer = service(WriterService.class);
         String provider = settings.getTranslator();
-        var pending = ReadAction.compute(() -> {
+        var pending = ReadAction.computeBlocking(() -> {
             if (!eligible(element, settings)) {
                 return null;
             }
             Supplier<String> generation;
             if (Consts.AI_TRANSLATOR.contains(provider)) {
                 var model = service(GptService.class);
-                String kind = element instanceof PsiClass ? "class" : element instanceof PsiMethod ? "method" : "field";
+                String kind = "field";
+                if (element instanceof PsiClass) {
+                    kind = "class";
+                } else if (element instanceof PsiMethod) {
+                    kind = "method";
+                }
                 var input = model.captureCommentInput(element, kind, provider);
                 generation = () -> model.requestComment(input);
             } else {
@@ -93,7 +98,7 @@ final class SourceCommentActionSupport {
         ProgressManager.checkCanceled();
         String generated = pending.generation().get();
         ProgressManager.checkCanceled();
-        return ReadAction.compute(() -> {
+        return ReadAction.computeBlocking(() -> {
             var target = pending.target().getElement();
             return projectFile(target) && WriterService.modificationStamp(target.getContainingFile()) == pending.stamp()
                     ? writer.prepareJavadoc(target, generated, mode) : null;

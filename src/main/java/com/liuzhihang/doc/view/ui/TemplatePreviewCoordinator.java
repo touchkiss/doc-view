@@ -6,11 +6,20 @@ import java.util.Objects;
 import java.util.concurrent.Executor;
 import java.util.function.Consumer;
 
-/** Coordinates background template preview work and rejects stale results. */
+/**
+ * Coordinates background template preview work and rejects stale results.
+ */
 public final class TemplatePreviewCoordinator {
 
     @FunctionalInterface
     public interface Renderer {
+        /**
+         * Renders the template for the selected framework.
+         * @param template template text
+         * @param framework target framework
+         * @return rendered markdown
+         * @throws Exception if rendering fails
+         */
         String render(String template, FrameworkEnum framework) throws Exception;
     }
 
@@ -49,11 +58,15 @@ public final class TemplatePreviewCoordinator {
     public synchronized long requestPreview(String template,
                                             FrameworkEnum framework,
                                             Consumer<Result> completion) {
-        if (disposed) return latestRequest;
+        if (disposed) {
+            return latestRequest;
+        }
         long request = ++latestRequest;
         backgroundExecutor.execute(() -> {
             synchronized (TemplatePreviewCoordinator.this) {
-                if (disposed || request != latestRequest) return;
+                if (disposed || request != latestRequest) {
+                    return;
+                }
             }
             Result result;
             try {
@@ -64,7 +77,9 @@ public final class TemplatePreviewCoordinator {
             Result completedResult = result;
             uiExecutor.accept(() -> {
                 synchronized (TemplatePreviewCoordinator.this) {
-                    if (disposed || request != latestRequest) return;
+                    if (disposed || request != latestRequest) {
+                        return;
+                    }
                 }
                 completion.accept(completedResult);
             });

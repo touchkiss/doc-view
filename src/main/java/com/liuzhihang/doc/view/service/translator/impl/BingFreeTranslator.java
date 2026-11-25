@@ -86,7 +86,7 @@ public class BingFreeTranslator extends AbstractTranslator {
                 if (parseAuth(html)) {
                     return;
                 }
-            } catch (Exception e) {
+            } catch (Exception _) {
                 LOGGER.warn("get bing translator page failed,retrying " + i);
             }
         }
@@ -161,7 +161,7 @@ public class BingFreeTranslator extends AbstractTranslator {
             JSONArray response = JSON.parseArray(json);
             return Objects.requireNonNull(response).getJSONObject(0).getJSONArray("translations").getJSONObject(0)
                 .getString("text");
-        } catch (Exception e) {
+        } catch (Exception _) {
             // 凭证可能提前失效，重置后下次调用自动刷新
             token = null;
             LOGGER.warn("bing free translate error: please check your network");

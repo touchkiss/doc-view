@@ -38,7 +38,7 @@ public class GoogleFreeTranslator extends AbstractTranslator {
             json = HttpUtil.get(String.format(url, HttpUtil.encode(text)), getConfig().getTimeout());
             JSONArray jsonArray = JSON.parseArray(json);
             return jsonArray.getJSONArray(0).getJSONArray(0).getString(0);
-        } catch (Exception e) {
+        } catch (Exception _) {
             LOGGER.warn("google free translate error: please check your network");
             return StringUtils.EMPTY;
         }

@@ -89,7 +89,6 @@ public class DubboDocViewServiceImpl implements DocViewService {
         docView.setVersion(CustomPsiCommentUtils.tagDocComment(psiMethod.getDocComment(), "version"));
         docView.setPath(psiClass.getName() + "#" + psiMethod.getName());
         docView.setMethod("Dubbo");
-        // docView.setDomain();
         docView.setType(FrameworkEnum.DUBBO);
 
         // 有参数

@@ -1,0 +1,77 @@
+package com.liuzhihang.doc.view.ui.settings.javadoc.template;
+
+import java.util.Objects;
+import java.util.TreeMap;
+
+import com.intellij.openapi.application.ApplicationManager;
+import com.intellij.openapi.options.ConfigurationException;
+import com.liuzhihang.doc.view.config.EasyDocConfig;
+import com.liuzhihang.doc.view.config.EasyDocConfig.TemplateConfig;
+import com.liuzhihang.doc.view.config.EasyDocConfigComponent;
+import org.apache.commons.lang3.BooleanUtils;
+import org.apache.commons.lang3.StringUtils;
+import org.jetbrains.annotations.Nls;
+
+/**
+ * @author <a href="mailto:wangchao.star@gmail.com">wangchao</a>
+ * @version 1.0.0
+ * @since 2019-11-10 17:35:00
+ */
+public class ClassSettingsConfigurable extends AbstractTemplateConfigurable<ClassSettingsView> {
+    private EasyDocConfig config = ApplicationManager.getApplication().getService(EasyDocConfigComponent.class).getState();
+    /** Lazy: Settings tree instantiates Configurable without building UI */
+    private ClassSettingsView view;
+
+    @Nls
+    @Override
+    public String getDisplayName() {
+        return "EasyDocClassTemplate";
+    }
+
+    @Override
+    public ClassSettingsView getView() {
+        if (view == null) {
+            view = new ClassSettingsView(config);
+        }
+        return view;
+    }
+
+    @Override
+    public boolean isModified() {
+        if (view == null) {
+            return false;
+        }
+        TemplateConfig templateConfig = config.getClassTemplateConfig();
+        return !Objects.equals(templateConfig.getIsDefault(), view.isDefault())
+                || !Objects.equals(templateConfig.getTemplate(), view.getTemplate());
+    }
+
+    @Override
+    public void apply() throws ConfigurationException {
+        ClassSettingsView settingsView = getView();
+        TemplateConfig templateConfig = config.getClassTemplateConfig();
+        templateConfig.setIsDefault(settingsView.isDefault());
+        templateConfig.setTemplate(settingsView.getTemplate());
+        if (templateConfig.getCustomMap() == null) {
+            templateConfig.setCustomMap(new TreeMap<>());
+        }
+        if (!settingsView.isDefault()) {
+            if (StringUtils.isBlank(settingsView.getTemplate())) {
+                throw new ConfigurationException("使用自定义模板，模板不能为空");
+            }
+            String temp = StringUtils.strip(settingsView.getTemplate());
+            if (!temp.startsWith("/**") || !temp.endsWith("*/")) {
+                throw new ConfigurationException("模板格式不正确，正确的javadoc应该以\"/**\"开头，以\"*/\"结束");
+            }
+        }
+    }
+
+    @Override
+    public void reset() {
+        ClassSettingsView settingsView = getView();
+        TemplateConfig templateConfig = config.getClassTemplateConfig();
+        settingsView.setDefault(BooleanUtils.isTrue(templateConfig.getIsDefault()));
+        settingsView.setTemplate(templateConfig.getTemplate());
+    }
+
+}

@@ -31,13 +31,17 @@ public interface DocViewUploadService {
 
     default void upload(@NotNull Project project, @NotNull List<DocView> docViewList) {
         DocViewBackgroundTasks.runTask(project, DocViewBundle.message("task.docview.upload"), true, indicator -> {
-            if (project.isDisposed()) throw new ProcessCanceledException();
+            if (project.isDisposed()) {
+                throw new ProcessCanceledException();
+            }
             if (!checkSettings(project)) {
                 return;
             }
             for (DocView docView : docViewList) {
                 indicator.checkCanceled();
-                if (project.isDisposed()) throw new ProcessCanceledException();
+                if (project.isDisposed()) {
+                    throw new ProcessCanceledException();
+                }
                 doUpload(project, docView);
             }
         }, throwable -> DocViewNotification.notifyError(project, DocViewBundle.message("notify.integration.upload.error")));

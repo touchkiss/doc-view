@@ -16,7 +16,7 @@ import com.intellij.ui.components.JBTextField;
 import com.intellij.util.ui.JBUI;
 import com.liuzhihang.doc.view.service.SourceDescriptionService;
 import com.liuzhihang.doc.view.service.gpt.ModelRequestException;
-import com.liuzhihang.doc.view.view.settings.CommonSettingsConfigurable;
+import com.liuzhihang.doc.view.ui.settings.CommonSettingsConfigurable;
 
 import javax.swing.JButton;
 import javax.swing.JComboBox;

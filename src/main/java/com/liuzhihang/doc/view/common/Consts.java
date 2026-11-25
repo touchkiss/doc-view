@@ -3,7 +3,6 @@ package com.liuzhihang.doc.view.common;
 import java.util.Set;
 
 import com.google.common.collect.ImmutableSet;
-import com.google.common.collect.Sets;
 
 /**
  * 常量
@@ -19,10 +18,10 @@ public final class Consts {
     /**
      * 基础类型集
      */
-    public static final Set<String> BASE_TYPE_SET = Sets.newHashSet("byte", "short", "int", "long", "char", "float",
+    public static final Set<String> BASE_TYPE_SET = Set.of("byte", "short", "int", "long", "char", "float",
         "double", "boolean");
     /** 停止词 */
-    public static final Set<String> STOP_WORDS = Sets.newHashSet("the", "of");
+    public static final Set<String> STOP_WORDS = Set.of("the", "of");
     /** 默认日期格式 */
     public static final String DEFAULT_DATE_FORMAT = "yyyy/MM/dd";
 

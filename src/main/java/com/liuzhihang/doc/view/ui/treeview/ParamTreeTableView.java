@@ -52,11 +52,9 @@ public class ParamTreeTableView extends TreeTableView {
                 @Nullable
                 @Override
                 public Object valueOf(Object o) {
-                    if (o instanceof DefaultMutableTreeNode node) {
-                        if (node.getUserObject() instanceof DocViewParamData paramData) {
-                            return paramData.getType();
-                        }
-
+                    if (o instanceof DefaultMutableTreeNode node
+                            && node.getUserObject() instanceof DocViewParamData paramData) {
+                        return paramData.getType();
                     }
                     return o;
                 }
@@ -72,13 +70,9 @@ public class ParamTreeTableView extends TreeTableView {
                 @Nullable
                 @Override
                 public Object valueOf(Object o) {
-                    if (o instanceof DefaultMutableTreeNode) {
-                        DefaultMutableTreeNode node = (DefaultMutableTreeNode) o;
-                        if (node.getUserObject() instanceof DocViewParamData) {
-                            DocViewParamData paramData = (DocViewParamData) node.getUserObject();
-                            return paramData.getRequired();
-                        }
-
+                    if (o instanceof DefaultMutableTreeNode node
+                            && node.getUserObject() instanceof DocViewParamData paramData) {
+                        return paramData.getRequired();
                     }
                     return o;
                 }
@@ -97,11 +91,9 @@ public class ParamTreeTableView extends TreeTableView {
                 @Nullable
                 @Override
                 public Object valueOf(Object o) {
-                    if (o instanceof DefaultMutableTreeNode node) {
-                        if (node.getUserObject() instanceof DocViewParamData paramData) {
-                            return paramData.getDescription().editableText();
-                        }
-
+                    if (o instanceof DefaultMutableTreeNode node
+                            && node.getUserObject() instanceof DocViewParamData paramData) {
+                        return paramData.getDescription().editableText();
                     }
                     return o;
                 }
@@ -148,10 +140,8 @@ public class ParamTreeTableView extends TreeTableView {
 
         @Override
         public void customizeCellRenderer(@NotNull JTree tree, Object value, boolean selected, boolean expanded, boolean leaf, int row, boolean hasFocus) {
-            if (value instanceof DefaultMutableTreeNode node) {
-                if (node.getUserObject() instanceof DocViewParamData paramData) {
-                    append(paramData.getName() == null ? "" : paramData.getName());
-                }
+            if (value instanceof DefaultMutableTreeNode node && node.getUserObject() instanceof DocViewParamData paramData) {
+                append(paramData.getName() == null ? "" : paramData.getName());
             }
         }
 
@@ -205,7 +195,8 @@ public class ParamTreeTableView extends TreeTableView {
         if (!super.editCellAt(row, column, event)) {
             return false;
         }
-        if (column == SOURCE_COMMENT_COLUMN && (!wasEditing || descriptionEdit == null)) {
+        boolean needsDescriptionEdit = !wasEditing || descriptionEdit == null;
+        if (column == SOURCE_COMMENT_COLUMN && needsDescriptionEdit) {
             var data = (DocViewParamData) getValueAt(row, ACTIONS_COLUMN);
             String displayed = data.getDescription().editableText();
             var commit = beginDescriptionEdit.apply(data);
@@ -263,8 +254,9 @@ public class ParamTreeTableView extends TreeTableView {
                 return paramData.getDescription().supplementaryText();
             case ACTIONS_COLUMN:
                 return paramData;
+            default:
+                return "";
         }
-        return "";
     }
 
 

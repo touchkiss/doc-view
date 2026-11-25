@@ -29,12 +29,14 @@ public final class BatchMarkdownExportWriter {
             throw new IOException("Export destination is not a directory");
         }
 
-        List<Path> targets = new ArrayList<>();
+        List<Path> targets = new ArrayList<>(files.size());
         for (BatchMarkdownExportFile file : files) {
             String name = file.fileName();
             Path relative = Path.of(name);
-            if (name.isBlank() || relative.isAbsolute() || relative.getNameCount() != 1
-                    || name.equals(".") || name.equals("..") || name.contains("/") || name.contains("\\")) {
+            boolean invalidPath = relative.isAbsolute() || relative.getNameCount() != 1
+                    || ".".equals(name) || "..".equals(name);
+            boolean containsSeparator = name.contains("/") || name.contains("\\");
+            if (name.isBlank() || invalidPath || containsSeparator) {
                 throw new IOException("Export file name is invalid");
             }
             Path target = directory.resolve(relative);

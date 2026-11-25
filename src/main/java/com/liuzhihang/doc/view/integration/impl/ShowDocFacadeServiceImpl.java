@@ -8,18 +8,18 @@ import com.liuzhihang.doc.view.integration.dto.ShowDocUpdateResponse;
 import com.liuzhihang.doc.view.utils.HttpUtils;
 
 public class ShowDocFacadeServiceImpl implements ShowDocFacadeService {
-    private static final Gson gson = new GsonBuilder().serializeNulls().create();
+    private static final Gson GSON = new GsonBuilder().serializeNulls().create();
 
     @Override
     public ShowDocUpdateResponse updateByApi(ShowDocUpdateRequest request) throws Exception {
-        String body = HttpUtils.post(request.getShowDocUrl() + "/api/item/updateByApi", gson.toJson(request));
+        String body = HttpUtils.post(request.getShowDocUrl() + "/api/item/updateByApi", GSON.toJson(request));
         try {
-            ShowDocUpdateResponse response = gson.fromJson(body, ShowDocUpdateResponse.class);
+            ShowDocUpdateResponse response = GSON.fromJson(body, ShowDocUpdateResponse.class);
             if (response != null && "0".equals(response.getErrorCode()) && response.getData() != null
                     && positiveId(response.getData().getItemId()) && positiveId(response.getData().getPageId())) {
                 return response;
             }
-        } catch (RuntimeException exception) {
+        } catch (RuntimeException _) {
             // Do not retain parser exceptions containing remote data.
         }
         throw new Exception("ShowDoc 接口响应失败或数据无效");

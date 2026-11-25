@@ -2,7 +2,6 @@ package com.liuzhihang.doc.view.service.translator;
 
 import com.intellij.psi.PsiElement;
 import com.liuzhihang.doc.view.config.EasyDocConfig;
-import java.util.Map;
 
 /**
  * 翻译

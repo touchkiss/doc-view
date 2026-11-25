@@ -26,6 +26,10 @@ import java.util.function.Supplier;
  * @date 2020/11/15 14:58
  */
 public class ExportUtils {
+    private ExportUtils() {}
+
+    private static final String EXPORT_FAILURE_MESSAGE = "notify.export.fail";
+
 
     public static void exportMarkdown(Project project, String fileName, String markdownText) {
 
@@ -48,7 +52,7 @@ public class ExportUtils {
                 FileUtil.writeToFile(file, markdownText);
                 DocViewNotification.notifyInfo(project, DocViewBundle.message("notify.export.success"));
             } catch (IOException ioException) {
-                DocViewNotification.notifyError(project, DocViewBundle.message("notify.export.fail"));
+                DocViewNotification.notifyError(project, DocViewBundle.message(EXPORT_FAILURE_MESSAGE));
             }
 
         }
@@ -87,9 +91,9 @@ public class ExportUtils {
                                         () -> DocViewNotification.notifyInfo(project,
                                                 DocViewBundle.message("notify.export.success")));
                             }, throwable -> DocViewNotification.notifyError(project,
-                                    DocViewBundle.message("notify.export.fail")));
+                                    DocViewBundle.message(EXPORT_FAILURE_MESSAGE)));
                 }, throwable -> DocViewNotification.notifyError(project,
-                        DocViewBundle.message("notify.export.fail")));
+                        DocViewBundle.message(EXPORT_FAILURE_MESSAGE)));
     }
 
     static List<BatchMarkdownExportFile> renderBatch(Project project,

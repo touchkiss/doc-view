@@ -100,6 +100,7 @@ public class McpServerServiceTest {
             first.get();
             second.get();
         } finally {
+            releaseStart.countDown();
             callers.shutdownNow();
         }
 

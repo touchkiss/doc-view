@@ -50,7 +50,7 @@ public class LocalTranslator extends AbstractTranslator {
             }
             String json = IOUtils.toString(resource, StandardCharsets.UTF_8);
             Map<String, String> words = JSON.parseObject(json, new TypeReference<Map<String, String>>() {});
-            Map<String, String> reverse = new HashMap<>();
+            Map<String, String> reverse = new HashMap<>(words.size());
             words.forEach((word, meaning) -> reverse.putIfAbsent(meaning, word));
             return new Dictionary(Map.copyOf(words), Map.copyOf(reverse));
         } catch (IOException e) {

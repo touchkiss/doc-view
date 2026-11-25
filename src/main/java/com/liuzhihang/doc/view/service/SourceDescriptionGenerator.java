@@ -13,13 +13,18 @@ import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
 final class SourceDescriptionGenerator {
+    private static final char CLASS_BODY_START = '{';
+    private static final String CODE_FENCE = "```";
+
     private SourceDescriptionGenerator() {}
 
     static Supplier<String> prepare(SourceDescriptionService.Draft draft, PsiJavaDocumentedElement owner, String instructions) {
         var app = ApplicationManager.getApplication();
         String provider = app.getService(EasyDocConfigComponent.class).getState().getTranslator();
-        String name = draft.target().paramName() != null ? draft.target().paramName()
-                : owner instanceof PsiNamedElement named ? named.getName() : "";
+        String name = draft.target().paramName();
+        if (name == null) {
+            name = owner instanceof PsiNamedElement named ? named.getName() : "";
+        }
         if (!Consts.AI_TRANSLATOR.contains(provider)) {
             return app.getService(TranslatorService.class).prepareTranslation(name == null ? "" : name, owner);
         }
@@ -30,8 +35,8 @@ final class SourceDescriptionGenerator {
         if (existing != null && source.startsWith(existing.getText())) {
             source = source.substring(existing.getTextLength()).stripLeading();
         }
-        if (owner instanceof PsiClass && source.contains("{")) {
-            source = source.substring(0, source.indexOf('{')).stripTrailing();
+        if (owner instanceof PsiClass && source.indexOf(CLASS_BODY_START) >= 0) {
+            source = source.substring(0, source.indexOf(CLASS_BODY_START)).stripTrailing();
         }
         String prompt = model.withProjectTerms(owner, source, """
                 根据下面的 Java 声明，为选中的条目写一段准确、简短的中文说明。
@@ -48,10 +53,10 @@ final class SourceDescriptionGenerator {
 
     private static String descriptionText(String response) {
         String text = response == null ? "" : response.strip();
-        if (text.startsWith("```") && text.endsWith("```")) {
+        if (text.startsWith(CODE_FENCE) && text.endsWith(CODE_FENCE)) {
             int firstLine = text.indexOf('\n');
-            if (firstLine >= 0 && firstLine < text.length() - 3) {
-                text = text.substring(firstLine + 1, text.length() - 3).strip();
+            if (firstLine >= 0 && firstLine < text.length() - CODE_FENCE.length()) {
+                text = text.substring(firstLine + 1, text.length() - CODE_FENCE.length()).strip();
             }
         }
         if (WriterService.isBlockComment(text)) {

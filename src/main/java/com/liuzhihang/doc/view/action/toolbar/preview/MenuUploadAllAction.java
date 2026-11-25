@@ -1,7 +1,6 @@
 package com.liuzhihang.doc.view.action.toolbar.preview;
 
 import com.intellij.openapi.actionSystem.AnActionEvent;
-import com.intellij.openapi.actionSystem.PlatformDataKeys;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.ui.popup.JBPopup;
 import com.liuzhihang.doc.view.action.toolbar.AbstractToolbarUploadAction;
@@ -25,7 +24,7 @@ public class MenuUploadAllAction extends AbstractToolbarUploadAction {
     public void actionPerformed(@NotNull AnActionEvent e) {
 
         // 获取当前project对象
-        Project project = e.getData(PlatformDataKeys.PROJECT);
+        Project project = e.getProject();
         JBPopup popup = e.getData(DocViewDataKeys.PREVIEW_POPUP);
         List<DocView> docViewList = e.getData(DocViewDataKeys.PREVIEW_DOC_VIEW_LIST);
         JPanel previewToolbarPanel = e.getData(DocViewDataKeys.PREVIEW_TOOLBAR_PANEL);

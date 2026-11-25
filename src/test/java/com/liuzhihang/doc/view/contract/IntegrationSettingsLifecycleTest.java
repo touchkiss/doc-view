@@ -11,7 +11,7 @@ import org.jdom.Element;
 import java.util.Arrays;
 import com.liuzhihang.doc.view.config.ShowDocSettings;
 import com.liuzhihang.doc.view.config.YApiSettings;
-import com.liuzhihang.doc.view.config.YApiSettingsConfigurable;
+import com.liuzhihang.doc.view.ui.settings.YApiSettingsConfigurable;
 import com.liuzhihang.doc.view.config.YuQueSettings;
 import com.liuzhihang.doc.view.ui.ShowDocSettingForm;
 import com.liuzhihang.doc.view.ui.YApiSettingForm;
@@ -24,6 +24,8 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 public final class IntegrationSettingsLifecycleTest extends LightJavaCodeInsightFixtureTestCase {
+    private static final Pattern YAPI_CONFIGURABLE_ID = Pattern.compile("instance=\"com\\.liuzhihang\\.doc\\.view\\.ui\\.settings\\.YApiSettingsConfigurable\"\\s+id=\"([^\"]+)\"");
+
 
     private ShowDocSettings showDocSettings;
     private YApiSettings yApiSettings;
@@ -373,7 +375,7 @@ public final class IntegrationSettingsLifecycleTest extends LightJavaCodeInsight
 
     public void testYApiDescriptorIdMatchesConfigurableId() throws Exception {
         String descriptor = Files.readString(Path.of("src/main/resources/META-INF/plugin.xml"));
-        Matcher matcher = Pattern.compile("instance=\"com\\.liuzhihang\\.doc\\.view\\.config\\.YApiSettingsConfigurable\"\\s+id=\"([^\"]+)\"")
+        Matcher matcher = YAPI_CONFIGURABLE_ID
                 .matcher(descriptor);
         assertTrue("YApi configurable should be registered in plugin.xml", matcher.find());
         assertEquals("liuzhihang.api.doc.YApiSettingsConfigurable",
@@ -451,7 +453,9 @@ public final class IntegrationSettingsLifecycleTest extends LightJavaCodeInsight
     private static void loadCredential(PersistentStateComponent model, String name, String value) {
         Element state = XmlSerializer.serialize(model.getState());
         for (Element option : java.util.List.copyOf(state.getChildren("option"))) {
-            if (name.equals(option.getAttributeValue("name"))) state.removeContent(option);
+            if (name.equals(option.getAttributeValue("name"))) {
+                state.removeContent(option);
+            }
         }
         state.addContent(new Element("option").setAttribute("name", name).setAttribute("value", value));
         model.loadState(XmlSerializer.deserialize(state, model.getClass()));
@@ -461,7 +465,9 @@ public final class IntegrationSettingsLifecycleTest extends LightJavaCodeInsight
         Element state = XmlSerializer.serialize(model.getState());
         String actual = null;
         for (Element option : state.getChildren("option")) {
-            if (name.equals(option.getAttributeValue("name"))) actual = option.getAttributeValue("value");
+            if (name.equals(option.getAttributeValue("name"))) {
+                actual = option.getAttributeValue("value");
+            }
         }
         assertEquals("Project XML must contain the saved " + name, expected, actual);
     }

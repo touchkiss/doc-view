@@ -129,7 +129,7 @@ public final class PreviewLifecycleTest extends LightJavaCodeInsightFixtureTestC
         java.util.concurrent.atomic.AtomicInteger backgroundReads = new java.util.concurrent.atomic.AtomicInteger();
         PsiClass guarded = (PsiClass) java.lang.reflect.Proxy.newProxyInstance(PsiClass.class.getClassLoader(),
                 new Class<?>[]{PsiClass.class}, (proxy, method, arguments) -> {
-                    if (method.getName().equals("getQualifiedName") || method.getName().equals("getName")) {
+                    if ("getQualifiedName".equals(method.getName()) || "getName".equals(method.getName())) {
                         if (ApplicationManager.getApplication().isDispatchThread()) {
                             edtReads.incrementAndGet();
                         } else {
@@ -448,8 +448,12 @@ public final class PreviewLifecycleTest extends LightJavaCodeInsightFixtureTestC
                 replaceListService(serviceOwner, () -> {
                     started.countDown();
                     try {
-                        if (!release.await(5, TimeUnit.SECONDS)) throw new AssertionError("Test did not release list task");
-                        if (fail) throw new IllegalStateException("late list failure");
+                        if (!release.await(5, TimeUnit.SECONDS)) {
+                            throw new AssertionError("Test did not release list task");
+                        }
+                        if (fail) {
+                            throw new IllegalStateException("late list failure");
+                        }
                         return List.of();
                     } catch (InterruptedException exception) {
                         Thread.currentThread().interrupt();

@@ -16,16 +16,23 @@ public final class Json5BodyInjector implements MultiHostInjector {
     }
     @Override public void getLanguagesToInject(MultiHostRegistrar registrar, PsiElement context) {
         HttpRequest request = PsiTreeUtil.getParentOfType(context, HttpRequest.class);
-        if (!HttpJsonBodies.isSupported(request) || !JsonBodyNormalizer.isJsonMediaType(request.getMimeType())) return;
+        if (!HttpJsonBodies.isSupported(request) || !JsonBodyNormalizer.isJsonMediaType(request.getMimeType())) {
+            return;
+        }
         for (var message : ((HttpRequestMessagesGroup) context).getRequestMessageList()) {
-            if (!(message instanceof HttpMessageBody body)) continue;
+            if (!(message instanceof HttpMessageBody body)) {
+                continue;
+            }
             var range = body.getContentRange();
             String text = range.substring(body.getText());
             var places = HttpRequestBodyInjector.injectBody(body, text, null, range.getStartOffset());
-            if (places.isEmpty()) continue;
-            registrar.startInjecting(Json5Language.INSTANCE);
-            for (var place : places) registrar.addPlace(place.getPrefix(), place.getSuffix(), place.getHost(), place.getRangeInsideHost());
-            registrar.doneInjecting();
+            if (!places.isEmpty()) {
+                registrar.startInjecting(Json5Language.INSTANCE);
+                for (var place : places) {
+                    registrar.addPlace(place.getPrefix(), place.getSuffix(), place.getHost(), place.getRangeInsideHost());
+                }
+                registrar.doneInjecting();
+            }
         }
     }
 }

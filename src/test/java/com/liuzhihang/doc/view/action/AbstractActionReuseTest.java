@@ -62,8 +62,12 @@ public final class AbstractActionReuseTest extends LightJavaCodeInsightFixtureTe
         var second = myFixture.addClass("class Second {}");
         myFixture.configureByText("Other.java", "class Other { void <caret>unrelated() {} }");
         invoke(ActionPlaces.PROJECT_VIEW_POPUP, key -> {
-            if (PlatformCoreDataKeys.PSI_ELEMENT_ARRAY.is(key)) return new PsiElement[]{first, second};
-            if (CommonDataKeys.PSI_ELEMENT.is(key)) return first;
+            if (PlatformCoreDataKeys.PSI_ELEMENT_ARRAY.is(key)) {
+                return new PsiElement[]{first, second};
+            }
+            if (CommonDataKeys.PSI_ELEMENT.is(key)) {
+                return first;
+            }
             return editorContext().getData(key);
         });
         assertEmpty(action.targets);
@@ -73,8 +77,12 @@ public final class AbstractActionReuseTest extends LightJavaCodeInsightFixtureTe
         var selected = myFixture.addClass("class Sidebar {}");
         myFixture.configureByText("Other.java", "class Other { void <caret>unrelated() {} }");
         invoke(ActionPlaces.KEYBOARD_SHORTCUT, key -> {
-            if (PlatformDataKeys.TOOL_WINDOW_ID.is(key)) return ToolWindowId.PROJECT_VIEW;
-            if (CommonDataKeys.PSI_ELEMENT.is(key)) return selected;
+            if (PlatformDataKeys.TOOL_WINDOW_ID.is(key)) {
+                return ToolWindowId.PROJECT_VIEW;
+            }
+            if (CommonDataKeys.PSI_ELEMENT.is(key)) {
+                return selected;
+            }
             return editorContext().getData(key);
         });
         assertSame(selected, assertOneElement(action.targets).type());
@@ -145,9 +153,15 @@ public final class AbstractActionReuseTest extends LightJavaCodeInsightFixtureTe
 
     private DataContext editorContext() {
         return key -> {
-            if (CommonDataKeys.PROJECT.is(key)) return getProject();
-            if (CommonDataKeys.PSI_FILE.is(key)) return myFixture.getFile();
-            if (CommonDataKeys.EDITOR.is(key)) return myFixture.getEditor();
+            if (CommonDataKeys.PROJECT.is(key)) {
+                return getProject();
+            }
+            if (CommonDataKeys.PSI_FILE.is(key)) {
+                return myFixture.getFile();
+            }
+            if (CommonDataKeys.EDITOR.is(key)) {
+                return myFixture.getEditor();
+            }
             return null;
         };
     }

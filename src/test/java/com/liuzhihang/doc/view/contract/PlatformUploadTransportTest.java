@@ -61,7 +61,7 @@ public final class PlatformUploadTransportTest extends LightPlatformTestCase {
             if (dropConnection) { exchange.close(); return; }
             byte[] bytes = response.getBytes(StandardCharsets.UTF_8);
             int code = status;
-            if (redirect && !exchange.getRequestURI().getPath().equals("/redirect-target")) {
+            if (redirect && !"/redirect-target".equals(exchange.getRequestURI().getPath())) {
                 code = 302;
                 exchange.getResponseHeaders().set("Location", base + "/redirect-target");
             } else if (redirect) {
@@ -85,8 +85,12 @@ public final class PlatformUploadTransportTest extends LightPlatformTestCase {
     @Override
     protected void tearDown() throws Exception {
         try {
-            if (server != null) server.stop(0);
-            if (executor != null) executor.shutdownNow();
+            if (server != null) {
+                server.stop(0);
+            }
+            if (executor != null) {
+                executor.shutdownNow();
+            }
         } finally {
             super.tearDown();
         }

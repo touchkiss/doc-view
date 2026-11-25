@@ -16,9 +16,13 @@ public final class RuntimeInstaller implements Disposable {
     public RuntimeInstaller() {
         point = RequestExecutionSupport.All.getEP_NAME().getPoint();
         for (var support : point.getExtensionList()) {
-            if (support.getClass() == HttpRequestRunSupport.class) originals.add(support);
+            if (support.getClass() == HttpRequestRunSupport.class) {
+                originals.add(support);
+            }
         }
-        if (originals.size() != 1) throw new IllegalStateException("Doc View JSON5 support requires exactly one native HTTP run support");
+        if (originals.size() != 1) {
+            throw new IllegalStateException("Doc View JSON5 support requires exactly one native HTTP run support");
+        }
         originals.forEach(point::unregisterExtension);
         point.registerExtension(replacement);
     }

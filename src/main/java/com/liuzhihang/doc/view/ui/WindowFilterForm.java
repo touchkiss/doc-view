@@ -30,12 +30,12 @@ public class WindowFilterForm {
         this.project = project;
         this.windowSettings = WindowSettings.getInstance(project);
 
-        initUI();
+        initUi();
         initFilterPane();
         initFilterListener();
     }
 
-    private void initUI() {
+    private void initUi() {
 
         scopePanel.setBorder(IdeBorderFactory.createTitledBorder(DocViewBundle.message("settings.window.scope")));
         otherSettingsPanel.setBorder(IdeBorderFactory.createTitledBorder(DocViewBundle.message("settings.window.other")));

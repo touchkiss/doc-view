@@ -65,14 +65,10 @@ public class PojoUtils extends ParamPsiUtils {
             fieldMap.put(name, PsiTypesUtil.getDefaultValue(type));
         } else if (FieldTypeConstant.FIELD_TYPE.containsKey(type.getPresentableText())) {
             fieldMap.put(name, FieldTypeConstant.FIELD_TYPE.get(type.getPresentableText()));
+        } else if (psiClass.isRecord()) {
+            fieldMap = ParamPsiUtils.getFieldsAndDefaultValueForRecord(psiClass, null);
         } else {
-            if (psiClass != null) {
-                if (psiClass.isRecord()) {
-                    fieldMap = ParamPsiUtils.getFieldsAndDefaultValueForRecord(psiClass, null);
-                } else {
-                    fieldMap = ParamPsiUtils.getFieldsAndDefaultValue(psiClass, null);
-                }
-            }
+            fieldMap = ParamPsiUtils.getFieldsAndDefaultValue(psiClass, null);
         }
 
         return GsonFormatUtil.gsonFormat(fieldMap);

@@ -12,6 +12,8 @@ import java.util.Objects;
  * @since 2021/12/16
  */
 public class StorageUtils {
+    private StorageUtils() {}
+
 
     public static Path getConfigDir(Project project) {
         Path configDir = ProjectKt.getStateStore(project).getDirectoryStorePath();

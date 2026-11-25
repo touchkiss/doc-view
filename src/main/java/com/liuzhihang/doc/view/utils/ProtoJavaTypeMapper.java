@@ -23,6 +23,10 @@ import java.util.StringJoiner;
  * @author liuzhihang
  */
 public final class ProtoJavaTypeMapper {
+    private static final String INTEGER_TYPE = "Integer";
+
+    private static final String STRING_TYPE = "String";
+
 
     /**
      * 无法解析类型时使用的 Java 类型
@@ -42,19 +46,19 @@ public final class ProtoJavaTypeMapper {
 
     static {
         // Timestamp/Duration/FieldMask 的 JSON 表示都是字符串
-        WELL_KNOWN_TYPES.put("Timestamp", "String");
-        WELL_KNOWN_TYPES.put("Duration", "String");
-        WELL_KNOWN_TYPES.put("FieldMask", "String");
+        WELL_KNOWN_TYPES.put("Timestamp", STRING_TYPE);
+        WELL_KNOWN_TYPES.put("Duration", STRING_TYPE);
+        WELL_KNOWN_TYPES.put("FieldMask", STRING_TYPE);
         // wrapper 类型的 JSON 表示就是被包装的标量本身
-        WELL_KNOWN_TYPES.put("Int32Value", "Integer");
-        WELL_KNOWN_TYPES.put("UInt32Value", "Integer");
+        WELL_KNOWN_TYPES.put("Int32Value", INTEGER_TYPE);
+        WELL_KNOWN_TYPES.put("UInt32Value", INTEGER_TYPE);
         WELL_KNOWN_TYPES.put("Int64Value", "Long");
         WELL_KNOWN_TYPES.put("UInt64Value", "Long");
         WELL_KNOWN_TYPES.put("FloatValue", "Float");
         WELL_KNOWN_TYPES.put("DoubleValue", "Double");
         WELL_KNOWN_TYPES.put("BoolValue", "Boolean");
-        WELL_KNOWN_TYPES.put("StringValue", "String");
-        WELL_KNOWN_TYPES.put("BytesValue", "String");
+        WELL_KNOWN_TYPES.put("StringValue", STRING_TYPE);
+        WELL_KNOWN_TYPES.put("BytesValue", STRING_TYPE);
         // 自由结构, 无法给出固定字段
         WELL_KNOWN_TYPES.put("Struct", UNKNOWN_JAVA_TYPE);
         WELL_KNOWN_TYPES.put("Value", UNKNOWN_JAVA_TYPE);
@@ -78,13 +82,13 @@ public final class ProtoJavaTypeMapper {
             return UNKNOWN_JAVA_TYPE;
         }
         return switch (builtInType) {
-            case INT32, SINT32, SFIXED32, FIXED32, UINT32 -> "Integer";
+            case INT32, SINT32, SFIXED32, FIXED32, UINT32 -> INTEGER_TYPE;
             case INT64, SINT64, SFIXED64, FIXED64, UINT64 -> "Long";
             case DOUBLE -> "Double";
             case FLOAT -> "Float";
             case BOOL -> "Boolean";
             // bytes 的 JSON 表示是 base64 字符串
-            case STRING, BYTES -> "String";
+            case STRING, BYTES -> STRING_TYPE;
         };
     }
 

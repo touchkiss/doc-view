@@ -98,7 +98,9 @@ public final class Json5ExampleRenderer {
             return type;
         }
         int dimensions = arrayDimensions(type);
-        if (dimensions > 0) return type.trim().substring(0, type.trim().length() - dimensions * 2).trim();
+        if (dimensions > 0) {
+            return type.trim().substring(0, type.trim().length() - dimensions * 2).trim();
+        }
         int lt = type.indexOf('<');
         int gt = type.lastIndexOf('>');
         if (lt < 0 || gt < 0 || gt <= lt) {
@@ -114,7 +116,9 @@ public final class Json5ExampleRenderer {
     }
 
     private static int arrayDimensions(String type) {
-        if (type == null) return 0;
+        if (type == null) {
+            return 0;
+        }
         String value = type.trim();
         int dimensions = 0;
         while (value.endsWith("[]")) {

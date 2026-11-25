@@ -31,48 +31,43 @@ import org.apache.commons.lang3.StringUtils;
  */
 public class TranslatorService {
 
-    private volatile EasyDocConfig config;
+    private EasyDocConfig config;
     private Map<String, Translator> translatorMap;
-    private static final Object LOCK = new Object();
 
     /**
      * 初始化
      *
      * @param config 配置
      */
-    public void init(EasyDocConfig config) {
-        if (translatorMap != null && this.config != null) {
+    public synchronized void init(EasyDocConfig config) {
+        if (this.config != null) {
             return;
         }
-        synchronized (LOCK) {
-            if (translatorMap != null && this.config != null) {
-                return;
-            }
-            translatorMap = ImmutableMap.<String, Translator>builder()
-                .put(Consts.BAIDU_TRANSLATOR, new BaiduTranslator().init(config))
-                .put(Consts.ALIYUN_TRANSLATOR, new AliyunTranslator().init(config))
-                .put(Consts.TENCENT_TRANSLATOR, new TencentTranslator().init(config))
-                .put(Consts.JINSHAN_TRANSLATOR, new JinshanTranslator().init(config))
-                .put(Consts.YOUDAO_AI_TRANSLATOR, new YoudaoAiTranslator().init(config))
-                .put(Consts.YOUDAO_TRANSLATOR, new YoudaoTranslator().init(config))
-                .put(Consts.MICROSOFT_TRANSLATOR, new MicrosoftTranslator().init(config))
-                .put(Consts.MICROSOFT_FREE_TRANSLATOR, new BingFreeTranslator().init(config))
-                .put(Consts.GOOGLE_TRANSLATOR, new GoogleTranslator().init(config))
-                .put(Consts.GOOGLE_FREE_TRANSLATOR, new GoogleFreeTranslator().init(config))
-                .put(Consts.SIMPLE_SPLITTER, new SimpleSplitterTranslator().init(config))
-                .put(Consts.LOCAL_DICTIONARY, new LocalTranslator().init(config))
-                .put(Consts.CUSTOM_URL, new CustomTranslator().init(config))
-                .put(Consts.OPENAI_GPT, new OpenAiTranslator().init(config))
-                .put(Consts.CHATGLM_GPT, new OpenAiTranslator().init(config))
-                .build();
-            this.config = config;
-        }
+        Objects.requireNonNull(config, "config");
+        translatorMap = ImmutableMap.<String, Translator>builder()
+            .put(Consts.BAIDU_TRANSLATOR, new BaiduTranslator().init(config))
+            .put(Consts.ALIYUN_TRANSLATOR, new AliyunTranslator().init(config))
+            .put(Consts.TENCENT_TRANSLATOR, new TencentTranslator().init(config))
+            .put(Consts.JINSHAN_TRANSLATOR, new JinshanTranslator().init(config))
+            .put(Consts.YOUDAO_AI_TRANSLATOR, new YoudaoAiTranslator().init(config))
+            .put(Consts.YOUDAO_TRANSLATOR, new YoudaoTranslator().init(config))
+            .put(Consts.MICROSOFT_TRANSLATOR, new MicrosoftTranslator().init(config))
+            .put(Consts.MICROSOFT_FREE_TRANSLATOR, new BingFreeTranslator().init(config))
+            .put(Consts.GOOGLE_TRANSLATOR, new GoogleTranslator().init(config))
+            .put(Consts.GOOGLE_FREE_TRANSLATOR, new GoogleFreeTranslator().init(config))
+            .put(Consts.SIMPLE_SPLITTER, new SimpleSplitterTranslator().init(config))
+            .put(Consts.LOCAL_DICTIONARY, new LocalTranslator().init(config))
+            .put(Consts.CUSTOM_URL, new CustomTranslator().init(config))
+            .put(Consts.OPENAI_GPT, new OpenAiTranslator().init(config))
+            .put(Consts.CHATGLM_GPT, new OpenAiTranslator().init(config))
+            .build();
+        this.config = config;
     }
 
     /**
      * 确保已初始化，如果未初始化则自动加载配置
      */
-    private void ensureInitialized() {
+    private synchronized void ensureInitialized() {
         if (this.config == null) {
             EasyDocConfig easyDocConfig = ApplicationManager.getApplication().getService(EasyDocConfigComponent.class).getState();
             init(easyDocConfig);
@@ -209,13 +204,11 @@ public class TranslatorService {
         }
         StringBuilder sb = new StringBuilder();
         for (int i = 0; i < chList.size(); i++) {
-            if (StringUtils.isBlank(chList.get(i))) {
+            if (StringUtils.isBlank(chList.get(i))
+                    || Consts.STOP_WORDS.contains(chList.get(i).toLowerCase())) {
                 continue;
             }
-            if (Consts.STOP_WORDS.contains(chList.get(i).toLowerCase())) {
-                continue;
-            }
-            if (sb.length() == 0) {
+            if (sb.isEmpty()) {
                 sb.append(chList.get(i).toLowerCase());
             } else {
                 String lowCh = chList.get(i).toLowerCase();

@@ -55,7 +55,7 @@ public class YoudaoAiTranslator extends AbstractTranslator {
             json = HttpUtil.get(YOUDAO_URL, params, getConfig().getTimeout());
             YoudaoAiResponse response = JSON.parseObject(json, YoudaoAiResponse.class);
             return Objects.requireNonNull(response).getTranslation().get(0);
-        } catch (Exception e) {
+        } catch (Exception _) {
             LOGGER.warn("youdao ai translate error: please check your appkey and network");
             return StringUtils.EMPTY;
         }
@@ -82,7 +82,7 @@ public class YoudaoAiTranslator extends AbstractTranslator {
                 str[k++] = hexDigits[byte0 & 0xf];
             }
             return new String(str);
-        } catch (NoSuchAlgorithmException e) {
+        } catch (NoSuchAlgorithmException _) {
             return null;
         }
     }

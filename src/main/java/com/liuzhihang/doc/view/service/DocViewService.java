@@ -77,6 +77,12 @@ public interface DocViewService {
 
     }
 
+    /**
+     * 判断方法是否支持生成文档。
+     *
+     * @param targetMethod 待检查的方法
+     * @return 支持时返回 true
+     */
     boolean checkMethod(@NotNull PsiMethod targetMethod);
 
     /**

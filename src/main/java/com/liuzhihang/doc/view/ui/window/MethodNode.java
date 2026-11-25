@@ -84,7 +84,7 @@ public class MethodNode extends DocViewNode {
 
     @Override
     public void updateNode(Project project) {
-
+        // Method nodes are leaves and have no cached children to refresh.
     }
 
     @Override
@@ -102,11 +102,6 @@ public class MethodNode extends DocViewNode {
         ClassNode classNode = (ClassNode) getParent();
 
         return classNode.httpPath(project) + "/" + DocViewUtils.getName(psiMethod) + ".http";
-    }
-
-    @Override
-    public void handleSelection(SimpleTree tree) {
-        super.handleSelection(tree);
     }
 
     /**

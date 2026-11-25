@@ -4,7 +4,9 @@ package com.liuzhihang.doc.view.integration;
 public final class YApiRemoteException extends Exception {
 
     public enum Kind {
+        /** The remote operation failed. */
         REQUEST_FAILED,
+        /** The remote response did not match its contract. */
         RESPONSE_INVALID
     }
 

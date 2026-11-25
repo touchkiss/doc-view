@@ -20,6 +20,8 @@ import java.util.List;
  * @date 2021/10/23 17:38
  */
 public class FeignPsiUtil {
+    private FeignPsiUtil() {}
+
 
     /**
      * 检查类或者接口是否是 Feign 接口
@@ -42,8 +44,8 @@ public class FeignPsiUtil {
             PsiModifierList psiModifierList = (PsiModifierList) psiAnnotation.getParent();
             PsiElement psiElement = psiModifierList.getParent();
 
-            if (psiElement instanceof PsiClass && isFeignClass((PsiClass) psiElement)) {
-                psiClasses.add((PsiClass) psiElement);
+            if (psiElement instanceof PsiClass psiClass && isFeignClass(psiClass)) {
+                psiClasses.add(psiClass);
             }
         }
         return psiClasses;

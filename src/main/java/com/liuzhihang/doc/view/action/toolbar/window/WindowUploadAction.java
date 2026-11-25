@@ -1,7 +1,6 @@
 package com.liuzhihang.doc.view.action.toolbar.window;
 
 import com.intellij.openapi.actionSystem.AnActionEvent;
-import com.intellij.openapi.actionSystem.PlatformDataKeys;
 import com.intellij.openapi.project.DumbService;
 import com.intellij.openapi.project.Project;
 import com.liuzhihang.doc.view.DocViewBundle;
@@ -22,7 +21,7 @@ public class WindowUploadAction extends AbstractToolbarUploadAction {
 
     @Override
     public void update(@NotNull AnActionEvent e) {
-        Project project = e.getData(PlatformDataKeys.PROJECT);
+        Project project = e.getProject();
         boolean available = project != null
                 && !project.isDisposed()
                 && !DumbService.isDumb(project)
@@ -35,7 +34,7 @@ public class WindowUploadAction extends AbstractToolbarUploadAction {
     public void actionPerformed(@NotNull AnActionEvent e) {
 
         // 获取当前project对象
-        Project project = e.getData(PlatformDataKeys.PROJECT);
+        Project project = e.getProject();
         JComponent toolbar = e.getData(DocViewDataKeys.WINDOW_TOOLBAR);
         RootNode rootNode = e.getData(DocViewDataKeys.WINDOW_ROOT_NODE);
 

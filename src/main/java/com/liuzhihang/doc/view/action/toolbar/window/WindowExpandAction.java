@@ -2,7 +2,6 @@ package com.liuzhihang.doc.view.action.toolbar.window;
 
 import com.intellij.openapi.actionSystem.AnAction;
 import com.intellij.openapi.actionSystem.AnActionEvent;
-import com.intellij.openapi.actionSystem.PlatformDataKeys;
 import com.intellij.openapi.project.Project;
 import com.intellij.ui.TreeExpandCollapse;
 import com.intellij.ui.treeStructure.SimpleTree;
@@ -18,7 +17,7 @@ public class WindowExpandAction extends AnAction {
     @Override
     public void actionPerformed(@NotNull AnActionEvent e) {
         // 获取当前project对象
-        Project project = e.getData(PlatformDataKeys.PROJECT);
+        Project project = e.getProject();
         SimpleTree catalogTree = e.getData(DocViewDataKeys.WINDOW_CATALOG_TREE);
 
         if (catalogTree == null || project == null) {

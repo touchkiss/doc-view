@@ -95,7 +95,9 @@ public final class ProtoToPsiClassConverter {
         ProtoUtils.markSynthetic(javaPsiFile);
 
         PsiClass result = PsiTreeUtil.findChildOfType(javaPsiFile, PsiClass.class);
-        if (result != null) generator.applyRequiredMetadata(result);
+        if (result != null) {
+            generator.applyRequiredMetadata(result);
+        }
         return result;
     }
 
@@ -132,10 +134,14 @@ public final class ProtoToPsiClassConverter {
             Set<String> requiredNames = requiredFieldsByJavaName.get(type.getName());
             if (requiredNames != null) {
                 for (PsiField field : type.getFields()) {
-                    if (requiredNames.contains(field.getName())) ProtoUtils.markRequiredSyntheticField(field);
+                    if (requiredNames.contains(field.getName())) {
+                        ProtoUtils.markRequiredSyntheticField(field);
+                    }
                 }
             }
-            for (PsiClass nested : type.getInnerClasses()) applyRequiredMetadata(nested);
+            for (PsiClass nested : type.getInnerClasses()) {
+                applyRequiredMetadata(nested);
+            }
         }
 
         private String generate(PbMessageType root) {
@@ -488,10 +494,11 @@ public final class ProtoToPsiClassConverter {
             if (candidate.isEmpty() || Character.isDigit(candidate.charAt(0))) {
                 candidate = "_" + candidate;
             }
-            while (!PsiNameHelper.getInstance(project).isIdentifier(candidate)) {
-                candidate = candidate + "_";
+            StringBuilder identifier = new StringBuilder(candidate);
+            while (!PsiNameHelper.getInstance(project).isIdentifier(identifier.toString())) {
+                identifier.append('_');
             }
-            return candidate;
+            return identifier.toString();
         }
 
         /**

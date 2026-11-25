@@ -1,6 +1,5 @@
 package com.liuzhihang.doc.view.integration;
 
-import com.intellij.openapi.project.Project;
 import com.liuzhihang.doc.view.config.YApiSettings;
 import com.liuzhihang.doc.view.dto.DocView;
 import com.liuzhihang.doc.view.enums.ContentTypeEnum;
@@ -265,7 +264,9 @@ public class YApiUploadOrchestratorTest {
             if (failure != null) {
                 throw failure;
             }
-            if (savedId != null) save.setId(savedId);
+            if (savedId != null) {
+                save.setId(savedId);
+            }
         }
 
         @Override

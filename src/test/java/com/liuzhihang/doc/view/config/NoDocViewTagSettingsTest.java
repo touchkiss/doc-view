@@ -13,7 +13,9 @@ public final class NoDocViewTagSettingsTest extends LightJavaCodeInsightFixtureT
     public void testStandardValidationSourcesAreAvailableByDefault() {
         var names = new Settings().getRequiredFieldAnnotation();
         for (String prefix : List.of("jakarta.validation.constraints.", "javax.validation.constraints.")) {
-            for (String name : List.of("NotNull", "NotEmpty", "NotBlank")) assertTrue(prefix + name, names.contains(prefix + name));
+            for (String name : List.of("NotNull", "NotEmpty", "NotBlank")) {
+                assertTrue(prefix + name, names.contains(prefix + name));
+            }
         }
     }
 
@@ -60,9 +62,13 @@ public final class NoDocViewTagSettingsTest extends LightJavaCodeInsightFixtureT
     }
 
     private static void collect(Component component, List<JCheckBox> options) {
-        if (component instanceof JCheckBox box) options.add(box);
+        if (component instanceof JCheckBox box) {
+            options.add(box);
+        }
         if (component instanceof Container container) {
-            for (Component child : container.getComponents()) collect(child, options);
+            for (Component child : container.getComponents()) {
+                collect(child, options);
+            }
         }
     }
 }

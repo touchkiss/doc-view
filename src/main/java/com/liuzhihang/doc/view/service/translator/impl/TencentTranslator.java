@@ -69,7 +69,10 @@ public class TencentTranslator extends AbstractTranslator {
                     break;
                 }
             }
-        } catch (Exception e) {
+        } catch (InterruptedException _) {
+            Thread.currentThread().interrupt();
+            return null;
+        } catch (Exception _) {
             LOGGER.warn("tencent translate error: please check your appkey and network");
         }
         return response;

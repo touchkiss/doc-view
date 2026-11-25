@@ -11,6 +11,8 @@ import java.util.*;
 
 /** Jackson property names and inclusion rules shared by schema and example generation. */
 final class JacksonPropertyProjection {
+    private static final String ANNOTATION_VALUE = "value";
+
     private static final String JSON_IGNORE_PROPERTIES = "com.fasterxml.jackson.annotation.JsonIgnoreProperties";
     private static final String JSON_INCLUDE_PROPERTIES = "com.fasterxml.jackson.annotation.JsonIncludeProperties";
     private static final String JSON_INCLUDE = "com.fasterxml.jackson.annotation.JsonInclude";
@@ -33,7 +35,7 @@ final class JacksonPropertyProjection {
 
     private static Set<String> propertyNames(PsiAnnotation annotation) {
         Set<String> names = new HashSet<>();
-        PsiAnnotationMemberValue value = annotation.findAttributeValue("value");
+        PsiAnnotationMemberValue value = annotation.findAttributeValue(ANNOTATION_VALUE);
         if (value instanceof PsiArrayInitializerMemberValue array) {
             for (PsiAnnotationMemberValue item : array.getInitializers()) {
                 if (PsiConstantUtils.constantValue(item) instanceof String name) {
@@ -94,7 +96,7 @@ final class JacksonPropertyProjection {
     private static String explicitName(PsiModifierListOwner member, String fallback) {
         PsiAnnotation property = member.getAnnotation(JsonPropertyConstant.JSON_PROPERTY);
         if (property != null
-                && PsiConstantUtils.constantValue(property.findAttributeValue("value")) instanceof String name
+                && PsiConstantUtils.constantValue(property.findAttributeValue(ANNOTATION_VALUE)) instanceof String name
                 && !name.isEmpty()) {
             return name;
         }
@@ -145,7 +147,7 @@ final class JacksonPropertyProjection {
     }
 
     private static String inclusionPolicy(PsiAnnotation annotation) {
-        if (annotation != null && annotation.findAttributeValue("value") instanceof PsiReferenceExpression reference
+        if (annotation != null && annotation.findAttributeValue(ANNOTATION_VALUE) instanceof PsiReferenceExpression reference
                 && reference.resolve() instanceof PsiEnumConstant constant) {
             return constant.getName();
         }

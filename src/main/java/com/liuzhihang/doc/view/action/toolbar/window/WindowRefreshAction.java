@@ -2,7 +2,6 @@ package com.liuzhihang.doc.view.action.toolbar.window;
 
 import com.intellij.openapi.actionSystem.AnAction;
 import com.intellij.openapi.actionSystem.AnActionEvent;
-import com.intellij.openapi.actionSystem.PlatformDataKeys;
 import com.intellij.openapi.project.Project;
 import com.liuzhihang.doc.view.data.DocViewDataKeys;
 import com.liuzhihang.doc.view.ui.window.DocViewWindowPanel;
@@ -18,7 +17,7 @@ public class WindowRefreshAction extends AnAction {
     public void actionPerformed(@NotNull AnActionEvent e) {
 
         // 获取当前project对象
-        Project project = e.getData(PlatformDataKeys.PROJECT);
+        Project project = e.getProject();
         DocViewWindowPanel docViewWindowPanel = e.getData(DocViewDataKeys.WINDOW_PANE);
 
         if (docViewWindowPanel == null || project == null) {

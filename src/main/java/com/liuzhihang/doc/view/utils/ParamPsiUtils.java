@@ -198,11 +198,15 @@ public class ParamPsiUtils {
         }
         if (type instanceof PsiArrayType) {
             body.setCollection(true);
-            while (type instanceof PsiArrayType arrayType) type = arrayType.getComponentType();
+            while (type instanceof PsiArrayType arrayType) {
+                type = arrayType.getComponentType();
+            }
             fieldClass = PsiUtil.resolveClassInType(type);
             qualifiedName = type.getCanonicalText();
             body.setQualifiedNameForClassType(qualifiedName);
-            if (setScalarArrayItemExample(body, type)) return;
+            if (setScalarArrayItemExample(body, type)) {
+                return;
+            }
         }
         if (type instanceof PsiPrimitiveType || FieldTypeConstant.FIELD_TYPE.containsKey(type.getPresentableText())) {
 
@@ -265,7 +269,9 @@ public class ParamPsiUtils {
                 parentBody = buildFieldGenericsBody("element", childClass, body);
                 parentBody.setCollection(true);
                 String childTypeIdentity = typeIdentity(iterableType, childClass.getQualifiedName());
-                if (context.hasVisited(childTypeIdentity)) return;
+                if (context.hasVisited(childTypeIdentity)) {
+                    return;
+                }
                 childContext = context.descend(childTypeIdentity);
 
                 // 集合参数构建, 集合就一个参数, 泛型 E
@@ -369,9 +375,9 @@ public class ParamPsiUtils {
             return;
         }
 
-        String collectionType = body.getType();
-        int genericStart = collectionType == null ? -1 : collectionType.indexOf('<');
-        int genericEnd = collectionType == null ? -1 : collectionType.lastIndexOf('>');
+        String collectionType = StringUtils.defaultString(body.getType());
+        int genericStart = collectionType.indexOf('<');
+        int genericEnd = collectionType.lastIndexOf('>');
         if (genericStart >= 0 && genericEnd > genericStart) {
             body.setType(collectionType.substring(0, genericStart + 1)
                     + contentWireType.getJsonType()
@@ -630,11 +636,15 @@ public class ParamPsiUtils {
 
             if (type instanceof PsiArrayType) {
                 body.setCollection(true);
-                while (type instanceof PsiArrayType arrayType) type = arrayType.getComponentType();
+                while (type instanceof PsiArrayType arrayType) {
+                    type = arrayType.getComponentType();
+                }
                 fieldClass = PsiUtil.resolveClassInType(type);
                 qualifiedName = type.getCanonicalText();
                 body.setQualifiedNameForClassType(qualifiedName);
-                if (setScalarArrayItemExample(body, type)) return;
+                if (setScalarArrayItemExample(body, type)) {
+                    return;
+                }
             }
             if (type instanceof PsiPrimitiveType || FieldTypeConstant.FIELD_TYPE.containsKey(type.getPresentableText())) {
                 if (projection.omitsNull(component)) {
@@ -651,7 +661,9 @@ public class ParamPsiUtils {
             }
 
             String typeIdentity = typeIdentity(type, qualifiedName);
-            if (context.isDepthLimitReached() || context.hasVisited(typeIdentity)) return;
+            if (context.isDepthLimitReached() || context.hasVisited(typeIdentity)) {
+                return;
+            }
             DtoParsingContext childContext;
             Map<String, PsiType> fieldGenericsMap;
             PsiClass childClass;
@@ -660,9 +672,13 @@ public class ParamPsiUtils {
             if (InheritanceUtil.isInheritor(type, CommonClassNames.JAVA_UTIL_COLLECTION)) {
                 PsiType iterableType = PsiUtil.extractIterableTypeParameter(type, false);
                 body.setCollection(true);
-                if (iterableType == null) return;
+                if (iterableType == null) {
+                    return;
+                }
                 childClass = PsiUtil.resolveClassInClassTypeOnly(iterableType);
-                if (childClass == null) return;
+                if (childClass == null) {
+                    return;
+                }
                 JsonWireType contentWireType = JacksonPsiUtils.resolveContentUsing(component, iterableType);
                 if (iterableType instanceof PsiPrimitiveType || FieldTypeConstant.FIELD_TYPE.containsKey(iterableType.getPresentableText())) {
                     if (contentWireType.isOverridden()) {
@@ -678,24 +694,36 @@ public class ParamPsiUtils {
                 parentBody = buildFieldGenericsBody("element", childClass, body);
                 parentBody.setCollection(true);
                 String childIdentity = typeIdentity(iterableType, childClass.getQualifiedName());
-                if (context.hasVisited(childIdentity)) return;
+                if (context.hasVisited(childIdentity)) {
+                    return;
+                }
                 childContext = context.descend(childIdentity);
                 fieldGenericsMap = CustomPsiUtils.getGenericsMap((PsiClassType) iterableType);
             } else if (InheritanceUtil.isInheritor(type, CommonClassNames.JAVA_UTIL_MAP)) {
                 PsiType matKeyType = PsiUtil.substituteTypeParameter(type, CommonClassNames.JAVA_UTIL_MAP, 0, false);
-                if (matKeyType == null || !FieldTypeConstant.PACKAGE_TYPE_SET.contains(matKeyType.getPresentableText())) return;
+                if (matKeyType == null || !FieldTypeConstant.PACKAGE_TYPE_SET.contains(matKeyType.getPresentableText())) {
+                    return;
+                }
                 PsiClass matKeyClass = PsiUtil.resolveClassInClassTypeOnly(matKeyType);
-                if (matKeyClass == null) return;
+                if (matKeyClass == null) {
+                    return;
+                }
                 buildFieldGenericsBody("key", matKeyClass, body).setMap(true);
                 PsiType matValueType = PsiUtil.substituteTypeParameter(type, CommonClassNames.JAVA_UTIL_MAP, 1, false);
-                if (ignoreField(matValueType)) return;
+                if (ignoreField(matValueType)) {
+                    return;
+                }
                 childClass = PsiUtil.resolveClassInClassTypeOnly(matValueType);
-                if (childClass == null) return;
+                if (childClass == null) {
+                    return;
+                }
                 fieldGenericsMap = CustomPsiUtils.getGenericsMap((PsiClassType) matValueType);
                 parentBody = buildFieldGenericsBody("value", childClass, body);
                 parentBody.setMap(true);
                 String childIdentity = typeIdentity(matValueType, childClass.getQualifiedName());
-                if (context.hasVisited(childIdentity)) return;
+                if (context.hasVisited(childIdentity)) {
+                    return;
+                }
                 childContext = context.descend(childIdentity);
             } else if (fieldClass == null || fieldClass.isEnum() || fieldClass.isInterface() || fieldClass.isAnnotationType()) {
                 return;
@@ -706,8 +734,12 @@ public class ParamPsiUtils {
                 childContext = context.descend(typeIdentity);
             }
 
-            if (childContext.isDepthLimitReached()) return;
-            if (FieldTypeConstant.FIELD_TYPE.containsKey(type.getPresentableText())) return;
+            if (childContext.isDepthLimitReached()) {
+                return;
+            }
+            if (FieldTypeConstant.FIELD_TYPE.containsKey(type.getPresentableText())) {
+                return;
+            }
 
             buildBodyProperties(childClass, fieldGenericsMap, parentBody, parentChildPair, false, childContext);
         } finally {

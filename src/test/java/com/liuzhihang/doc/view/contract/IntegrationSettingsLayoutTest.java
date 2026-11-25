@@ -99,7 +99,9 @@ public final class IntegrationSettingsLayoutTest extends LightJavaCodeInsightFix
     private static void assertNoClearCheckbox(Container container) {
         for (Component component : container.getComponents()) {
             assertFalse("Blank Apply clears credentials without a separate clear checkbox", component instanceof JCheckBox);
-            if (component instanceof Container child) assertNoClearCheckbox(child);
+            if (component instanceof Container child) {
+                assertNoClearCheckbox(child);
+            }
         }
     }
 
@@ -116,7 +118,9 @@ public final class IntegrationSettingsLayoutTest extends LightJavaCodeInsightFix
     private static void layoutRecursively(Container container) {
         container.doLayout();
         for (Component child : container.getComponents()) {
-            if (child instanceof Container nested) layoutRecursively(nested);
+            if (child instanceof Container nested) {
+                layoutRecursively(nested);
+            }
         }
     }
 }

@@ -109,7 +109,9 @@ public final class TemplateSettingForm extends DialogWrapper {
                 AppExecutorUtil.getAppExecutorService(),
                 action -> ApplicationManager.getApplication().invokeLater(action, ModalityState.any()),
                 (template, framework) -> {
-                    if (project.isDisposed()) return "";
+                    if (project.isDisposed()) {
+                        return "";
+                    }
                     return TemplatePreviewRenderer.render(project, template, framework);
                 });
         init();
@@ -118,7 +120,9 @@ public final class TemplateSettingForm extends DialogWrapper {
     @Nullable
     @Override
     public JComponent createCenterPanel() {
-        if (rootPanel == null) buildUi();
+        if (rootPanel == null) {
+            buildUi();
+        }
         return rootPanel;
     }
 
@@ -280,7 +284,9 @@ public final class TemplateSettingForm extends DialogWrapper {
     }
 
     private void setVariablesVisible(boolean visible) {
-        if (variablesVisible == visible || editorContentPanel == null) return;
+        if (variablesVisible == visible || editorContentPanel == null) {
+            return;
+        }
         variablesVisible = visible;
         editorContentPanel.removeAll();
         if (visible) {
@@ -313,16 +319,21 @@ public final class TemplateSettingForm extends DialogWrapper {
 
     private JPanel templatePanel(EditorEx editor, FrameworkEnum framework) {
         JPanel panel = new JPanel(new BorderLayout(JBUI.scale(4), JBUI.scale(4)));
-        String frameworkName = framework == FrameworkEnum.SPRING ? "Spring"
-                : framework == FrameworkEnum.DUBBO ? "Dubbo" : "POJO";
+        String frameworkName = "POJO";
+        if (framework == FrameworkEnum.SPRING) {
+            frameworkName = "Spring";
+        } else if (framework == FrameworkEnum.DUBBO) {
+            frameworkName = "Dubbo";
+        }
         panel.setName("templatePanel" + frameworkName);
         JPanel controls = new JPanel(new BorderLayout(0, JBUI.scale(4)));
         controls.setName("templatePreviewControls" + frameworkName);
         JPanel previewActions = new JPanel(new FlowLayout(FlowLayout.LEFT, JBUI.scale(6), 0));
         previewActions.setName("previewActions" + frameworkName);
-        JButton previewButton = new JButton(framework == FrameworkEnum.NONE_POJO ? "Preview POJO"
+        String previewLabel = framework == FrameworkEnum.NONE_POJO ? "Preview POJO"
                 : DocViewBundle.message(framework == FrameworkEnum.SPRING
-                        ? "template.preview.spring" : "template.preview.dubbo"));
+                        ? "template.preview.spring" : "template.preview.dubbo");
+        JButton previewButton = new JButton(previewLabel);
         previewButton.setName("preview" + frameworkName + "Button");
         previewButton.addActionListener(event -> requestPreview(editor, framework));
         previewActions.add(previewButton);
@@ -362,7 +373,9 @@ public final class TemplateSettingForm extends DialogWrapper {
     }
 
     private void invalidatePreviewForDraftChange() {
-        if (suppressPreviewInvalidation) return;
+        if (suppressPreviewInvalidation) {
+            return;
+        }
         long invalidation = previewCoordinator.invalidate();
         ApplicationManager.getApplication().invokeLater(() -> {
             if (!previewCoordinator.isCurrent(invalidation) || isDisposed() || project.isDisposed()
@@ -451,8 +464,8 @@ public final class TemplateSettingForm extends DialogWrapper {
                 DocViewBundle.message("template.variables.description.accessible"));
         JBScrollPane descriptionScroll = new JBScrollPane(variableDescriptionArea);
         descriptionScroll.setName("variableDescriptionScroll");
-        descriptionScroll.setVerticalScrollBarPolicy(JBScrollPane.VERTICAL_SCROLLBAR_AS_NEEDED);
-        descriptionScroll.setHorizontalScrollBarPolicy(JBScrollPane.HORIZONTAL_SCROLLBAR_NEVER);
+        descriptionScroll.setVerticalScrollBarPolicy(javax.swing.ScrollPaneConstants.VERTICAL_SCROLLBAR_AS_NEEDED);
+        descriptionScroll.setHorizontalScrollBarPolicy(javax.swing.ScrollPaneConstants.HORIZONTAL_SCROLLBAR_NEVER);
         descriptionScroll.setPreferredSize(new Dimension(JBUI.scale(120), JBUI.scale(120)));
         descriptionScroll.setBorder(JBUI.Borders.empty());
         JPanel details = new JPanel(new BorderLayout(JBUI.scale(4), JBUI.scale(2)));
@@ -469,7 +482,9 @@ public final class TemplateSettingForm extends DialogWrapper {
     }
 
     private void updateVariableDescription() {
-        if (variableDescriptionArea == null || variableList == null) return;
+        if (variableDescriptionArea == null || variableList == null) {
+            return;
+        }
         TemplateVariable variable = variableList.getSelectedValue();
         variableDescriptionArea.setText(variable == null ? ""
                 : variable.expression() + "\n" + variable.displayName() + "\n" + variable.description());
@@ -495,15 +510,21 @@ public final class TemplateSettingForm extends DialogWrapper {
     }
 
     private void filterVariables() {
-        if (variableModel == null) return;
+        if (variableModel == null) {
+            return;
+        }
         String query = variableSearchField.getText().trim().toLowerCase(Locale.ROOT);
         variableModel.clear();
         for (TemplateVariable variable : TEMPLATE_VARIABLES) {
             String searchable = (variable.expression() + " " + variable.displayName() + " " + variable.description())
                     .toLowerCase(Locale.ROOT);
-            if (query.isEmpty() || searchable.contains(query)) variableModel.addElement(variable);
+            if (query.isEmpty() || searchable.contains(query)) {
+                variableModel.addElement(variable);
+            }
         }
-        if (!variableModel.isEmpty()) variableList.setSelectedIndex(0);
+        if (!variableModel.isEmpty()) {
+            variableList.setSelectedIndex(0);
+        }
         updateInsertButton();
     }
 
@@ -515,7 +536,9 @@ public final class TemplateSettingForm extends DialogWrapper {
 
     private void insertSelectedVariable() {
         TemplateVariable variable = variableList.getSelectedValue();
-        if (variable == null) return;
+        if (variable == null) {
+            return;
+        }
         EditorEx editor = selectedTemplateEditor();
         boolean selected = editor.getSelectionModel().hasSelection();
         int start = selected ? editor.getSelectionModel().getSelectionStart() : editor.getCaretModel().getOffset();
@@ -546,12 +569,16 @@ public final class TemplateSettingForm extends DialogWrapper {
     }
 
     private void requestPreview(EditorEx editor, FrameworkEnum framework) {
-        if (isDisposed() || project.isDisposed()) return;
+        if (isDisposed() || project.isDisposed()) {
+            return;
+        }
         workspaceTabs.setSelectedComponent(previewPanel);
         setPreviewText("");
         previewStatusLabel.setText(DocViewBundle.message("template.preview.status.loading"));
         previewCoordinator.requestPreview(documentText(editor), framework, result -> {
-            if (isDisposed()) return;
+            if (isDisposed()) {
+                return;
+            }
             if (!result.isSuccess()) {
                 setPreviewText("");
                 previewStatusLabel.setText(DocViewBundle.message("template.preview.status.error", result.errorMessage()));
@@ -566,7 +593,9 @@ public final class TemplateSettingForm extends DialogWrapper {
     }
 
     private void setPreviewText(String text) {
-        if (previewEditor == null || project.isDisposed()) return;
+        if (previewEditor == null || project.isDisposed()) {
+            return;
+        }
         WriteCommandAction.runWriteCommandAction(project, () -> previewEditor.getDocument().setText(text));
     }
 
@@ -587,7 +616,9 @@ public final class TemplateSettingForm extends DialogWrapper {
 
     public boolean isModified() {
         if (springTemplateEditor == null || dubboTemplateEditor == null || pojoTemplateEditor == null || separateParamCheckBox == null
-                || mergeExportCheckBox == null || prefix1Field == null || prefix2Field == null) return false;
+                || mergeExportCheckBox == null || prefix1Field == null || prefix2Field == null) {
+            return false;
+        }
         TemplateSettings settings = TemplateSettings.getInstance(project);
         Settings outputSettings = Settings.getInstance(project);
         return !settings.getSpringTemplate().equals(documentText(springTemplateEditor))
@@ -601,7 +632,9 @@ public final class TemplateSettingForm extends DialogWrapper {
 
     public void apply() {
         if (springTemplateEditor == null || dubboTemplateEditor == null || pojoTemplateEditor == null || separateParamCheckBox == null
-                || mergeExportCheckBox == null || prefix1Field == null || prefix2Field == null) return;
+                || mergeExportCheckBox == null || prefix1Field == null || prefix2Field == null) {
+            return;
+        }
         TemplateSettings settings = TemplateSettings.getInstance(project);
         settings.setSpringTemplate(documentText(springTemplateEditor));
         settings.setDubboTemplate(documentText(dubboTemplateEditor));
@@ -617,7 +650,9 @@ public final class TemplateSettingForm extends DialogWrapper {
 
     public void reset() {
         if (springTemplateEditor == null || dubboTemplateEditor == null || pojoTemplateEditor == null || separateParamCheckBox == null
-                || mergeExportCheckBox == null || prefix1Field == null || prefix2Field == null) return;
+                || mergeExportCheckBox == null || prefix1Field == null || prefix2Field == null) {
+            return;
+        }
         TemplateSettings settings = TemplateSettings.getInstance(project);
         Settings outputSettings = Settings.getInstance(project);
         resetOutputSettings(outputSettings);

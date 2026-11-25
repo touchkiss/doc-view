@@ -1,6 +1,5 @@
 package com.liuzhihang.doc.view.mcp;
 
-import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -9,13 +8,15 @@ import java.util.Objects;
 /** Immutable, token-safe result values returned by the YApi MCP tool. */
 public final class McpResult {
 
+    private static final String REDACTED_GROUP = "$1***";
+
     private McpResult() {
     }
 
     public record Item(Status status, String reference, String yapiUrl, String errorCode, String message) {
 
         public Item {
-            status = Objects.requireNonNull(status, "status");
+            Objects.requireNonNull(status, "status");
             reference = safe(reference);
             yapiUrl = safe(yapiUrl);
             errorCode = safe(errorCode);
@@ -44,23 +45,24 @@ public final class McpResult {
             content.put("reference", reference);
             if (errorCode != null) {
                 content.put("errorCode", errorCode);
-                content.put("message", message);
-                return content;
-            }
-            if (yapiUrl != null) {
+            } else if (yapiUrl != null) {
                 content.put("yapiUrl", yapiUrl);
-                if (message != null) content.put("message", message);
-                return content;
             }
-            content.put("message", message);
+            if (message != null || errorCode != null || yapiUrl == null) {
+                content.put("message", message);
+            }
             return content;
         }
     }
 
     public enum Status {
+        /** 创建成功。 */
         CREATED,
+        /** 更新成功。 */
         UPDATED,
+        /** 跳过不支持的目标。 */
         SKIPPED,
+        /** 处理失败。 */
         FAILED
     }
 
@@ -118,10 +120,10 @@ public final class McpResult {
             }
         }
         return sanitized
-                .replaceAll("(?i)(\\b(?:token|access[_-]?token)\\b\\s*[=:]\\s*)(?:\\\"[^\\\"]*\\\"|'[^']*'|[^&\\s,}\\]\\\"]+)", "$1***")
+                .replaceAll("(?i)(\\b(?:token|access[_-]?token)\\b\\s*[=:]\\s*)(?:\\\"[^\\\"]*\\\"|'[^']*'|[^&\\s,}\\]\\\"]+)", REDACTED_GROUP)
                 .replaceAll("(?i)(\\\"(?:token|access[_-]?token)\\\"\\s*:\\s*\\\")[^\\\"]*(\\\")", "$1***$2")
-                .replaceAll("(?i)(\\bAuthorization\\s*:\\s*Bearer\\s+)[^\\s,;}\\]]+", "$1***")
-                .replaceAll("(?i)(\\b(?:X-Api-Key|Api-Key)\\s*:\\s*)(?:\\\"[^\\\"]*\\\"|'[^']*'|[^\\s,;}\\]]+)", "$1***")
+                .replaceAll("(?i)(\\bAuthorization\\s*:\\s*Bearer\\s+)[^\\s,;}\\]]+", REDACTED_GROUP)
+                .replaceAll("(?i)(\\b(?:X-Api-Key|Api-Key)\\s*:\\s*)(?:\\\"[^\\\"]*\\\"|'[^']*'|[^\\s,;}\\]]+)", REDACTED_GROUP)
                 .replaceAll("(?i)(\\\"(?:X-Api-Key|Api-Key)\\\"\\s*:\\s*\\\")[^\\\"]*(\\\")", "$1***$2");
     }
 }

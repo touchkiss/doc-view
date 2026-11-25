@@ -46,6 +46,35 @@ public class ModuleNode extends DocViewNode {
         cleanUpCache();
         classNodes.clear();
 
+        List<PsiClass> psiClasses = findClasses(project);
+        List<ClassOrder> orderedClasses = new ArrayList<>(psiClasses.size());
+        for (PsiClass psiClass : psiClasses) {
+            ProgressManager.checkCanceled();
+            String qualifiedName = psiClass.getQualifiedName();
+            PsiFile containingFile = psiClass.getContainingFile();
+            VirtualFile virtualFile = containingFile == null ? null : containingFile.getVirtualFile();
+            String sourcePath = "";
+            if (virtualFile != null) {
+                sourcePath = virtualFile.getPath();
+            } else if (containingFile != null) {
+                sourcePath = containingFile.getName();
+            }
+            orderedClasses.add(new ClassOrder(psiClass, qualifiedName == null ? "" : qualifiedName,
+                    sourcePath, psiClass.getTextOffset()));
+        }
+        orderedClasses.sort(Comparator.comparing(ClassOrder::qualifiedName)
+                .thenComparing(ClassOrder::sourcePath)
+                .thenComparingInt(ClassOrder::sourceOffset));
+
+        for (ClassOrder classOrder : orderedClasses) {
+            ProgressManager.checkCanceled();
+            ClassNode classNode = new ClassNode(this, classOrder.psiClass());
+            classNodes.add(classNode);
+        }
+        update();
+    }
+
+    private List<PsiClass> findClasses(Project project) {
         List<PsiClass> psiClasses = new LinkedList<>();
 
         if (Settings.getInstance(project).getIncludeNormalInterface()) {
@@ -67,28 +96,7 @@ public class ModuleNode extends DocViewNode {
 
         ProgressManager.checkCanceled();
         psiClasses.addAll(SpringPsiUtils.findDocViewFromModule(module));
-
-        List<ClassOrder> orderedClasses = new ArrayList<>(psiClasses.size());
-        for (PsiClass psiClass : psiClasses) {
-            ProgressManager.checkCanceled();
-            String qualifiedName = psiClass.getQualifiedName();
-            PsiFile containingFile = psiClass.getContainingFile();
-            VirtualFile virtualFile = containingFile == null ? null : containingFile.getVirtualFile();
-            String sourcePath = virtualFile != null ? virtualFile.getPath()
-                    : containingFile == null ? "" : containingFile.getName();
-            orderedClasses.add(new ClassOrder(psiClass, qualifiedName == null ? "" : qualifiedName,
-                    sourcePath, psiClass.getTextOffset()));
-        }
-        orderedClasses.sort(Comparator.comparing(ClassOrder::qualifiedName)
-                .thenComparing(ClassOrder::sourcePath)
-                .thenComparingInt(ClassOrder::sourceOffset));
-
-        for (ClassOrder classOrder : orderedClasses) {
-            ProgressManager.checkCanceled();
-            ClassNode classNode = new ClassNode(this, classOrder.psiClass());
-            classNodes.add(classNode);
-        }
-        update();
+        return psiClasses;
     }
 
     private record ClassOrder(PsiClass psiClass, String qualifiedName, String sourcePath, int sourceOffset) {

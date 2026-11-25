@@ -22,13 +22,14 @@ import org.apache.commons.lang3.StringUtils;
 import org.jetbrains.annotations.NotNull;
 
 import java.util.*;
-import java.util.stream.Collectors;
 
 /**
  * @author liuzhihang
  * @date 2020/11/16 20:37
  */
 public class DubboPsiUtils {
+    private DubboPsiUtils() {}
+
 
     /**
      * 检查是否是 dubbo 接口
@@ -103,8 +104,8 @@ public class DubboPsiUtils {
             PsiModifierList psiModifierList = (PsiModifierList) psiAnnotation.getParent();
             PsiElement psiElement = psiModifierList.getParent();
 
-            if (psiElement instanceof PsiClass && isDubboClass((PsiClass) psiElement)) {
-                psiClasses.add((PsiClass) psiElement);
+            if (psiElement instanceof PsiClass psiClass && isDubboClass(psiClass)) {
+                psiClasses.add(psiClass);
             }
         }
         return psiClasses;
@@ -220,13 +221,15 @@ public class DubboPsiUtils {
                 fieldMap.put(name, FieldTypeConstant.FIELD_TYPE.get(type.getPresentableText()));
             } else {
                 PsiClass psiClass = PsiUtil.resolveClassInType(type);
-                if (psiClass != null) {
-                    fieldMap = ParamPsiUtils.getFieldsAndDefaultValue(psiClass, null);
+                Map<String, Object> fields = psiClass == null ? Collections.emptyMap()
+                        : ParamPsiUtils.getFieldsAndDefaultValue(psiClass, null);
+                if (parameters.length == 1) {
+                    return GsonFormatUtil.gsonFormat(fields);
                 }
+                fieldMap.put(name, fields);
             }
-            return GsonFormatUtil.gsonFormat(fieldMap);
         }
 
-        return "{}";
+        return GsonFormatUtil.gsonFormat(fieldMap);
     }
 }

@@ -90,10 +90,12 @@ public final class DocViewBackgroundTasks {
     }
 
     public interface ReadTask<T> {
+        /** 在 read action 中计算结果，并使用进度指示器检查取消。 */
         T compute(@NotNull ProgressIndicator indicator);
     }
 
     public interface BackgroundTask {
+        /** 在后台执行任务，并使用进度指示器检查取消。 */
         void run(@NotNull ProgressIndicator indicator) throws Exception;
     }
 }

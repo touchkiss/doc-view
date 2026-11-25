@@ -74,23 +74,28 @@ public final class CurlUtils {
             return;
         }
 
-        if (contentType == ContentTypeEnum.FORM || StringUtils.isNotBlank(docView.getReqFormExample())) {
-            if (!formBodyParams.isEmpty()) {
-                for (Param param : formBodyParams) {
-                    String name = param.getName();
-                    if (StringUtils.isBlank(name)) {
-                        continue;
-                    }
-                    String example = param.getExample() != null ? param.getExample() : "";
-                    parts.add("-d '" + escapeSingleQuoted(name + "=" + example) + "'");
+        if (contentType != ContentTypeEnum.FORM && StringUtils.isBlank(docView.getReqFormExample())) {
+            return;
+        }
+        appendFormBody(docView.getReqFormExample(), formBodyParams, parts);
+    }
+
+    private static void appendFormBody(String formExample, List<Param> params, List<String> parts) {
+        if (!params.isEmpty()) {
+            for (Param param : params) {
+                String name = param.getName();
+                if (StringUtils.isBlank(name)) {
+                    continue;
                 }
-                return;
+                String example = param.getExample() != null ? param.getExample() : "";
+                parts.add("-d '" + escapeSingleQuoted(name + "=" + example) + "'");
             }
-            if (StringUtils.isNotBlank(docView.getReqFormExample())) {
-                for (String pair : docView.getReqFormExample().split("&")) {
-                    if (StringUtils.isNotBlank(pair)) {
-                        parts.add("-d '" + escapeSingleQuoted(pair) + "'");
-                    }
+            return;
+        }
+        if (StringUtils.isNotBlank(formExample)) {
+            for (String pair : formExample.split("&")) {
+                if (StringUtils.isNotBlank(pair)) {
+                    parts.add("-d '" + escapeSingleQuoted(pair) + "'");
                 }
             }
         }
@@ -113,11 +118,9 @@ public final class CurlUtils {
             if (param == null || StringUtils.isBlank(param.getName())) {
                 continue;
             }
-            String name = param.getName();
-            String example = param.getExample() != null ? param.getExample() : "";
-            String placeholder = "{" + name + "}";
+            String placeholder = "{" + param.getName() + "}";
             if (path.contains(placeholder)) {
-                path = path.replace(placeholder, example);
+                path = path.replace(placeholder, StringUtils.defaultString(param.getExample()));
             } else {
                 nonPathParams.add(param);
             }
@@ -130,19 +133,22 @@ public final class CurlUtils {
 
         if (queryOnUrl && !nonPathParams.isEmpty()) {
             url.append("?");
-            for (int i = 0; i < nonPathParams.size(); i++) {
-                Param param = nonPathParams.get(i);
-                if (i > 0) {
-                    url.append("&");
-                }
-                String example = param.getExample() != null ? param.getExample() : "";
-                url.append(param.getName()).append("=").append(example);
-            }
+            appendQueryParameters(url, nonPathParams);
         } else {
             formBodyParams.addAll(nonPathParams);
         }
 
         return new UrlBuildResult(url.toString(), formBodyParams);
+    }
+
+    private static void appendQueryParameters(StringBuilder url, List<Param> params) {
+        for (int i = 0; i < params.size(); i++) {
+            if (i > 0) {
+                url.append("&");
+            }
+            Param param = params.get(i);
+            url.append(param.getName()).append("=").append(StringUtils.defaultString(param.getExample()));
+        }
     }
 
     private static boolean isBodyMethod(String method) {

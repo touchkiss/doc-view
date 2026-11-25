@@ -152,9 +152,14 @@ public final class SourceDescriptionService {
         }
         var comment = owner.getDocComment();
         var ordinary = ordinaryComment(owner, target.paramName());
-        String original = ordinary != null ? CustomPsiCommentUtils.ordinaryCommentText(ordinary)
-                : target.paramName() == null ? CustomPsiCommentUtils.descriptionBody(comment)
-                : CustomPsiCommentUtils.paramText(comment, target.paramName());
+        String original;
+        if (ordinary != null) {
+            original = CustomPsiCommentUtils.ordinaryCommentText(ordinary);
+        } else if (target.paramName() == null) {
+            original = CustomPsiCommentUtils.descriptionBody(comment);
+        } else {
+            original = CustomPsiCommentUtils.paramText(comment, target.paramName());
+        }
         return new Draft(target, WriterService.modificationStamp(owner.getContainingFile()), original);
     }
 
@@ -195,25 +200,7 @@ public final class SourceDescriptionService {
         List<WriterService.JavaChange> changes = new ArrayList<>();
         List<OrdinaryChange> ordinaryChanges = new ArrayList<>();
         for (var entry : changesByOwner.entrySet()) {
-            var previous = entry.getKey().getDocComment();
-            var comment = previous;
-            String result = null;
-            List<Edit> group = entry.getValue();
-            for (Edit edit : group) {
-                String name = edit.draft().target().paramName();
-                var ordinary = ordinaryComment(entry.getKey(), name);
-                if (ordinary != null) {
-                    ordinaryChanges.add(new OrdinaryChange(SmartPointerManager.createPointer(ordinary),
-                            JavaDescriptionText.safeCommentText(edit.description())));
-                } else {
-                    result = JavaDescriptionText.rewrite(comment, name, edit.description());
-                    comment = factory.createDocCommentFromText(result);
-                }
-            }
-            if (result != null) {
-                Draft first = group.getFirst().draft();
-                changes.add(new WriterService.JavaChange(first.target().source(), first.stamp(), result, 0, previous != null));
-            }
+            prepareOwnerChanges(entry.getKey(), entry.getValue(), factory, changes, ordinaryChanges);
         }
         var writer = ApplicationManager.getApplication().getService(WriterService.class);
         if (ordinaryChanges.isEmpty()) {
@@ -233,6 +220,29 @@ public final class SourceDescriptionService {
             });
         }
         return true;
+    }
+
+    private static void prepareOwnerChanges(PsiJavaDocumentedElement owner, List<Edit> group,
+                                            PsiElementFactory factory, List<WriterService.JavaChange> changes,
+                                            List<OrdinaryChange> ordinaryChanges) {
+        var previous = owner.getDocComment();
+        var comment = previous;
+        String result = null;
+        for (Edit edit : group) {
+            String name = edit.draft().target().paramName();
+            var ordinary = ordinaryComment(owner, name);
+            if (ordinary != null) {
+                ordinaryChanges.add(new OrdinaryChange(SmartPointerManager.createPointer(ordinary),
+                        JavaDescriptionText.safeCommentText(edit.description())));
+            } else {
+                result = JavaDescriptionText.rewrite(comment, name, edit.description());
+                comment = factory.createDocCommentFromText(result);
+            }
+        }
+        if (result != null) {
+            Draft first = group.getFirst().draft();
+            changes.add(new WriterService.JavaChange(first.target().source(), first.stamp(), result, 0, previous != null));
+        }
     }
 
     private record OrdinaryChange(SmartPsiElementPointer<PsiComment> comment, String prose) {}

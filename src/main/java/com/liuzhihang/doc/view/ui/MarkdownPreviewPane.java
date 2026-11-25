@@ -35,11 +35,11 @@ import java.util.function.BiFunction;
 /** Owns the two editors displaying one in-memory Markdown document. */
 @Slf4j
 final class MarkdownPreviewPane implements Disposable {
-    private static final AtomicBoolean preferRenderedPreview = new AtomicBoolean(true);
+    private static final AtomicBoolean PREFER_RENDERED_PREVIEW = new AtomicBoolean(true);
     private final Project project;
     private final JPanel previewContentPanel;
     private final BiFunction<Project, VirtualFile, FileEditor> previewFactory;
-    private volatile FileEditor nativeMarkdownPreview;
+    private FileEditor nativeMarkdownPreview;
     private EditorEx markdownEditor;
 
     MarkdownPreviewPane(Project project, JPanel panel, BiFunction<Project, VirtualFile, FileEditor> factory) {
@@ -54,7 +54,7 @@ final class MarkdownPreviewPane implements Disposable {
     }
 
     boolean isRendered() {
-        return nativeMarkdownPreview != null && preferRenderedPreview.get();
+        return nativeMarkdownPreview != null && PREFER_RENDERED_PREVIEW.get();
     }
 
     void selectRendered(boolean state) {
@@ -62,7 +62,7 @@ final class MarkdownPreviewPane implements Disposable {
             DocViewNotification.notifyInfo(project, DocViewBundle.message("notify.markdown.preview.unavailable"));
             return;
         }
-        preferRenderedPreview.set(state);
+        PREFER_RENDERED_PREVIEW.set(state);
         showSelectedView();
     }
 
@@ -148,7 +148,7 @@ final class MarkdownPreviewPane implements Disposable {
 
     void showSelectedView() {
         previewContentPanel.removeAll();
-        if (preferRenderedPreview.get() && nativeMarkdownPreview != null) {
+        if (PREFER_RENDERED_PREVIEW.get() && nativeMarkdownPreview != null) {
             try {
                 previewContentPanel.add(nativeMarkdownPreview.getComponent(), BorderLayout.CENTER);
             } catch (ProcessCanceledException canceled) {

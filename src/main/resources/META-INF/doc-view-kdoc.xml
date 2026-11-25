@@ -4,10 +4,10 @@
                             serviceImplementation="com.liuzhihang.doc.view.kdoc.KdocSupportImpl"/>
         <applicationService serviceImplementation="com.liuzhihang.doc.view.kdoc.service.KdocGeneratorServiceImpl"/>
         <applicationService serviceImplementation="com.liuzhihang.doc.view.kdoc.service.variable.KdocVariableGeneratorService"/>
-        <applicationConfigurable parentId="easydoc.common.settings" id="easydoc.kdoc.settings" displayName="Kotlin 注释" instance="com.liuzhihang.doc.view.view.settings.kdoc.KdocSettingsConfigurable">
-            <configurable parentId="easydoc.kdoc.settings" displayName="类注释模板" instance="com.liuzhihang.doc.view.view.settings.kdoc.template.KtClassSettingsConfigurable"/>
-            <configurable parentId="easydoc.kdoc.settings" displayName="函数注释模板" instance="com.liuzhihang.doc.view.view.settings.kdoc.template.KtMethodSettingsConfigurable"/>
-            <configurable parentId="easydoc.kdoc.settings" displayName="属性注释模板" instance="com.liuzhihang.doc.view.view.settings.kdoc.template.KtFieldSettingsConfigurable"/>
+        <applicationConfigurable parentId="easydoc.common.settings" id="easydoc.kdoc.settings" displayName="Kotlin 注释" instance="com.liuzhihang.doc.view.ui.settings.kdoc.KdocSettingsConfigurable">
+            <configurable parentId="easydoc.kdoc.settings" displayName="类注释模板" instance="com.liuzhihang.doc.view.ui.settings.kdoc.template.KtClassSettingsConfigurable"/>
+            <configurable parentId="easydoc.kdoc.settings" displayName="函数注释模板" instance="com.liuzhihang.doc.view.ui.settings.kdoc.template.KtMethodSettingsConfigurable"/>
+            <configurable parentId="easydoc.kdoc.settings" displayName="属性注释模板" instance="com.liuzhihang.doc.view.ui.settings.kdoc.template.KtFieldSettingsConfigurable"/>
         </applicationConfigurable>
     </extensions>
 </idea-plugin>

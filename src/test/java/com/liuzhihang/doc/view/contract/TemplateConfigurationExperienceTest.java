@@ -65,7 +65,9 @@ public final class TemplateConfigurationExperienceTest extends LightJavaCodeInsi
     protected void tearDown() throws Exception {
         try {
             EdtTestUtil.runInEdtAndWait(() -> forms.forEach(form -> {
-                if (!form.isDisposed()) form.disposeIfNeeded();
+                if (!form.isDisposed()) {
+                    form.disposeIfNeeded();
+                }
             }));
             settings.setSpringTemplate(originalSpring);
             settings.setDubboTemplate(originalDubbo);
@@ -372,7 +374,9 @@ public final class TemplateConfigurationExperienceTest extends LightJavaCodeInsi
             previewEditorRef[0] = previewEditor;
             workspacesRef[0] = workspaces;
             status.addPropertyChangeListener("text", event -> {
-                if (!(event.getNewValue() instanceof String text)) return;
+                if (!(event.getNewValue() instanceof String text)) {
+                    return;
+                }
                 if (DocViewBundle.message("template.preview.status.success").equals(text)) {
                     previewCompleted.countDown();
                 } else if (DocViewBundle.message("template.preview.status.empty").equals(text)) {
@@ -494,7 +498,9 @@ public final class TemplateConfigurationExperienceTest extends LightJavaCodeInsi
                 backgroundTasks::add,
                 uiTasks::add,
                 (template, type) -> {
-                    if ("broken".equals(template)) throw new IllegalArgumentException("line 3, column 2: invalid directive");
+                    if ("broken".equals(template)) {
+                        throw new IllegalArgumentException("line 3, column 2: invalid directive");
+                    }
                     return template + ":" + type;
                 });
 
@@ -666,25 +672,35 @@ public final class TemplateConfigurationExperienceTest extends LightJavaCodeInsi
     }
 
     private static <T extends Component> T component(Container root, String name, Class<T> type) {
-        if (name.equals(root.getName()) && type.isInstance(root)) return type.cast(root);
+        if (name.equals(root.getName()) && type.isInstance(root)) {
+            return type.cast(root);
+        }
         for (Component child : root.getComponents()) {
             if (child.getName() != null && name.equals(child.getName()) && type.isInstance(child)) {
                 return type.cast(child);
             }
             if (child instanceof Container container) {
                 T found = component(container, name, type);
-                if (found != null) return found;
+                if (found != null) {
+                    return found;
+                }
             }
         }
         return null;
     }
 
     private static boolean isDescendant(Component root, Component target) {
-        if (root == target) return true;
+        if (root == target) {
+            return true;
+        }
         if (root instanceof Container container) {
             for (Component child : container.getComponents()) {
-                if (child == target) return true;
-                if (child instanceof Container nested && isDescendant(nested, target)) return true;
+                if (child == target) {
+                    return true;
+                }
+                if (child instanceof Container nested && isDescendant(nested, target)) {
+                    return true;
+                }
             }
         }
         return false;

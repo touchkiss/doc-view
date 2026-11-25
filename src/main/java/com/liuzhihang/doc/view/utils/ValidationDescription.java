@@ -21,7 +21,9 @@ import java.util.function.Function;
 
 /** Describes Bean Validation declarations without inferring API requiredness. */
 record ValidationDescription(String constraints, String presenceConstraints) {
-    private record Rule(String[] annotationNames, Function<PsiAnnotation, String> describe, boolean presence) {}
+    private static final String ANNOTATION_VALUE = "value";
+
+    private record Rule(List<String> annotationNames, Function<PsiAnnotation, String> describe, boolean presence) {}
 
     private static final List<Rule> RULES = List.of(
             rule(ValidationConstant.MIN, annotation -> numericBound(annotation, "最小值")),
@@ -37,9 +39,9 @@ record ValidationDescription(String constraints, String presenceConstraints) {
             rule(ValidationConstant.FUTURE_OR_PRESENT, "不早于当前时间"),
             rule(ValidationConstant.NEGATIVE, "< 0"),
             rule(ValidationConstant.NEGATIVE_OR_ZERO, "≤ 0"),
-            new Rule(ValidationConstant.NOT_BLANK, ignored -> "不能为 null 或空白", true),
-            new Rule(ValidationConstant.NOT_EMPTY, ignored -> "不能为 null 或空", true),
-            new Rule(ValidationConstant.NOT_NULL, ignored -> "不能为 null", true),
+            new Rule(List.of(ValidationConstant.NOT_BLANK), ignored -> "不能为 null 或空白", true),
+            new Rule(List.of(ValidationConstant.NOT_EMPTY), ignored -> "不能为 null 或空", true),
+            new Rule(List.of(ValidationConstant.NOT_NULL), ignored -> "不能为 null", true),
             rule(ValidationConstant.NULL, "必须为 null"),
             rule(ValidationConstant.PAST, "早于当前时间"),
             rule(ValidationConstant.PAST_OR_PRESENT, "不晚于当前时间"),
@@ -95,7 +97,7 @@ record ValidationDescription(String constraints, String presenceConstraints) {
     }
 
     private static Rule rule(String[] names, Function<PsiAnnotation, String> describe) {
-        return new Rule(names, describe, false);
+        return new Rule(List.of(names), describe, false);
     }
 
     private static void collect(PsiAnnotation annotation, Map<String, List<PsiAnnotation>> annotations) {
@@ -106,7 +108,7 @@ record ValidationDescription(String constraints, String presenceConstraints) {
         }
         if (name.endsWith(".List")) {
             String constraintName = name.substring(0, name.length() - ".List".length());
-            for (var item : attributeItems(annotation, "value")) {
+            for (var item : attributeItems(annotation, ANNOTATION_VALUE)) {
                 if (item instanceof PsiAnnotation constraint && constraintName.equals(constraint.getQualifiedName())) {
                     annotations.computeIfAbsent(constraintName, ignored -> new ArrayList<>()).add(constraint);
                 }
@@ -126,7 +128,7 @@ record ValidationDescription(String constraints, String presenceConstraints) {
     }
 
     private static String numericBound(PsiAnnotation annotation, String label) {
-        var value = numberAttribute(annotation, "value");
+        var value = numberAttribute(annotation, ANNOTATION_VALUE);
         return value == null ? null : label + ":" + value;
     }
 
@@ -137,7 +139,7 @@ record ValidationDescription(String constraints, String presenceConstraints) {
     }
 
     private static String decimalBound(PsiAnnotation annotation, String inclusive, String exclusive) {
-        String value = stringAttribute(annotation, "value");
+        String value = stringAttribute(annotation, ANNOTATION_VALUE);
         if (value == null) {
             return null;
         }

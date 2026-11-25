@@ -58,7 +58,7 @@ public class StringUtil {
      */
     public static int endCount(String str, char c) {
         // 计算空行数
-        if (str == null || str.length() == 0) {
+        if (str == null || str.isEmpty()) {
             return 0;
         }
         char[] chars = str.toCharArray();

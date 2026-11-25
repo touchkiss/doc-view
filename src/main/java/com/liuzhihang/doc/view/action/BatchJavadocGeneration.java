@@ -35,7 +35,7 @@ final class BatchJavadocGeneration {
                 indicator.setIndeterminate(false);
                 for (int i = 0; i < targets.size(); i++) {
                     indicator.checkCanceled();
-                    if (ReadAction.compute(this::fileChanged)) {
+                    if (ReadAction.computeBlocking(this::fileChanged)) {
                         return;
                     }
                     indicator.setFraction((double) i / targets.size());

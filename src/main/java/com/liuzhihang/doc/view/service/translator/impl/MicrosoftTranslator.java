@@ -53,7 +53,7 @@ public class MicrosoftTranslator extends AbstractTranslator {
             json = HttpUtil.postJson(url, headers, JSON.toJSONString(body), getConfig().getTimeout());
             JSONArray response = JSON.parseArray(json);
             return Objects.requireNonNull(response).getJSONObject(0).getJSONArray("translations").getJSONObject(0).getString("text");
-        } catch (Exception e) {
+        } catch (Exception _) {
             LOGGER.warn("microsoft translate error: please check your appkey and network");
             return StringUtils.EMPTY;
         }

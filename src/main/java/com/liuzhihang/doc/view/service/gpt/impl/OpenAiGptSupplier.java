@@ -56,11 +56,11 @@ public class OpenAiGptSupplier extends AbstractGptSupplier {
         HttpUtil.PostResponse response;
         try {
             response = HttpUtil.postResponse(endpoint.toASCIIString(), headers, JSON.toJSONString(request), TIMEOUT);
-        } catch (ConnectException e) {
+        } catch (ConnectException _) {
             throw new ModelRequestException("无法连接模型服务，请确认服务已启动，并检查地址和端口。");
-        } catch (SocketTimeoutException e) {
+        } catch (SocketTimeoutException _) {
             throw new ModelRequestException("模型服务响应超时，请检查模型负载和网络连接。");
-        } catch (UnknownHostException e) {
+        } catch (UnknownHostException _) {
             throw new ModelRequestException("无法解析模型服务的主机地址。");
         } catch (IOException e) {
             throw new ModelRequestException("连接模型服务失败（" + e.getClass().getSimpleName() + "）。");
@@ -72,7 +72,7 @@ public class OpenAiGptSupplier extends AbstractGptSupplier {
         Object parsed;
         try {
             parsed = JSON.parse(response.body());
-        } catch (RuntimeException e) {
+        } catch (RuntimeException _) {
             throw new ModelRequestException("模型接口返回了无法解析的 JSON，请检查 API 地址。");
         }
         if (!(parsed instanceof JSONObject payload)) {
@@ -97,7 +97,12 @@ public class OpenAiGptSupplier extends AbstractGptSupplier {
                     || !("http".equalsIgnoreCase(base.getScheme()) || "https".equalsIgnoreCase(base.getScheme()))) {
                 throw new IllegalArgumentException();
             }
-            String path = base.getRawPath().replaceFirst("/+$", "");
+            String rawPath = base.getRawPath();
+            int end = rawPath.length();
+            while (end > 0 && rawPath.charAt(end - 1) == '/') {
+                end--;
+            }
+            String path = rawPath.substring(0, end);
             if (path.isEmpty()) {
                 path = "/v1";
             }
@@ -106,7 +111,7 @@ public class OpenAiGptSupplier extends AbstractGptSupplier {
             }
             String query = base.getRawQuery() == null ? "" : "?" + base.getRawQuery();
             return URI.create(base.getScheme() + "://" + base.getRawAuthority() + path + query);
-        } catch (IllegalArgumentException e) {
+        } catch (IllegalArgumentException _) {
             throw new ModelRequestException("API 地址无效，请填写 HTTP(S) 基础地址或完整的 Chat Completions 地址。");
         }
     }

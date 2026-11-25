@@ -59,7 +59,7 @@ public class MicrosoftFreeTranslator extends AbstractTranslator {
                 if (thisToken != null && !thisToken.isEmpty()) {
                     break;
                 }
-            } catch (Exception e) {
+            } catch (Exception _) {
                 LOGGER.warn("get microsoft token failed,retrying " + i);
             }
         }
@@ -112,7 +112,7 @@ public class MicrosoftFreeTranslator extends AbstractTranslator {
             JSONArray response = JSON.parseArray(json);
             return Objects.requireNonNull(response).getJSONObject(0).getJSONArray("translations").getJSONObject(0)
                 .getString("text");
-        } catch (Exception e) {
+        } catch (Exception _) {
             LOGGER.warn("microsoft free translate error: please check your network");
             return StringUtils.EMPTY;
         }

@@ -102,7 +102,7 @@ public final class ProjectDocumentSnapshotService {
                         }
                         identity = ProjectDocumentIdentity.of(module.getName(), sourcePath, qualifiedClassName,
                                 psiMethod.getName(), parameterTypes);
-                    } catch (IllegalArgumentException exception) {
+                    } catch (IllegalArgumentException _) {
                         skippedCount++;
                         continue;
                     }
@@ -170,7 +170,7 @@ public final class ProjectDocumentSnapshotService {
         }
         try {
             return Path.of(virtualFile.getPath()).toAbsolutePath().normalize();
-        } catch (RuntimeException invalidPath) {
+        } catch (RuntimeException _) {
             return null;
         }
     }
@@ -182,7 +182,7 @@ public final class ProjectDocumentSnapshotService {
                 return null;
             }
             return projectRoot.relativize(realSource).toString().replace('\\', '/');
-        } catch (IOException | RuntimeException invalidPath) {
+        } catch (IOException | RuntimeException _) {
             return null;
         }
     }

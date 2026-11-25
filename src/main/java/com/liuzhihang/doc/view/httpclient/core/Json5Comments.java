@@ -9,29 +9,46 @@ public final class Json5Comments {
     private Json5Comments() {}
     public static List<Range> ranges(String text) {
         List<Range> result = new ArrayList<>();
-        for (int i = 0; i < text.length();) {
-            char c = text.charAt(i);
-            if (c == '\'' || c == '"') {
-                char quote = c;
-                i++;
-                while (i < text.length()) {
-                    char next = text.charAt(i++);
-                    if (next == '\\' && i < text.length()) i++;
-                    else if (next == quote) break;
-                }
-            } else if (c == '/' && i + 1 < text.length() && (text.charAt(i + 1) == '/' || text.charAt(i + 1) == '*')) {
-                int start = i;
-                boolean line = text.charAt(i + 1) == '/';
-                i += 2;
-                if (line) {
-                    while (i < text.length() && "\r\n\u2028\u2029".indexOf(text.charAt(i)) < 0) i++;
-                } else {
-                    int end = text.indexOf("*/", i);
-                    i = end < 0 ? text.length() : end + 2;
-                }
-                result.add(new Range(start, i));
-            } else i++;
+        int offset = 0;
+        while (offset < text.length()) {
+            char current = text.charAt(offset);
+            if (current == '\'' || current == '"') {
+                offset = endOfQuotedString(text, offset);
+            } else if (text.startsWith("//", offset) || text.startsWith("/*", offset)) {
+                int end = endOfComment(text, offset);
+                result.add(new Range(offset, end));
+                offset = end;
+            } else {
+                offset++;
+            }
         }
         return result;
+    }
+
+    static int endOfQuotedString(String text, int start) {
+        char quote = text.charAt(start);
+        int offset = start + 1;
+        while (offset < text.length()) {
+            char next = text.charAt(offset++);
+            if (next == quote) {
+                break;
+            }
+            if (next == '\\' && offset < text.length()) {
+                offset++;
+            }
+        }
+        return offset;
+    }
+
+    private static int endOfComment(String text, int start) {
+        int offset = start + 2;
+        if (text.charAt(start + 1) == '*') {
+            int end = text.indexOf("*/", offset);
+            return end < 0 ? text.length() : end + 2;
+        }
+        while (offset < text.length() && "\r\n\u2028\u2029".indexOf(text.charAt(offset)) < 0) {
+            offset++;
+        }
+        return offset;
     }
 }

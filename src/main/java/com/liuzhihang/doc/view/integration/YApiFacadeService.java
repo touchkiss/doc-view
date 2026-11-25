@@ -19,7 +19,8 @@ public interface YApiFacadeService {
     /**
      * 新增接口，或在 DTO 包含接口 ID 时更新接口
      *
-     * @param dto
+     * @param dto 接口内容
+     * @throws Exception 请求失败或响应处理失败时抛出
      */
     void save(YapiSave dto) throws Exception;
 
@@ -34,6 +35,18 @@ public interface YApiFacadeService {
      */
     List<YApiCat> getCatMenu(String yapiUrl, Long projectId, String token) throws Exception;
 
+    /**
+     * 按分类、方法和路径查找已有接口。
+     *
+     * @param yapiUrl YApi 地址
+     * @param projectId 项目 ID
+     * @param token 访问令牌
+     * @param catId 分类 ID
+     * @param method HTTP 方法
+     * @param path 接口路径
+     * @return 匹配接口的 ID，未找到时为空
+     * @throws Exception 请求失败或响应处理失败时抛出
+     */
     Optional<Long> findInterfaceId(String yapiUrl, Long projectId, String token,
                                    Long catId, String method, String path) throws Exception;
 

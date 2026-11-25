@@ -17,6 +17,8 @@ import static com.liuzhihang.doc.view.utils.ParamPsiUtils.DEFAULT_MAX_SCHEMA_DEP
 
 /** Projects Java property values to request and response JSON examples. */
 final class PsiJsonExamples {
+    private static final String OBJECT_DESCRIPTION_PREFIX = "Object for ";
+
     private PsiJsonExamples() {
     }
 
@@ -37,7 +39,9 @@ final class PsiJsonExamples {
             return fieldMap;
         }
 
-        if (qualifiedNameList.size() >= DEFAULT_MAX_SCHEMA_DEPTH) return fieldMap;
+        if (qualifiedNameList.size() >= DEFAULT_MAX_SCHEMA_DEPTH) {
+            return fieldMap;
+        }
         if (psiClass.isRecord()) {
             return getFieldsAndDefaultValueForRecord(psiClass, genericMap, qualifiedNameList);
         }
@@ -135,7 +139,7 @@ final class PsiJsonExamples {
 
                     LinkedList<String> temp = new LinkedList<>(qualifiedNameList);
                     if (classInType != null && (containsQualifiedName(temp, classInType.getQualifiedName()) || temp.size() >= DEFAULT_MAX_SCHEMA_DEPTH)) {
-                        list.add("Object for " + classInType.getName());
+                        list.add(OBJECT_DESCRIPTION_PREFIX + classInType.getName());
                     } else {
                         list.add(getFieldsAndDefaultValue(classInType, null, temp));
                     }
@@ -160,7 +164,7 @@ final class PsiJsonExamples {
                         // 参数类型为对象 校验是否递归
                         LinkedList<String> temp = new LinkedList<>(qualifiedNameList);
                         if (containsQualifiedName(temp, iterableClass.getQualifiedName()) || temp.size() >= DEFAULT_MAX_SCHEMA_DEPTH) {
-                            list.add("Object for " + iterableClass.getName());
+                            list.add(OBJECT_DESCRIPTION_PREFIX + iterableClass.getName());
                         } else {
                             Map<String, PsiType> elementGenerics = iterableType instanceof PsiClassType classType
                                     ? CustomPsiUtils.getGenericsMap(classType) : null;
@@ -186,7 +190,7 @@ final class PsiJsonExamples {
                         if (valueClass != null) {
                             LinkedList<String> temp = new LinkedList<>(qualifiedNameList);
                             if (containsQualifiedName(temp, valueClass.getQualifiedName()) || temp.size() >= DEFAULT_MAX_SCHEMA_DEPTH) {
-                                hashMap.put(matKeyType.getPresentableText(), "Object for " + valueClass.getName());
+                                hashMap.put(matKeyType.getPresentableText(), OBJECT_DESCRIPTION_PREFIX + valueClass.getName());
                             } else {
                                 hashMap.put(matKeyType.getPresentableText(), getFieldsAndDefaultValue(valueClass, CustomPsiUtils.getGenericsMap((PsiClassType) matValueType), temp));
                             }
@@ -207,7 +211,7 @@ final class PsiJsonExamples {
 
                 LinkedList<String> temp = new LinkedList<>(qualifiedNameList);
                 if (classInType != null && (containsQualifiedName(temp, classInType.getQualifiedName()) || temp.size() >= DEFAULT_MAX_SCHEMA_DEPTH)) {
-                    fieldMap.put(fieldName, "Object for " + classInType.getName());
+                    fieldMap.put(fieldName, OBJECT_DESCRIPTION_PREFIX + classInType.getName());
                 } else {
                     fieldMap.put(fieldName, getFieldsAndDefaultValue(PsiUtil.resolveClassInType(type), CustomPsiUtils.getGenericsMap((PsiClassType) type), temp));
                 }
@@ -227,7 +231,9 @@ final class PsiJsonExamples {
                                                                          @NotNull LinkedList<String> qualifiedNameList) {
         ProgressManager.checkCanceled();
         Map<String, Object> fieldMap = new LinkedHashMap<>();
-        if (qualifiedNameList.size() >= DEFAULT_MAX_SCHEMA_DEPTH) return fieldMap;
+        if (qualifiedNameList.size() >= DEFAULT_MAX_SCHEMA_DEPTH) {
+            return fieldMap;
+        }
         qualifiedNameList.add(psiClass.getQualifiedName());
 
         JacksonPropertyProjection projection = new JacksonPropertyProjection(psiClass, false);
@@ -272,7 +278,7 @@ final class PsiJsonExamples {
                     PsiClass classInType = PsiUtil.resolveClassInType(deepType);
                     LinkedList<String> temp = new LinkedList<>(qualifiedNameList);
                     if (classInType != null && (containsQualifiedName(temp, classInType.getQualifiedName()) || temp.size() >= DEFAULT_MAX_SCHEMA_DEPTH)) {
-                        list.add("Object for " + classInType.getName());
+                        list.add(OBJECT_DESCRIPTION_PREFIX + classInType.getName());
                     } else if (classInType != null && classInType.isRecord()) {
                         list.add(getFieldsAndDefaultValueForRecord(classInType, null, temp));
                     } else {
@@ -295,7 +301,7 @@ final class PsiJsonExamples {
                     } else {
                         LinkedList<String> temp = new LinkedList<>(qualifiedNameList);
                         if (containsQualifiedName(temp, iterableClass.getQualifiedName()) || temp.size() >= DEFAULT_MAX_SCHEMA_DEPTH) {
-                            list.add("Object for " + iterableClass.getName());
+                            list.add(OBJECT_DESCRIPTION_PREFIX + iterableClass.getName());
                         } else if (iterableClass.isRecord()) {
                             list.add(getFieldsAndDefaultValueForRecord(iterableClass, null, temp));
                         } else {
@@ -314,7 +320,7 @@ final class PsiJsonExamples {
                         if (valueClass != null) {
                             LinkedList<String> temp = new LinkedList<>(qualifiedNameList);
                             if (containsQualifiedName(temp, valueClass.getQualifiedName()) || temp.size() >= DEFAULT_MAX_SCHEMA_DEPTH) {
-                                hashMap.put(matKeyType.getPresentableText(), "Object for " + valueClass.getName());
+                                hashMap.put(matKeyType.getPresentableText(), OBJECT_DESCRIPTION_PREFIX + valueClass.getName());
                             } else if (valueClass.isRecord()) {
                                 hashMap.put(matKeyType.getPresentableText(), getFieldsAndDefaultValueForRecord(valueClass, CustomPsiUtils.getGenericsMap((PsiClassType) matValueType), temp));
                             } else {
@@ -328,7 +334,7 @@ final class PsiJsonExamples {
                 PsiClass classInType = PsiUtil.resolveClassInType(type);
                 LinkedList<String> temp = new LinkedList<>(qualifiedNameList);
                 if (classInType != null && (containsQualifiedName(temp, classInType.getQualifiedName()) || temp.size() >= DEFAULT_MAX_SCHEMA_DEPTH)) {
-                    fieldMap.put(fieldName, "Object for " + classInType.getName());
+                    fieldMap.put(fieldName, OBJECT_DESCRIPTION_PREFIX + classInType.getName());
                 } else if (classInType != null && classInType.isRecord()) {
                     fieldMap.put(fieldName, getFieldsAndDefaultValueForRecord(classInType, type instanceof PsiClassType ? CustomPsiUtils.getGenericsMap((PsiClassType) type) : null, temp));
                 } else {

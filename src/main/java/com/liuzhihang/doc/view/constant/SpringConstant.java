@@ -79,14 +79,7 @@ public final class SpringConstant {
     /**
      * Spring Mapping 注解列表
      */
-    public static final List<String> MAPPING_ANNOTATIONS = new ArrayList<>() {{
-
-        add(GET_MAPPING);
-        add(POST_MAPPING);
-        add(PUT_MAPPING);
-        add(DELETE_MAPPING);
-        add(PATCH_MAPPING);
-        add(REQUEST_MAPPING);
-    }};
+    public static final List<String> MAPPING_ANNOTATIONS = new ArrayList<>(List.of(
+            GET_MAPPING, POST_MAPPING, PUT_MAPPING, DELETE_MAPPING, PATCH_MAPPING, REQUEST_MAPPING));
 
 }

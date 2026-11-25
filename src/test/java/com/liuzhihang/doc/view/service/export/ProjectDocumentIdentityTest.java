@@ -12,6 +12,9 @@ public final class ProjectDocumentIdentityTest extends TestCase {
         ProjectDocumentIdentity same = identity("api", "src/main/java/example/UserApi.java", "example.UserApi",
                 "find", List.of("java.lang.String"));
 
+        assertEquals(first, same);
+        assertEquals(first.hashCode(), same.hashCode());
+        assertEquals(0, first.compareTo(same));
         assertEquals(first.canonicalForm(), same.canonicalForm());
         assertEquals(first.sha256(), same.sha256());
         assertEquals(first.pageFileName(), same.pageFileName());
@@ -29,6 +32,8 @@ public final class ProjectDocumentIdentityTest extends TestCase {
         ProjectDocumentIdentity left = identity("a|b", "c", "d", "e", List.of("f"));
         ProjectDocumentIdentity right = identity("a", "b|c", "d", "e", List.of("f"));
 
+        assertFalse(left.equals(right));
+        assertTrue(left.compareTo(right) != 0);
         assertFalse(left.canonicalForm().equals(right.canonicalForm()));
         assertFalse(left.sha256().equals(right.sha256()));
     }

@@ -10,6 +10,8 @@ import org.jetbrains.annotations.NotNull;
  * @date 2020/3/6 13:24
  */
 public class SpringHeaderUtils {
+    private SpringHeaderUtils() {}
+
 
     @NotNull
     public static Header buildJsonHeader() {

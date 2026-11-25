@@ -46,7 +46,7 @@ public class ParamsVariableGenerator extends AbstractVariableGenerator {
         List<Supplier<String>> parameters = new ArrayList<>();
         PsiDocComment docComment = ((PsiMethod)element).getDocComment();
         // {"paramName":PsiDocTag}
-        Map<String, PsiDocTag> psiDocTagMap = new HashMap<>();
+        Map<String, PsiDocTag> psiDocTagMap = HashMap.newHashMap(paramNameList.size());
         if (docComment != null) {
             PsiDocTag[] paramsDocArray = docComment.findTagsByName("param");
             for (PsiDocTag psiDocTag : paramsDocArray) {

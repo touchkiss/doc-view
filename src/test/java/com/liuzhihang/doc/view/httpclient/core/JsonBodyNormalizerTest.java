@@ -16,6 +16,10 @@ public class JsonBodyNormalizerTest {
         String input = "{\n  \"id\": -0, \"x\": 1e+3, \"text\": \"\\u4e2d\"\n}";
         assertEquals(input, JsonBodyNormalizer.normalize(input));
     }
+    @Test public void preservesLongStrictJsonString() {
+        String input = "{\"notes\":\"" + "field description ".repeat(2048) + "\"}";
+        assertEquals(input, JsonBodyNormalizer.normalize(input));
+    }
     @Test public void supportsPrimitiveRootAndEmptyBody() {
         assertEquals("\"hello\"", JsonBodyNormalizer.normalize("'hello'"));
         assertEquals("true", JsonBodyNormalizer.normalize("true"));

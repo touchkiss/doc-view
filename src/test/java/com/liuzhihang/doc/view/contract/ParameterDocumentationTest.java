@@ -1,5 +1,7 @@
 package com.liuzhihang.doc.view.contract;
 
+import com.google.gson.JsonObject;
+import com.google.gson.JsonParser;
 import com.intellij.psi.PsiClass;
 import com.intellij.psi.PsiJavaFile;
 import com.intellij.psi.PsiMethod;
@@ -10,6 +12,8 @@ import com.liuzhihang.doc.view.dto.DocViewData;
 import com.liuzhihang.doc.view.service.impl.DubboDocViewServiceImpl;
 import com.liuzhihang.doc.view.utils.CustomPsiCommentUtils;
 import com.liuzhihang.doc.view.utils.DubboPsiUtils;
+
+import java.util.Set;
 
 public final class ParameterDocumentationTest extends LightJavaCodeInsightFixtureTestCase {
     public void testOriginalDubboIssueMultipleParametersKeepDescriptions() {
@@ -31,6 +35,10 @@ public final class ParameterDocumentationTest extends LightJavaCodeInsightFixtur
                 class Page { long size; long current; }
                 """);
         DocView doc = new DubboDocViewServiceImpl().buildClassMethodDoc(api, api.getMethods()[0]);
+        JsonObject example = JsonParser.parseString(doc.getReqBodyExample()).getAsJsonObject();
+        assertEquals(Set.of("page", "searchKey", "viewId", "displayType", "fetchOrgsInfo", "maxLevel", "displayLevel"),
+                example.keySet());
+        assertEquals(Set.of("size", "current"), example.getAsJsonObject("page").keySet());
         String[] expected = {"分页参数", "关键字", "视图id", "显示类型", "组装所在机构信息", "最大搜索等级", "机构显示级别"};
         assertEquals(expected.length, doc.getReqBody().getChildList().size());
         String markdown = DocViewData.markdownText(getProject(), doc);
@@ -38,6 +46,15 @@ public final class ParameterDocumentationTest extends LightJavaCodeInsightFixtur
             assertEquals(expected[i], doc.getReqBody().getChildList().get(i).getDesc().trim());
             assertTrue(markdown.contains(expected[i]));
         }
+    }
+
+    public void testSingleDubboObjectExampleKeepsFieldsAtRoot() {
+        PsiMethod method = source("""
+                interface QueryApi { void query(Page page); }
+                class Page { long size; }
+                """).getMethods()[0];
+        JsonObject example = JsonParser.parseString(DubboPsiUtils.getReqBodyJson(method)).getAsJsonObject();
+        assertEquals(Set.of("size"), example.keySet());
     }
 
     public void testParameterNamesMatchExactlyAndMultilineIsPreserved() {

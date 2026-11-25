@@ -21,11 +21,21 @@ public final class YApiUploadNotificationTest extends LightPlatformTestCase {
         assertFalse(notification.getContent().contains("未能定位接口"));
     }
 
+    public void testMissingLinkStillReportsSuccessWithoutLinkActions() {
+        for (String url : new String[] {null, "  "}) {
+            Notification notification = notifyUpload(url);
+            assertEquals(NotificationType.INFORMATION, notification.getType());
+            assertTrue(notification.getActions().isEmpty());
+        }
+    }
+
     private Notification notifyUpload(String url) {
         AtomicReference<Notification> emitted = new AtomicReference<>();
         Notifications listener = new Notifications() {
             @Override public void notify(Notification notification) {
-                if ("doc-view.NotificationGroup".equals(notification.getGroupId())) emitted.set(notification);
+                if ("doc-view.NotificationGroup".equals(notification.getGroupId())) {
+                    emitted.set(notification);
+                }
             }
         };
         ApplicationManager.getApplication().getMessageBus().connect(getTestRootDisposable())

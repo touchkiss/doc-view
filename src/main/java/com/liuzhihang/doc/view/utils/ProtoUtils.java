@@ -11,6 +11,8 @@ import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
 public class ProtoUtils {
+    private ProtoUtils() {}
+
 
     /**
      * 标记由 .proto message 合成出来的内存 Java 文件。

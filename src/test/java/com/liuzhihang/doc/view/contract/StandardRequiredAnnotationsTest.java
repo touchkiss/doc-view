@@ -166,10 +166,14 @@ public final class StandardRequiredAnnotationsTest extends LightJavaCodeInsightF
         String before = type.getContainingFile().getText();
         DocView doc = new SpringDocViewServiceImpl().buildClassMethodDoc(type, type.getMethods()[0]);
         var flags = doc.getReqParamList().stream().collect(Collectors.toMap(p -> p.getName(), p -> p.getRequired()));
-        for (String name : REQUIRED) assertEquals(name, Boolean.TRUE, flags.get(name));
+        for (String name : REQUIRED) {
+            assertEquals(name, Boolean.TRUE, flags.get(name));
+        }
         assertEquals(Boolean.FALSE, flags.get("optional"));
         var save = new YapiSaveFactory().create(settings(), category(), doc);
-        for (var query : save.getReqQuery()) assertEquals(query.getName(), query.getName().equals("optional") ? "0" : "1", query.getRequired());
+        for (var query : save.getReqQuery()) {
+            assertEquals(query.getName(), query.getName().equals("optional") ? "0" : "1", query.getRequired());
+        }
         assertEquals(before, type.getContainingFile().getText());
     }
 
@@ -195,7 +199,9 @@ public final class StandardRequiredAnnotationsTest extends LightJavaCodeInsightF
 
     private void assertRequirements(Body root) {
         Map<String, Boolean> flags = root.getChildList().stream().collect(Collectors.toMap(Body::getName, Body::getRequired));
-        for (String name : REQUIRED) assertEquals(name, Boolean.TRUE, flags.get(name));
+        for (String name : REQUIRED) {
+            assertEquals(name, Boolean.TRUE, flags.get(name));
+        }
         assertEquals(Boolean.FALSE, flags.get("optional"));
         root.getChildList().stream().filter(row -> row.getName().equals("javaxEmpty") && row.getType().endsWith("[]"))
                 .forEach(row -> {
@@ -203,7 +209,9 @@ public final class StandardRequiredAnnotationsTest extends LightJavaCodeInsightF
                     assertTrue("Scalar array contents must not expand String implementation fields", row.getChildList().isEmpty());
                 });
         for (String nullable : List.of("sized", "positive", "nested", "legacy")) {
-            if (flags.containsKey(nullable)) assertEquals(nullable, Boolean.FALSE, flags.get(nullable));
+            if (flags.containsKey(nullable)) {
+                assertEquals(nullable, Boolean.FALSE, flags.get(nullable));
+            }
         }
     }
 

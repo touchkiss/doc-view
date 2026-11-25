@@ -25,7 +25,7 @@ public final class ReferenceResolver {
     public ReferenceResolver() {
         this((project, fqcn) -> JavaPsiFacade.getInstance(project)
                         .findClass(fqcn, GlobalSearchScope.projectScope(project)),
-                (project, psiClass) -> DocViewService.getInstance(project, psiClass),
+                DocViewService::getInstance,
                 ReadAction::computeBlocking);
     }
 
@@ -147,16 +147,34 @@ public final class ReferenceResolver {
 
     @FunctionalInterface
     interface ClassLookup {
+        /**
+         * Finds a class by qualified name.
+         * @param project project to search
+         * @param fqcn qualified class name
+         * @return matching class, or null
+         */
         PsiClass findClass(Project project, String fqcn);
     }
 
     @FunctionalInterface
     interface DocViewServiceProvider {
+        /**
+         * Selects the document parser for a class.
+         * @param project current project
+         * @param psiClass source class
+         * @return matching parser
+         */
         DocViewService get(Project project, PsiClass psiClass);
     }
 
     @FunctionalInterface
     interface ReadActionComputer {
+        /**
+         * Resolves PSI under the caller-provided read action.
+         * @param computation read computation
+         * @param <T> result type
+         * @return computation result
+         */
         <T> T compute(ThrowableComputable<T, RuntimeException> computation);
     }
 

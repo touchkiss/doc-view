@@ -41,12 +41,16 @@ public abstract class AbstractAction extends AnAction {
     @Override
     public final void actionPerformed(@NotNull AnActionEvent event) {
         Project project = event.getProject();
-        if (!ready(project)) return;
+        if (!ready(project)) {
+            return;
+        }
         PsiDocumentManager.getInstance(project).commitAllDocuments();
         var selection = ActionSelection.from(event);
         DocumentTarget target;
         if (CustomPsiUtils.isProtoFile(selection.file())) {
-            if (!supportsProto()) return;
+            if (!supportsProto()) {
+                return;
+            }
             PsiClass type = CustomPsiUtils.getProtoTargetClass(selection.editor(), selection.file());
             if (type == null) {
                 DocViewNotification.notifyError(project, DocViewBundle.message("notify.error.proto.no.message"));
@@ -69,9 +73,13 @@ public abstract class AbstractAction extends AnAction {
 
     private static DocumentTarget javaTarget(Project project, ActionSelection selection) {
         var element = selection.declaration();
-        if (element == null || !element.isValid() || selection.file() == null) return null;
+        if (element == null || !element.isValid() || selection.file() == null) {
+            return null;
+        }
         var type = PsiTreeUtil.getParentOfType(element, PsiClass.class, false);
-        if (type == null || type instanceof SyntheticElement || type.isAnnotationType() || type.isEnum()) return null;
+        if (type == null || type instanceof SyntheticElement || type.isAnnotationType() || type.isEnum()) {
+            return null;
+        }
         var method = PsiTreeUtil.getParentOfType(element, PsiMethod.class, false);
         if (method instanceof SyntheticElement || method != null && method.getContainingClass() != type) {
             method = null;
@@ -87,5 +95,9 @@ public abstract class AbstractAction extends AnAction {
         return true;
     }
 
+    /**
+     * Executes the command for a validated source target.
+     * @param target resolved source target
+     */
     protected abstract void perform(DocumentTarget target);
 }

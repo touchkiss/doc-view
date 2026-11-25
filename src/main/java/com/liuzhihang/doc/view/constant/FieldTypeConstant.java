@@ -1,6 +1,5 @@
 package com.liuzhihang.doc.view.constant;
 
-import com.google.common.collect.Sets;
 import org.jetbrains.annotations.NonNls;
 
 import java.util.HashMap;
@@ -17,15 +16,15 @@ public final class FieldTypeConstant {
     }
 
     @NonNls
-    public static final Map<String, Object> FIELD_TYPE = new HashMap<>(64);
+    public static final Map<String, Object> FIELD_TYPE = HashMap.newHashMap(13);
 
-    public static final Set<String> BASE_TYPE_SET = Sets.newHashSet("byte", "short", "int", "long", "char", "float",
+    public static final Set<String> BASE_TYPE_SET = Set.of("byte", "short", "int", "long", "char", "float",
             "double", "boolean");
 
     /**
      * 包装类型 & String
      */
-    public static final Set<String> PACKAGE_TYPE_SET = Sets.newHashSet("Byte", "Short", "Integer", "Long", "Float", "Double",
+    public static final Set<String> PACKAGE_TYPE_SET = Set.of("Byte", "Short", "Integer", "Long", "Float", "Double",
             "Boolean", "String");
 
     static {

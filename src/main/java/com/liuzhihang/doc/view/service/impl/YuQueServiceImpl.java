@@ -5,7 +5,7 @@ import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.components.Service;
 import com.intellij.openapi.project.Project;
 import com.liuzhihang.doc.view.DocViewBundle;
-import com.liuzhihang.doc.view.config.YuQueSettingsConfigurable;
+import com.liuzhihang.doc.view.ui.settings.YuQueSettingsConfigurable;
 import com.liuzhihang.doc.view.config.YuQueSettings;
 import com.liuzhihang.doc.view.dto.DocView;
 import com.liuzhihang.doc.view.render.DocumentMarkdownRenderer;
@@ -85,7 +85,7 @@ public final class YuQueServiceImpl implements DocViewUploadService {
             DocViewNotification.uploadSuccess(project, DocViewBundle.message("platform.name.yuque"), yuQueDocUrl);
         } catch (ProcessCanceledException exception) {
             throw exception;
-        } catch (Exception e) {
+        } catch (Exception _) {
             DocViewNotification.notifyError(project, DocViewBundle.message("notify.yuque.upload.error"));
         }
     }

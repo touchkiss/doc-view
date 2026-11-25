@@ -25,6 +25,9 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
 final class SdkMcpTransport implements McpServerService.McpTransport, McpStatelessServerTransport {
+    private static final String INVALID_MESSAGE = "Invalid JSON-RPC message.";
+    private static final String CONTENT_TYPE = "Content-Type";
+
 
     private static final Logger LOG = Logger.getInstance(SdkMcpTransport.class);
     static final String MCP_PATH = "/mcp";
@@ -51,12 +54,7 @@ final class SdkMcpTransport implements McpServerService.McpTransport, McpStatele
         // through IntelliJ's plugin class loader. Tool input validation is intentionally
         // disabled below and McpToolHandler validates the business input, so keep startup
         // fully local and offline here.
-        return new JsonSchemaValidator() {
-            @Override
-            public ValidationResponse validate(Map<String, Object> schema, Object structuredContent) {
-                return ValidationResponse.asValid(null);
-            }
-        };
+        return (schema, structuredContent) -> JsonSchemaValidator.ValidationResponse.asValid(null);
     }
 
     @Override
@@ -139,7 +137,7 @@ final class SdkMcpTransport implements McpServerService.McpTransport, McpStatele
                 message = jsonMapper.readValue(exchange.getRequestBody().readAllBytes(), Map.class);
                 messageType = classifyMessage(message);
             } catch (Exception exception) {
-                sendText(exchange, 400, "Invalid JSON-RPC message.");
+                sendText(exchange, 400, INVALID_MESSAGE);
                 return;
             }
 
@@ -148,7 +146,7 @@ final class SdkMcpTransport implements McpServerService.McpTransport, McpStatele
                 try {
                     request = jsonMapper.convertValue(message, McpSchema.JSONRPCRequest.class);
                 } catch (Exception exception) {
-                    sendText(exchange, 400, "Invalid JSON-RPC message.");
+                    sendText(exchange, 400, INVALID_MESSAGE);
                     return;
                 }
                 McpSchema.JSONRPCResponse response = handler
@@ -159,7 +157,7 @@ final class SdkMcpTransport implements McpServerService.McpTransport, McpStatele
             }
 
             if (messageType != JsonRpcMessageType.NOTIFICATION) {
-                sendText(exchange, 400, "Invalid JSON-RPC message.");
+                sendText(exchange, 400, INVALID_MESSAGE);
                 return;
             }
 
@@ -167,7 +165,7 @@ final class SdkMcpTransport implements McpServerService.McpTransport, McpStatele
             try {
                 notification = jsonMapper.convertValue(message, McpSchema.JSONRPCNotification.class);
             } catch (Exception exception) {
-                sendText(exchange, 400, "Invalid JSON-RPC message.");
+                sendText(exchange, 400, INVALID_MESSAGE);
                 return;
             }
             handler.handleNotification(McpTransportContext.EMPTY, notification).block();
@@ -179,21 +177,21 @@ final class SdkMcpTransport implements McpServerService.McpTransport, McpStatele
     }
 
     private int validateRequestHeaders(HttpExchange exchange) {
-        if (!isApplicationJson(exchange.getRequestHeaders().getFirst("Content-Type"))) {
+        if (!isApplicationJson(exchange.getRequestHeaders().getFirst(CONTENT_TYPE))) {
             return 415;
         }
         if (!acceptsMcpResponses(exchange.getRequestHeaders().get("Accept"))) {
             return 406;
         }
 
-        int port = httpServer.getAddress().getPort();
+        int listenerPort = httpServer.getAddress().getPort();
         List<String> hostHeaders = exchange.getRequestHeaders().get("Host");
-        if (hostHeaders == null || hostHeaders.size() != 1 || !isLoopbackAuthority(hostHeaders.get(0), port)) {
+        if (hostHeaders == null || hostHeaders.size() != 1 || !isLoopbackAuthority(hostHeaders.get(0), listenerPort)) {
             return 400;
         }
 
         String origin = exchange.getRequestHeaders().getFirst("Origin");
-        return origin == null || isLoopbackOrigin(origin, port) ? 0 : 403;
+        return origin == null || isLoopbackOrigin(origin, listenerPort) ? 0 : 403;
     }
 
     private static boolean isApplicationJson(String contentType) {
@@ -216,11 +214,8 @@ final class SdkMcpTransport implements McpServerService.McpTransport, McpStatele
                 if (mediaRange == null) {
                     return false;
                 }
-                if (APPLICATION_JSON.equalsIgnoreCase(mediaRange.type)) {
-                    acceptsJson |= mediaRange.hasPositiveQuality;
-                } else if (TEXT_EVENT_STREAM.equalsIgnoreCase(mediaRange.type)) {
-                    acceptsEventStream |= mediaRange.hasPositiveQuality;
-                }
+                acceptsJson |= mediaRange.matches(APPLICATION_JSON);
+                acceptsEventStream |= mediaRange.matches(TEXT_EVENT_STREAM);
             }
         }
         return acceptsJson && acceptsEventStream;
@@ -319,7 +314,7 @@ final class SdkMcpTransport implements McpServerService.McpTransport, McpStatele
         if (hasResult || hasError) {
             return JsonRpcMessageType.INVALID;
         }
-        if (!(method instanceof String) || ((String) method).trim().isEmpty()) {
+        if (!(method instanceof String methodName) || methodName.trim().isEmpty()) {
             return JsonRpcMessageType.INVALID;
         }
         if (!message.containsKey("id")) {
@@ -332,19 +327,23 @@ final class SdkMcpTransport implements McpServerService.McpTransport, McpStatele
     }
 
     private enum JsonRpcMessageType {
+        /** A request expecting a response. */
         REQUEST,
+        /** A notification without an identifier. */
         NOTIFICATION,
+        /** A response received from the client. */
         RESPONSE,
+        /** A message that does not satisfy the JSON-RPC shape. */
         INVALID
     }
 
     private void sendText(HttpExchange exchange, int status, String body) throws IOException {
-        exchange.getResponseHeaders().set("Content-Type", "text/plain; charset=utf-8");
+        exchange.getResponseHeaders().set(CONTENT_TYPE, "text/plain; charset=utf-8");
         sendBody(exchange, status, body.getBytes(StandardCharsets.UTF_8));
     }
 
     private void sendJson(HttpExchange exchange, int status, byte[] body) throws IOException {
-        exchange.getResponseHeaders().set("Content-Type", APPLICATION_JSON);
+        exchange.getResponseHeaders().set(CONTENT_TYPE, APPLICATION_JSON);
         sendBody(exchange, status, body);
     }
 
@@ -360,6 +359,10 @@ final class SdkMcpTransport implements McpServerService.McpTransport, McpStatele
         private AcceptMediaRange(String type, boolean hasPositiveQuality) {
             this.type = type;
             this.hasPositiveQuality = hasPositiveQuality;
+        }
+
+        private boolean matches(String mediaType) {
+            return hasPositiveQuality && mediaType.equalsIgnoreCase(type);
         }
     }
 }

@@ -71,7 +71,9 @@ public final class YApiUploadOrchestrator {
         List<UploadItemResult> results = new ArrayList<>();
         for (DocView docView : docViews) {
             ProgressManager.checkCanceled();
-            if (project != null && project.isDisposed()) throw new ProcessCanceledException();
+            if (project != null && project.isDisposed()) {
+                throw new ProcessCanceledException();
+            }
             results.add(uploadOne(settings, docView));
         }
         return results;
@@ -81,6 +83,9 @@ public final class YApiUploadOrchestrator {
         String reference = docView == null ? "unknown" : docView.getMethod() + " " + docView.getPath();
         final YapiSave save;
         try {
+            if (docView == null) {
+                throw new IllegalArgumentException("文档为空");
+            }
             save = createSaveInReadAction(settings, docView);
             reference = save.getMethod() + " " + save.getPath();
         } catch (ProcessCanceledException exception) {
@@ -183,7 +188,12 @@ public final class YApiUploadOrchestrator {
     }
 
     private enum Failure {
-        DOC_GENERATION_FAILED, YAPI_REQUEST_FAILED, YAPI_RESPONSE_INVALID
+        /** Local conversion of a document failed. */
+        DOC_GENERATION_FAILED,
+        /** A request to YApi failed. */
+        YAPI_REQUEST_FAILED,
+        /** YApi returned an invalid response. */
+        YAPI_RESPONSE_INVALID
     }
 
     public static final class UploadItemResult {

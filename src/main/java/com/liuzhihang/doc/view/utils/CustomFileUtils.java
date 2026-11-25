@@ -103,10 +103,6 @@ public class CustomFileUtils {
 
         DocViewService service = DocViewService.getInstance(project, node.getPsiClass());
 
-        if (service == null) {
-            return;
-        }
-
         // 解析获取 DocView, 从而可以获取接口信息
         DocView docView = ApplicationManager.getApplication().runReadAction(
                 (Computable<DocView>) () -> service.buildClassMethodDoc(node.getPsiClass(), node.getPsiMethod()));

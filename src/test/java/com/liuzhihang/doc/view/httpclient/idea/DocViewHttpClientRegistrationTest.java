@@ -20,7 +20,9 @@ public class DocViewHttpClientRegistrationTest {
         for (int i = 0; i < dependencies.getLength(); i++) {
             Element item = (Element) dependencies.item(i);
             assertNotEquals("Do not depend on the separate REST Client X plugin", "com.touchkiss.restclientx", item.getTextContent().trim());
-            if (item.getTextContent().trim().equals("com.jetbrains.restClient")) http = item;
+            if ("com.jetbrains.restClient".equals(item.getTextContent().trim())) {
+                http = item;
+            }
         }
         assertNotNull("Native HTTP Client must be an optional dependency", http);
         assertEquals("true", http.getAttribute("optional"));

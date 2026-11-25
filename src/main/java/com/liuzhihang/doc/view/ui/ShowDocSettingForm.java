@@ -12,6 +12,9 @@ import javax.swing.*;
 import java.awt.FlowLayout;
 import java.util.Arrays;
 
+/**
+ * ShowDoc integration settings.
+ */
 public class ShowDocSettingForm {
     private JPanel rootPanel;
     private JPanel showDocProjectPanel;

@@ -31,8 +31,12 @@ public final class MarkdownExamples {
     public static String requestExample(DocView docView) {
         String form = codeBlock("Form", docView.getReqFormExample());
         String body = codeBlock("JSON", docView.getReqBodyExample());
-        if (form.isEmpty()) return body;
-        if (body.isEmpty()) return form;
+        if (form.isEmpty()) {
+            return body;
+        }
+        if (body.isEmpty()) {
+            return form;
+        }
         return form + "\n\n" + body;
     }
 

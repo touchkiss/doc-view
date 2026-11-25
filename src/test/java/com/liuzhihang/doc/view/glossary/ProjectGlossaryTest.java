@@ -19,7 +19,8 @@ public class ProjectGlossaryTest {
                 ```
                 """;
         assertEquals(Map.of("trec", "交易对账"), ProjectGlossary.parse(response, Set.of("trec", "oms")));
-        assertThrows(IllegalArgumentException.class, () -> ProjectGlossary.parse("error", Set.of()));
+        Set<String> noEvidence = Set.of();
+        assertThrows(IllegalArgumentException.class, () -> ProjectGlossary.parse("error", noEvidence));
     }
 
     @Test

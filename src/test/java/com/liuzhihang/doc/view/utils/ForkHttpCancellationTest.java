@@ -57,8 +57,12 @@ public final class ForkHttpCancellationTest extends LightPlatformTestCase {
     protected void tearDown() throws Exception {
         try {
             finishResponse.countDown();
-            if (server != null) server.stop(0);
-            if (executor != null) executor.shutdownNow();
+            if (server != null) {
+                server.stop(0);
+            }
+            if (executor != null) {
+                executor.shutdownNow();
+            }
         } finally {
             super.tearDown();
         }
@@ -103,7 +107,9 @@ public final class ForkHttpCancellationTest extends LightPlatformTestCase {
         do {
             for (StackTraceElement frame : thread.getStackTrace()) {
                 if ("org.apache.http.util.EntityUtils".equals(frame.getClassName())
-                        && "toString".equals(frame.getMethodName())) return true;
+                        && "toString".equals(frame.getMethodName())) {
+                    return true;
+                }
             }
             Thread.sleep(10);
         } while (System.nanoTime() < deadline);

@@ -97,11 +97,23 @@ public final class ProjectDocumentIdentity implements Comparable<ProjectDocument
         return canonicalForm.compareTo(other.canonicalForm);
     }
 
+    @Override
+    public boolean equals(Object other) {
+        return this == other || other instanceof ProjectDocumentIdentity identity
+                && canonicalForm.equals(identity.canonicalForm);
+    }
+
+    @Override
+    public int hashCode() {
+        return canonicalForm.hashCode();
+    }
+
     private byte[] encodeCanonicalIdentity() {
         try {
             ByteArrayOutputStream bytes = new ByteArrayOutputStream();
             try (DataOutputStream output = new DataOutputStream(bytes)) {
-                output.writeInt(1); // identity encoding version
+                // Identity encoding version.
+                output.writeInt(1);
                 writeString(output, moduleName);
                 writeString(output, sourcePath);
                 writeString(output, qualifiedClassName);
@@ -130,10 +142,10 @@ public final class ProjectDocumentIdentity implements Comparable<ProjectDocument
         }
         List<String> normalized = new ArrayList<>();
         for (String component : path.split("/")) {
-            if (component.isEmpty() || component.equals(".")) {
+            if (component.isEmpty() || ".".equals(component)) {
                 continue;
             }
-            if (component.equals("..")) {
+            if ("..".equals(component)) {
                 throw new IllegalArgumentException("sourcePath must not escape the project root");
             }
             normalized.add(component);

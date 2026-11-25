@@ -63,8 +63,10 @@ record DocEditorFields(List<DocViewParamData> data, Map<DocViewParamData, Source
                                              Map<DocViewParamData, SourceDescriptionService.Target> targets,
                                              String prefix) {
         for (DocViewParamData row : rows) {
-            String path = row.getName() == null || row.getName().isBlank() ? prefix
-                    : prefix.isEmpty() ? row.getName() : prefix + " · " + row.getName();
+            String path = prefix;
+            if (row.getName() != null && !row.getName().isBlank()) {
+                path = prefix.isEmpty() ? row.getName() : prefix + " · " + row.getName();
+            }
             if (!row.isSyntheticContainerNode()) {
                 var target = SourceDescriptionService.fieldDescriptionTarget(path, row.getDescription(), row.getPsiElement());
                 if (target != null) {
@@ -108,20 +110,7 @@ record DocEditorFields(List<DocViewParamData> data, Map<DocViewParamData, Source
 
     void updateRowDescription(DocViewParamData row) {
         var target = targets.get(row);
-        var description = ReadAction.computeBlocking(() -> {
-            var owner = target.source().getElement();
-            if (owner instanceof PsiField field) {
-                return DocViewUtils.fieldDescription(field);
-            }
-            if (owner instanceof PsiClass type && target.paramName() != null) {
-                for (var component : type.getRecordComponents()) {
-                    if (target.paramName().equals(component.getName())) {
-                        return DocViewUtils.fieldDescription(component);
-                    }
-                }
-            }
-            return null;
-        });
+        var description = ReadAction.computeBlocking(() -> readTargetDescription(target));
         if (description != null) {
             for (var entry : targets.entrySet()) {
                 var other = entry.getValue();
@@ -132,6 +121,21 @@ record DocEditorFields(List<DocViewParamData> data, Map<DocViewParamData, Source
                 }
             }
         }
+    }
+
+    private static com.liuzhihang.doc.view.dto.DocDescription readTargetDescription(SourceDescriptionService.Target target) {
+        var owner = target.source().getElement();
+        if (owner instanceof PsiField field) {
+            return DocViewUtils.fieldDescription(field);
+        }
+        if (owner instanceof PsiClass type && target.paramName() != null) {
+            for (var component : type.getRecordComponents()) {
+                if (target.paramName().equals(component.getName())) {
+                    return DocViewUtils.fieldDescription(component);
+                }
+            }
+        }
+        return null;
     }
 
 }

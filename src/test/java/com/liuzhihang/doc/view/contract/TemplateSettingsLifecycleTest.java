@@ -11,7 +11,7 @@ import com.intellij.psi.PsiMethod;
 import com.intellij.testFramework.EdtTestUtil;
 import com.intellij.testFramework.fixtures.LightJavaCodeInsightFixtureTestCase;
 import com.intellij.util.xmlb.XmlSerializer;
-import com.liuzhihang.doc.view.config.TemplateConfigurable;
+import com.liuzhihang.doc.view.ui.settings.TemplateConfigurable;
 import com.liuzhihang.doc.view.config.TemplateSettings;
 import com.liuzhihang.doc.view.dto.DocView;
 import com.liuzhihang.doc.view.dto.DocViewData;

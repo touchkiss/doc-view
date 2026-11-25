@@ -15,6 +15,8 @@ import java.util.Map;
  * @date 2020/3/4 16:18
  */
 public class CustomPsiUtils {
+    private CustomPsiUtils() {}
+
 
     /**
      * 通过 PsiFile 获取 PsiClass
@@ -27,8 +29,8 @@ public class CustomPsiUtils {
     public static PsiClass getTargetClass(PsiFile file) {
         PsiElement[] children = file.getChildren();
         for (PsiElement child : children) {
-            if (child instanceof PsiClass) {
-                return (PsiClass) child;
+            if (child instanceof PsiClass psiClass) {
+                return psiClass;
             }
         }
         return null;
@@ -138,10 +140,11 @@ public class CustomPsiUtils {
     public static @Nullable Map<String, PsiType> getGenericsMap(@NotNull PsiClassType psiClassType) {
 
         Map<PsiTypeParameter, PsiType> substitutionMap = PsiUtil.resolveGenericsClassInType(psiClassType).getSubstitutor().getSubstitutionMap();
-        Map<String, PsiType> hashMap = new HashMap<>();
+        Map<String, PsiType> hashMap = HashMap.newHashMap(substitutionMap.size());
         boolean isProto = ProtoUtils.isProto(psiClassType);
-        for (PsiTypeParameter psiTypeParameter : substitutionMap.keySet()) {
-            PsiType psiType = substitutionMap.get(psiTypeParameter);
+        for (Map.Entry<PsiTypeParameter, PsiType> entry : substitutionMap.entrySet()) {
+            PsiTypeParameter psiTypeParameter = entry.getKey();
+            PsiType psiType = entry.getValue();
             if (psiType instanceof PsiClassType) {
 
                 String fieldName = psiTypeParameter.getName();

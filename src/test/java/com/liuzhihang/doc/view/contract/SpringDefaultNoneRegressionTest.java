@@ -60,12 +60,16 @@ public final class SpringDefaultNoneRegressionTest extends LightJavaCodeInsightF
     @Override
     protected void tearDown() throws Exception {
         try {
-            if (library != null) PsiTestUtil.removeLibrary(getModule(), library);
+            if (library != null) {
+                PsiTestUtil.removeLibrary(getModule(), library);
+            }
         } finally {
             try {
                 super.tearDown();
             } finally {
-                if (libraryDirectory != null) FileUtil.delete(libraryDirectory.toFile());
+                if (libraryDirectory != null) {
+                    FileUtil.delete(libraryDirectory.toFile());
+                }
             }
         }
     }

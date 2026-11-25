@@ -120,12 +120,26 @@ public final class McpServerService implements Disposable {
 
     @FunctionalInterface
     interface McpTransportFactory {
+        /**
+         * Creates an unstarted transport.
+         * @return transport to start
+         * @throws Exception if transport creation fails
+         */
         McpTransport create() throws Exception;
     }
 
     interface McpTransport extends AutoCloseable {
+        /**
+         * Starts the listener.
+         * @return listener endpoint
+         * @throws Exception if startup fails
+         */
         URI start() throws Exception;
 
+        /**
+         * Stops the listener and releases resources.
+         * @throws Exception if shutdown fails
+         */
         @Override
         void close() throws Exception;
     }

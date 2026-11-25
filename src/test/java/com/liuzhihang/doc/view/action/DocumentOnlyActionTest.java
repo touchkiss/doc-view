@@ -32,7 +32,9 @@ public final class DocumentOnlyActionTest extends LightJavaCodeInsightFixtureTes
             if (document != null) {
                 EdtTestUtil.runInEdtAndWait(() -> FileDocumentManager.getInstance().reloadFromDisk(document));
             }
-            if (sources != null) sources.cleanup();
+            if (sources != null) {
+                sources.cleanup();
+            }
         } finally {
             super.tearDown();
         }
@@ -56,9 +58,15 @@ public final class DocumentOnlyActionTest extends LightJavaCodeInsightFixtureTes
         assertTrue(FileDocumentManager.getInstance().isDocumentUnsaved(document));
         InspectableAction action = new InspectableAction();
         DataContext context = dataId -> {
-            if (CommonDataKeys.PROJECT.is(dataId)) return getProject();
-            if (CommonDataKeys.PSI_FILE.is(dataId)) return myFixture.getFile();
-            if (CommonDataKeys.EDITOR.is(dataId)) return myFixture.getEditor();
+            if (CommonDataKeys.PROJECT.is(dataId)) {
+                return getProject();
+            }
+            if (CommonDataKeys.PSI_FILE.is(dataId)) {
+                return myFixture.getFile();
+            }
+            if (CommonDataKeys.EDITOR.is(dataId)) {
+                return myFixture.getEditor();
+            }
             return null;
         };
         EdtTestUtil.runInEdtAndWait(() -> action.actionPerformed(event(action, context)));

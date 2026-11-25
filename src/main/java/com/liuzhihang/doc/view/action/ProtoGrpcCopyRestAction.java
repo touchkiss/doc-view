@@ -12,16 +12,24 @@ import java.awt.datatransfer.StringSelection;
 import java.util.regex.*;
 
 public abstract class ProtoGrpcCopyRestAction extends ProtoGrpcCopyCurlAction {
+    private static final Pattern PACKAGE_DECLARATION = Pattern.compile("(?m)^\\s*package\\s+([\\w.]+)\\s*;");
+
+    /**
+     * Returns whether the generated request includes field descriptions.
+     * @return whether descriptions are included
+     */
     protected abstract boolean descriptions();
     @Override public void actionPerformed(@NotNull AnActionEvent event) {
         Project project = event.getData(CommonDataKeys.PROJECT);
         var selection = ActionSelection.from(event);
         PsiFile file = selection.file();
         Editor editor = selection.editor();
-        if (project == null || file == null || editor == null) return;
+        if (project == null || file == null || editor == null) {
+            return;
+        }
         String[] signature = ProtoGrpcUtils.extractMethodSignature(editor, file);
         if (signature == null) { DocViewNotification.notifyError(project, "无法识别 gRPC 方法"); return; }
-        Matcher pkg = Pattern.compile("(?m)^\\s*package\\s+([\\w.]+)\\s*;").matcher(file.getText());
+        Matcher pkg = PACKAGE_DECLARATION.matcher(file.getText());
         String service = (pkg.find() ? pkg.group(1) + "." : "") + signature[0];
         String request = GrpcRestRequestBuilder.build(CurlHostUtils.grpcHost(project), service, signature[1],
                 ProtoGrpcUtils.parseMessageFields(file, signature[2]), descriptions());

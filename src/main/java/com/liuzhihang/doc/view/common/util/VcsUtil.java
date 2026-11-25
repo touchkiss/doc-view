@@ -26,9 +26,6 @@ public class VcsUtil {
      */
     public static String getCurrentBranch(Project project) {
         VcsRepositoryManager manager = VcsRepositoryManager.getInstance(project);
-        if (manager == null) {
-            return "";
-        }
         Optional<Repository> firstRepository = manager.getRepositories().stream().findFirst();
         if (!firstRepository.isPresent()) {
             return "";

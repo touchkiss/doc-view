@@ -5,8 +5,6 @@ import com.intellij.ide.ui.search.SearchableOptionProcessor;
 import com.liuzhihang.doc.view.DocViewBundle;
 import org.jetbrains.annotations.NotNull;
 
-import java.util.List;
-
 /** Adds Chinese and English keywords to the corresponding project settings pages. */
 public final class DocViewSearchableOptionContributor extends SearchableOptionContributor {
 

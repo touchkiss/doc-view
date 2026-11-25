@@ -2,7 +2,6 @@ package com.liuzhihang.doc.view.action.toolbar.window.catalog;
 
 import com.intellij.openapi.actionSystem.ActionUpdateThread;
 import com.intellij.openapi.actionSystem.AnActionEvent;
-import com.intellij.openapi.actionSystem.PlatformDataKeys;
 import com.intellij.openapi.project.DumbService;
 import com.intellij.openapi.project.Project;
 import com.intellij.ui.treeStructure.SimpleNode;
@@ -33,7 +32,7 @@ public abstract class AbstractCatalogUploadAction extends AnAction {
 
     @Override
     public void update(@NotNull AnActionEvent e) {
-        Project actionProject = e.getData(PlatformDataKeys.PROJECT);
+        Project actionProject = e.getProject();
         SimpleTree simpleTree = e.getData(DocViewDataKeys.WINDOW_CATALOG_TREE);
         boolean available = actionProject != null
                 && !actionProject.isDisposed()
@@ -46,7 +45,7 @@ public abstract class AbstractCatalogUploadAction extends AnAction {
     public void actionPerformed(@NotNull AnActionEvent e) {
 
         // 获取当前project对象
-        Project project = e.getData(PlatformDataKeys.PROJECT);
+        Project project = e.getProject();
         SimpleTree simpleTree = e.getData(DocViewDataKeys.WINDOW_CATALOG_TREE);
 
         if (simpleTree == null || project == null) {

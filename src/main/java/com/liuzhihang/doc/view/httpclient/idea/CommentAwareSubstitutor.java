@@ -19,12 +19,15 @@ final class CommentAwareSubstitutor implements HttpRequestVariableSubstitutor {
         Set<HttpRequestVariableSubstitutionKey> ignored = new HashSet<>();
         if (request.getRequestBody() instanceof HttpRequestMessagesGroup group) {
             for (var message : group.getRequestMessageList()) {
-                if (!(message instanceof HttpMessageBody body)) continue;
+                if (!(message instanceof HttpMessageBody body)) {
+                    continue;
+                }
                 var comments = Json5Comments.ranges(body.getText());
                 var factory = HttpRequestVariableSubstitutionKey.insideElementKeyFactory(body);
                 for (var variable : HttpRequestPsiUtils.collectVariablesRangesInMessageBody(body.getText())) {
-                    if (comments.stream().anyMatch(r -> variable.getStartOffset() >= r.start() && variable.getStartOffset() < r.end()))
+                    if (comments.stream().anyMatch(r -> variable.getStartOffset() >= r.start() && variable.getStartOffset() < r.end())) {
                         ignored.add(factory.withOffset(variable.getStartOffset()));
+                    }
                 }
             }
         }

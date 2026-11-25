@@ -6,7 +6,7 @@ import com.intellij.openapi.components.Service;
 import com.intellij.openapi.project.Project;
 import com.liuzhihang.doc.view.DocViewBundle;
 import com.liuzhihang.doc.view.config.ShowDocSettings;
-import com.liuzhihang.doc.view.config.ShowDocSettingsConfigurable;
+import com.liuzhihang.doc.view.ui.settings.ShowDocSettingsConfigurable;
 import com.liuzhihang.doc.view.dto.DocView;
 import com.liuzhihang.doc.view.render.DocumentMarkdownRenderer;
 import com.liuzhihang.doc.view.integration.ShowDocFacadeService;
@@ -63,7 +63,7 @@ public final class ShowDocServiceImpl implements DocViewUploadService {
             DocViewNotification.uploadSuccess(project, DocViewBundle.message("platform.name.showdoc"), showDocInterfaceUrl);
         } catch (ProcessCanceledException exception) {
             throw exception;
-        } catch (Exception e) {
+        } catch (Exception _) {
             DocViewNotification.notifyError(project, DocViewBundle.message("notify.showdoc.upload.error"));
         }
     }

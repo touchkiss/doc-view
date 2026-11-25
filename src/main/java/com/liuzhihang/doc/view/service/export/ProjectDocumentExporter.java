@@ -121,7 +121,7 @@ public final class ProjectDocumentExporter {
         for (Map.Entry<String, byte[]> entry : contents.entrySet()) {
             Path target = canonicalRoot.resolve(entry.getKey());
             TargetState state = expectedTargets.get(target);
-            if (state.exists() && MessageDigest.isEqual(state.bytes(), entry.getValue())) {
+            if (state.hasContent(entry.getValue())) {
                 unchanged.add(entry.getKey());
             } else {
                 changed.put(target, entry.getValue());
@@ -135,7 +135,7 @@ public final class ProjectDocumentExporter {
                 Path parent = entry.getKey().getParent();
                 validateOutputDirectories(canonicalRoot);
                 Path temporary = Files.createTempFile(parent, ".doc-view-", ".tmp");
-                staged.add(new StagedFile(entry.getKey(), temporary, entry.getValue(), relative(canonicalRoot, entry.getKey())));
+                staged.add(new StagedFile(entry.getKey(), temporary, relative(canonicalRoot, entry.getKey())));
                 Files.write(temporary, entry.getValue());
             }
             observer.afterStaging(canonicalRoot);
@@ -175,7 +175,6 @@ public final class ProjectDocumentExporter {
                 }
                 atomicReplace(file);
                 published.add(file.relativePath());
-                expectedTargets.put(file.target(), TargetState.of(file.content()));
             }
             for (StagedFile file : staged) {
                 if (file.target().equals(canonicalRoot.resolve(INDEX_PATH))) {
@@ -187,7 +186,6 @@ public final class ProjectDocumentExporter {
                     }
                     atomicReplace(file);
                     published.add(file.relativePath());
-                    expectedTargets.put(file.target(), TargetState.of(file.content()));
                     break;
                 }
             }
@@ -385,7 +383,7 @@ public final class ProjectDocumentExporter {
         String content;
         try {
             content = Files.readString(target, StandardCharsets.UTF_8);
-        } catch (CharacterCodingException invalidUtf8) {
+        } catch (CharacterCodingException _) {
             conflicts.add(relative);
             return;
         }
@@ -411,7 +409,7 @@ public final class ProjectDocumentExporter {
         String content;
         try {
             content = Files.readString(target, StandardCharsets.UTF_8);
-        } catch (CharacterCodingException invalidUtf8) {
+        } catch (CharacterCodingException _) {
             conflicts.add(relative);
             return;
         }
@@ -450,7 +448,7 @@ public final class ProjectDocumentExporter {
             try {
                 validateOutputDirectories(projectRoot);
                 Files.deleteIfExists(file.temporary());
-            } catch (IOException ignored) {
+            } catch (IOException _) {
                 leftovers.add(relative(projectRoot, file.temporary()));
             }
         }
@@ -495,7 +493,7 @@ public final class ProjectDocumentExporter {
         }
     }
 
-    private record StagedFile(Path target, Path temporary, byte[] content, String relativePath) {
+    private record StagedFile(Path target, Path temporary, String relativePath) {
     }
 
     interface ExportObserver {
@@ -506,30 +504,32 @@ public final class ProjectDocumentExporter {
         }
     }
 
-    private record TargetState(boolean exists, byte[] content) {
-        private TargetState {
-            content = content == null ? null : content.clone();
+    private static final class TargetState {
+        private final byte[] content;
+
+        private TargetState(byte[] content) {
+            this.content = content;
         }
 
         private static TargetState absent() {
-            return new TargetState(false, null);
+            return new TargetState(null);
         }
 
         private static TargetState of(byte[] content) {
-            return new TargetState(true, content);
+            return new TargetState(content);
         }
 
-        private byte[] bytes() {
-            return content == null ? null : content.clone();
+        private boolean hasContent(byte[] candidate) {
+            return content != null && MessageDigest.isEqual(content, candidate);
         }
 
         private boolean matches(Path target) throws IOException {
             if (!Files.exists(target, LinkOption.NOFOLLOW_LINKS)) {
-                return !exists;
+                return content == null;
             }
-            return exists && !Files.isSymbolicLink(target)
+            return content != null && !Files.isSymbolicLink(target)
                     && Files.isRegularFile(target, LinkOption.NOFOLLOW_LINKS)
-                    && MessageDigest.isEqual(content, Files.readAllBytes(target));
+                    && hasContent(Files.readAllBytes(target));
         }
     }
 }

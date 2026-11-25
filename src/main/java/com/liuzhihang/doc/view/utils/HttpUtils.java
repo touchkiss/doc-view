@@ -6,6 +6,7 @@ import com.intellij.openapi.progress.ProgressIndicator;
 import com.intellij.util.concurrency.AppExecutorUtil;
 import com.liuzhihang.doc.view.DocViewBundle;
 import org.apache.http.Header;
+import org.apache.http.HttpStatus;
 import org.apache.http.NameValuePair;
 import org.apache.http.client.config.RequestConfig;
 import org.apache.http.client.methods.HttpGet;
@@ -68,10 +69,13 @@ public final class HttpUtils {
         ProgressManager.checkCanceled();
         try {
             URIBuilder builder = new URIBuilder(url);
-            if (parameters != null && !parameters.isEmpty()) builder.setParameters(parameters);
+            if (parameters != null && !parameters.isEmpty()) {
+                builder.setParameters(parameters);
+            }
             URI uri = builder.build();
-            if (uri.getHost() == null || !("http".equalsIgnoreCase(uri.getScheme())
-                    || "https".equalsIgnoreCase(uri.getScheme()))) {
+            boolean supportedScheme = "http".equalsIgnoreCase(uri.getScheme())
+                    || "https".equalsIgnoreCase(uri.getScheme());
+            if (uri.getHost() == null || !supportedScheme) {
                 throw new IllegalArgumentException();
             }
             return uri;
@@ -97,11 +101,15 @@ public final class HttpUtils {
                 .disableAutomaticRetries()
                 .disableRedirectHandling()
                 .build()) {
-            if (headers != null) headers.forEach(request::addHeader);
+            if (headers != null) {
+                headers.forEach(request::addHeader);
+            }
             try (var response = client.execute(request)) {
                 ProgressManager.checkCanceled();
                 int code = response.getStatusLine().getStatusCode();
-                if (code < 200 || code >= 300) throw new HttpStatusException(code);
+                if (code < HttpStatus.SC_OK || code >= HttpStatus.SC_MULTIPLE_CHOICES) {
+                    throw new HttpStatusException(code);
+                }
                 String body = response.getEntity() == null ? ""
                         : EntityUtils.toString(response.getEntity(), StandardCharsets.UTF_8);
                 ProgressManager.checkCanceled();

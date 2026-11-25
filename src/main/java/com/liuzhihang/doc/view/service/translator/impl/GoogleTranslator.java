@@ -42,7 +42,7 @@ public class GoogleTranslator extends AbstractTranslator {
             JSONObject response = JSON.parseObject(json);
             return Objects.requireNonNull(response).getJSONObject("data").getJSONArray("translations")
                 .getJSONObject(0).getString("translatedText");
-        } catch (Exception e) {
+        } catch (Exception _) {
             LOGGER.warn("google translate error: please check your appkey and network");
             return StringUtils.EMPTY;
         }

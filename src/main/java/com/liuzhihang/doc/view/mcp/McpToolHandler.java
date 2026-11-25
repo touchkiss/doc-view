@@ -20,6 +20,9 @@ import java.util.function.Supplier;
 
 /** Handles the MCP tool that uploads generated API documentation to YApi. */
 public final class McpToolHandler {
+    private static final String PROJECT_PATH = "projectPath";
+    private static final String REFERENCE = "reference";
+
 
     public static final String TOOL_NAME = "upload_yapi_api_doc";
 
@@ -47,8 +50,8 @@ public final class McpToolHandler {
         Map<String, Object> stringField = Map.of("type", "string");
         return McpSchema.Tool.builder(TOOL_NAME, Map.of(
                         "type", "object",
-                        "properties", Map.of("projectPath", stringField, "reference", stringField),
-                        "required", List.of("projectPath", "reference"),
+                        "properties", Map.of(PROJECT_PATH, stringField, REFERENCE, stringField),
+                        "required", List.of(PROJECT_PATH, REFERENCE),
                         "additionalProperties", false))
                 .description("Uploads Java controller API documentation to the configured YApi project.")
                 .build();
@@ -64,8 +67,8 @@ public final class McpToolHandler {
     }
 
     McpResult.UploadBatch handle(Map<String, Object> arguments) {
-        String projectPath = stringArgument(arguments, "projectPath");
-        String reference = stringArgument(arguments, "reference");
+        String projectPath = stringArgument(arguments, PROJECT_PATH);
+        String reference = stringArgument(arguments, REFERENCE);
         if (projectPath == null || reference == null) {
             return McpResult.UploadBatch.failure(projectPath, reference, McpException.Code.INVALID_ARGUMENT,
                     "projectPath and reference must be non-blank strings");
@@ -119,7 +122,13 @@ public final class McpToolHandler {
     }
 
     private static McpResult.UploadBatch batch(String projectPath, String reference, GeneratedDocs generated,
-                                               List<McpResult.Item> uploaded) {
+                                               /**
+         * Uploads documents.
+         * @param project current project
+         * @param documents documents to upload
+         * @return per-document results
+         */
+        List<McpResult.Item> uploaded) {
         List<McpResult.Item> created = new ArrayList<>();
         List<McpResult.Item> updated = new ArrayList<>();
         List<McpResult.Item> skipped = new ArrayList<>(generated.skipped());
@@ -216,16 +225,33 @@ public final class McpToolHandler {
 
     @FunctionalInterface
     interface ProjectPathResolver {
+        /**
+         * Resolves an open project.
+         * @param projectPath project path
+         * @return open project
+         */
         Project resolve(String projectPath);
     }
 
     @FunctionalInterface
     interface UploadReferenceResolver {
+        /**
+         * Resolves the requested controller or method.
+         * @param project current project
+         * @param reference class or method reference
+         * @return resolved targets
+         */
         List<UploadTarget> resolve(Project project, String reference);
     }
 
     @FunctionalInterface
     interface DocumentGenerator {
+        /**
+         * Generates documents and records skipped or failed targets.
+         * @param project current project
+         * @param targets resolved targets
+         * @return generated documents and per-target errors
+         */
         GeneratedDocs generate(Project project, List<UploadTarget> targets);
     }
 
@@ -236,6 +262,11 @@ public final class McpToolHandler {
 
     @FunctionalInterface
     interface UploadTargetReadAction {
+        /**
+         * Captures an upload target inside a read action.
+         * @param computation target computation
+         * @return captured target
+         */
         UploadTarget compute(Supplier<UploadTarget> computation);
     }
 

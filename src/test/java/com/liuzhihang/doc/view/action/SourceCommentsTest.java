@@ -19,7 +19,7 @@ import com.liuzhihang.doc.view.config.EasyDocConfig;
 import com.liuzhihang.doc.view.service.KdocSupport;
 import com.liuzhihang.doc.view.service.PackageInfoService;
 import com.liuzhihang.doc.view.service.WriterService;
-import com.liuzhihang.doc.view.view.settings.CommonSettingsConfigurable;
+import com.liuzhihang.doc.view.ui.settings.CommonSettingsConfigurable;
 import org.jetbrains.kotlin.idea.KotlinFileType;
 import org.jetbrains.kotlin.psi.KtFile;
 import org.jetbrains.kotlin.psi.KtNamedFunction;
@@ -329,8 +329,8 @@ public class SourceCommentsTest extends LightJavaCodeInsightFixtureTestCase {
     }
 
     public void testKdocSettingsAndTemplateFormsCanBeCreated() {
-        assertNotNull(new com.liuzhihang.doc.view.view.settings.kdoc.KdocSettingsConfigurable().createComponent());
-        assertNotNull(new com.liuzhihang.doc.view.view.settings.kdoc.template.KtMethodSettingsConfigurable().createComponent());
+        assertNotNull(new com.liuzhihang.doc.view.ui.settings.kdoc.KdocSettingsConfigurable().createComponent());
+        assertNotNull(new com.liuzhihang.doc.view.ui.settings.kdoc.template.KtMethodSettingsConfigurable().createComponent());
     }
 
     private static void restore(Map<String, String> map, String key, String old) {

@@ -32,12 +32,12 @@
         <applicationService serviceImplementation="com.liuzhihang.doc.view.javadoc.service.variable.JavadocVariableGeneratorService"/>
         <applicationService serviceImplementation="com.liuzhihang.doc.view.service.gpt.GptService"/>
 
-        <applicationConfigurable id="easydoc.common.settings" parentId="liuzhihang.api.doc.SettingsConfigurable" displayName="源码注释与 AI" instance="com.liuzhihang.doc.view.view.settings.CommonSettingsConfigurable"/>
+        <applicationConfigurable id="easydoc.common.settings" parentId="liuzhihang.api.doc.SettingsConfigurable" displayName="源码注释与 AI" instance="com.liuzhihang.doc.view.ui.settings.CommonSettingsConfigurable"/>
 
-        <applicationConfigurable parentId="easydoc.common.settings" id="easydoc.javadoc.settings" displayName="Java 注释" instance="com.liuzhihang.doc.view.view.settings.javadoc.JavadocSettingsConfigurable">
-            <configurable parentId="easydoc.javadoc.settings" displayName="类注释模板" instance="com.liuzhihang.doc.view.view.settings.javadoc.template.ClassSettingsConfigurable"/>
-            <configurable parentId="easydoc.javadoc.settings" displayName="方法注释模板" instance="com.liuzhihang.doc.view.view.settings.javadoc.template.MethodSettingsConfigurable"/>
-            <configurable parentId="easydoc.javadoc.settings" displayName="字段注释模板" instance="com.liuzhihang.doc.view.view.settings.javadoc.template.FieldSettingsConfigurable"/>
+        <applicationConfigurable parentId="easydoc.common.settings" id="easydoc.javadoc.settings" displayName="Java 注释" instance="com.liuzhihang.doc.view.ui.settings.javadoc.JavadocSettingsConfigurable">
+            <configurable parentId="easydoc.javadoc.settings" displayName="类注释模板" instance="com.liuzhihang.doc.view.ui.settings.javadoc.template.ClassSettingsConfigurable"/>
+            <configurable parentId="easydoc.javadoc.settings" displayName="方法注释模板" instance="com.liuzhihang.doc.view.ui.settings.javadoc.template.MethodSettingsConfigurable"/>
+            <configurable parentId="easydoc.javadoc.settings" displayName="字段注释模板" instance="com.liuzhihang.doc.view.ui.settings.javadoc.template.FieldSettingsConfigurable"/>
         </applicationConfigurable>
 
 
@@ -74,47 +74,47 @@
                                         implementationClass="com.liuzhihang.doc.view.provider.DocViewLineMarkerProvider"/>
 
         <!-- 配置为项目等级 全局为 applicationConfigurable -->
-        <projectConfigurable instance="com.liuzhihang.doc.view.config.SettingsConfigurable"
+        <projectConfigurable instance="com.liuzhihang.doc.view.ui.settings.SettingsConfigurable"
                              id="liuzhihang.api.doc.SettingsConfigurable"
                              parentId="tools"
                              bundle="messages.DocViewBundle" key="settings.page.root"
                              nonDefaultProject="true"/>
 
-        <applicationConfigurable instance="com.liuzhihang.doc.view.config.McpSettingsConfigurable"
+        <applicationConfigurable instance="com.liuzhihang.doc.view.ui.settings.McpSettingsConfigurable"
                                  id="liuzhihang.api.doc.McpSettingsConfigurable"
                                  parentId="liuzhihang.api.doc.IntegrationSettingsConfigurable"
                                  displayName="MCP 服务"/>
 
-        <projectConfigurable instance="com.liuzhihang.doc.view.config.GenerationRulesConfigurable"
+        <projectConfigurable instance="com.liuzhihang.doc.view.ui.settings.GenerationRulesConfigurable"
                              id="liuzhihang.api.doc.GenerationRulesConfigurable"
                              parentId="liuzhihang.api.doc.SettingsConfigurable"
                              bundle="messages.DocViewBundle" key="settings.page.rules"
                              nonDefaultProject="true"/>
 
-        <projectConfigurable instance="com.liuzhihang.doc.view.config.TemplateConfigurable"
+        <projectConfigurable instance="com.liuzhihang.doc.view.ui.settings.TemplateConfigurable"
                              id="liuzhihang.api.doc.TemplateConfigurable"
                              parentId="liuzhihang.api.doc.SettingsConfigurable"
                              bundle="messages.DocViewBundle" key="settings.page.template"
                              nonDefaultProject="true"/>
 
-        <projectConfigurable instance="com.liuzhihang.doc.view.config.IntegrationSettingsConfigurable"
+        <projectConfigurable instance="com.liuzhihang.doc.view.ui.settings.IntegrationSettingsConfigurable"
                              id="liuzhihang.api.doc.IntegrationSettingsConfigurable"
                              parentId="liuzhihang.api.doc.SettingsConfigurable"
                              bundle="messages.DocViewBundle" key="settings.page.integrations"
                              nonDefaultProject="true"/>
 
-        <projectConfigurable instance="com.liuzhihang.doc.view.config.YApiSettingsConfigurable"
+        <projectConfigurable instance="com.liuzhihang.doc.view.ui.settings.YApiSettingsConfigurable"
                              id="liuzhihang.api.doc.YApiSettingsConfigurable"
                              parentId="liuzhihang.api.doc.IntegrationSettingsConfigurable"
                              bundle="messages.DocViewBundle" key="settings.page.yapi"
                              nonDefaultProject="true"/>
 
-        <projectConfigurable instance="com.liuzhihang.doc.view.config.ShowDocSettingsConfigurable"
+        <projectConfigurable instance="com.liuzhihang.doc.view.ui.settings.ShowDocSettingsConfigurable"
                              id="liuzhihang.api.doc.ShowDocSettingsConfigurable"
                              parentId="liuzhihang.api.doc.IntegrationSettingsConfigurable"
                              bundle="messages.DocViewBundle" key="settings.page.showdoc"
                              nonDefaultProject="true"/>
-        <projectConfigurable instance="com.liuzhihang.doc.view.config.YuQueSettingsConfigurable"
+        <projectConfigurable instance="com.liuzhihang.doc.view.ui.settings.YuQueSettingsConfigurable"
                              id="liuzhihang.api.doc.YuQueSettingsConfigurable"
                              parentId="liuzhihang.api.doc.IntegrationSettingsConfigurable"
                              bundle="messages.DocViewBundle" key="settings.page.yuque"

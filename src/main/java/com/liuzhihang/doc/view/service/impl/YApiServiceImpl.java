@@ -6,7 +6,7 @@ import com.intellij.openapi.progress.ProcessCanceledException;
 import com.intellij.openapi.project.Project;
 import com.liuzhihang.doc.view.DocViewBundle;
 import com.liuzhihang.doc.view.config.YApiSettings;
-import com.liuzhihang.doc.view.config.YApiSettingsConfigurable;
+import com.liuzhihang.doc.view.ui.settings.YApiSettingsConfigurable;
 import com.liuzhihang.doc.view.dto.DocView;
 import com.liuzhihang.doc.view.integration.YApiFacadeService;
 import com.liuzhihang.doc.view.integration.impl.YApiFacadeServiceImpl;
@@ -47,7 +47,7 @@ public final class YApiServiceImpl implements DocViewUploadService {
             }
         } catch (ProcessCanceledException canceled) {
             throw canceled;
-        } catch (Exception failure) {
+        } catch (Exception _) {
             DocViewNotification.notifyError(project, DocViewBundle.message("notify.integration.upload.error"));
         }
     }

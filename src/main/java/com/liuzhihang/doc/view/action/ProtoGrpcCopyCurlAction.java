@@ -3,8 +3,6 @@ package com.liuzhihang.doc.view.action;
 import com.intellij.openapi.actionSystem.ActionUpdateThread;
 import com.intellij.openapi.actionSystem.AnAction;
 import com.intellij.openapi.actionSystem.AnActionEvent;
-import com.intellij.openapi.actionSystem.CommonDataKeys;
-import com.intellij.openapi.actionSystem.PlatformDataKeys;
 import com.intellij.openapi.editor.Editor;
 import com.intellij.openapi.project.Project;
 import com.intellij.psi.PsiFile;
@@ -30,7 +28,7 @@ public class ProtoGrpcCopyCurlAction extends AnAction {
 
     @Override
     public void actionPerformed(@NotNull AnActionEvent e) {
-        Project project = e.getData(PlatformDataKeys.PROJECT);
+        Project project = e.getProject();
         var selection = ActionSelection.from(e);
         PsiFile psiFile = selection.file();
         Editor editor = selection.editor();
@@ -73,7 +71,7 @@ public class ProtoGrpcCopyCurlAction extends AnAction {
 
     @Override
     public void update(@NotNull AnActionEvent e) {
-        Project project = e.getData(PlatformDataKeys.PROJECT);
+        Project project = e.getProject();
         var selection = ActionSelection.from(e);
         PsiFile psiFile = selection.file();
         Editor editor = selection.editor();

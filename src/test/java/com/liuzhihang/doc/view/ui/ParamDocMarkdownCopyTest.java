@@ -163,7 +163,9 @@ public final class ParamDocMarkdownCopyTest extends LightJavaCodeInsightFixtureT
 
             @Override
             public void beforeTaskStart(Task task, ProgressIndicator indicator) {
-                if (!isCopyTask(task)) return;
+                if (!isCopyTask(task)) {
+                    return;
+                }
                 startedOnEdt.set(ApplicationManager.getApplication().isDispatchThread());
                 started.countDown();
                 try {
@@ -178,7 +180,9 @@ public final class ParamDocMarkdownCopyTest extends LightJavaCodeInsightFixtureT
 
             @Override
             public void afterTaskStart(Task task, ProgressIndicator indicator) {
-                if (isCopyTask(task)) rendered.countDown();
+                if (isCopyTask(task)) {
+                    rendered.countDown();
+                }
             }
         });
         try {
@@ -199,8 +203,11 @@ public final class ParamDocMarkdownCopyTest extends LightJavaCodeInsightFixtureT
         } finally {
             release.countDown();
             connection.disconnect();
-            if (previousProperty == null) System.clearProperty(property);
-            else System.setProperty(property, previousProperty);
+            if (previousProperty == null) {
+                System.clearProperty(property);
+            } else {
+                System.setProperty(property, previousProperty);
+            }
         }
     }
 
@@ -243,13 +250,17 @@ public final class ParamDocMarkdownCopyTest extends LightJavaCodeInsightFixtureT
         if (component instanceof ActionToolbar toolbar) {
             for (AnAction action : toolbar.getActionGroup().getChildren(null)) {
                 String text = action.getTemplatePresentation().getText();
-                if (text != null && text.contains("Markdown")) return action;
+                if (text != null && text.contains("Markdown")) {
+                    return action;
+                }
             }
         }
         if (component instanceof Container container) {
             for (Component child : container.getComponents()) {
                 AnAction result = findMarkdownAction(child);
-                if (result != null) return result;
+                if (result != null) {
+                    return result;
+                }
             }
         }
         return null;
@@ -257,7 +268,9 @@ public final class ParamDocMarkdownCopyTest extends LightJavaCodeInsightFixtureT
 
     private static int rowFor(ParamTreeTableView table, String name) {
         for (int row = 0; row < table.getRowCount(); row++) {
-            if (name.equals(table.getValueAt(row, 0))) return row;
+            if (name.equals(table.getValueAt(row, 0))) {
+                return row;
+            }
         }
         throw new AssertionError("Field not visible in the editor: " + name);
     }

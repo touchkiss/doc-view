@@ -2,7 +2,6 @@ package com.liuzhihang.doc.view.action.toolbar.window.catalog;
 
 import com.intellij.openapi.actionSystem.AnAction;
 import com.intellij.openapi.actionSystem.AnActionEvent;
-import com.intellij.openapi.actionSystem.PlatformDataKeys;
 import com.intellij.openapi.project.Project;
 import com.intellij.ui.TreeExpandCollapse;
 import com.intellij.ui.treeStructure.SimpleNode;
@@ -22,7 +21,7 @@ public class CatalogOpenAction extends AnAction {
     public void actionPerformed(@NotNull AnActionEvent e) {
 
         // 获取当前project对象
-        Project project = e.getData(PlatformDataKeys.PROJECT);
+        Project project = e.getProject();
         SimpleTree simpleTree = e.getData(DocViewDataKeys.WINDOW_CATALOG_TREE);
 
         if (simpleTree == null || project == null) {
@@ -31,8 +30,7 @@ public class CatalogOpenAction extends AnAction {
 
         SimpleNode selectedNode = simpleTree.getSelectedNode();
 
-        if (selectedNode instanceof MethodNode) {
-            MethodNode methodNode = (MethodNode) selectedNode;
+        if (selectedNode instanceof MethodNode methodNode) {
             CustomFileUtils.openMd(project, methodNode);
         } else {
             TreeExpandCollapse.expandAll(simpleTree);

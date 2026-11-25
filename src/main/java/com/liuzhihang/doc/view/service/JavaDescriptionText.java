@@ -15,22 +15,7 @@ final class JavaDescriptionText {
         if (comment == null) {
             return prose;
         }
-        var references = new ArrayList<PsiInlineDocTag>();
-        if (param == null) {
-            for (var element : comment.getDescriptionElements()) {
-                if (element instanceof PsiInlineDocTag tag) {
-                    references.add(tag);
-                } else {
-                    references.addAll(PsiTreeUtil.findChildrenOfType(element, PsiInlineDocTag.class));
-                }
-            }
-        } else {
-            for (var tag : comment.findTagsByName("param")) {
-                if (matches(tag, param)) {
-                    references.addAll(PsiTreeUtil.findChildrenOfType(tag, PsiInlineDocTag.class));
-                }
-            }
-        }
+        var references = inlineReferences(comment, param);
         for (var reference : references) {
             String name = reference.getName();
             String text = safeProse(reference.getText());
@@ -39,6 +24,26 @@ final class JavaDescriptionText {
             }
         }
         return prose;
+    }
+
+    private static ArrayList<PsiInlineDocTag> inlineReferences(PsiDocComment comment, String param) {
+        var references = new ArrayList<PsiInlineDocTag>();
+        if (param != null) {
+            for (var tag : comment.findTagsByName("param")) {
+                if (matches(tag, param)) {
+                    references.addAll(PsiTreeUtil.findChildrenOfType(tag, PsiInlineDocTag.class));
+                }
+            }
+            return references;
+        }
+        for (var element : comment.getDescriptionElements()) {
+            if (element instanceof PsiInlineDocTag tag) {
+                references.add(tag);
+            } else {
+                references.addAll(PsiTreeUtil.findChildrenOfType(element, PsiInlineDocTag.class));
+            }
+        }
+        return references;
     }
 
     private static String safeProse(String description) {

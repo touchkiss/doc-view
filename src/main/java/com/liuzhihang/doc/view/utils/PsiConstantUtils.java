@@ -1,6 +1,8 @@
 package com.liuzhihang.doc.view.utils;
 
 import com.intellij.openapi.project.IndexNotReadyException;
+import org.apache.commons.lang3.Strings;
+
 import com.intellij.psi.JavaPsiFacade;
 import com.intellij.psi.PsiElement;
 import com.intellij.psi.PsiExpression;
@@ -31,6 +33,6 @@ public final class PsiConstantUtils {
             return null;
         }
         Object value = constantValue(expression);
-        return value != null ? String.valueOf(value) : expression.getText().replaceAll("^\"|\"$", "");
+        return value != null ? String.valueOf(value) : Strings.CS.removeEnd(Strings.CS.removeStart(expression.getText(), "\""), "\"");
     }
 }

@@ -30,6 +30,14 @@ import java.util.stream.Collectors;
  * @date 2020/3/18 17:00
  */
 public class CustomPsiCommentUtils {
+    private CustomPsiCommentUtils() {}
+
+    private static final String DOC_COMMENT_DATA_TOKEN = "PsiDocToken:DOC_COMMENT_DATA";
+
+    private static final Pattern LINK_REFERENCE = Pattern.compile("\\{@link\\s+([^\\s}]+)", Pattern.CASE_INSENSITIVE);
+
+    private static final Pattern SEE_REFERENCE = Pattern.compile("@see\\s+([\\w.#$()]+)", Pattern.CASE_INSENSITIVE);
+
 
     /**
      * 获取注释中 tagName 对应的注释, 如果指定 tagName 则直接从 tagName 里面获取
@@ -103,7 +111,7 @@ public class CustomPsiCommentUtils {
             if (docComment != null) {
                 for (PsiElement element : docComment.getChildren()) {
 
-                    if (!"PsiDocToken:DOC_COMMENT_DATA".equalsIgnoreCase(element.toString())) {
+                    if (!DOC_COMMENT_DATA_TOKEN.equalsIgnoreCase(element.toString())) {
                         continue;
                     }
                     // 原注释中的换行符移除，移除注释中的 html 标签：<p> </p>
@@ -123,8 +131,10 @@ public class CustomPsiCommentUtils {
         String text = comment.getText();
         var tags = comment.getTags();
         boolean block = text.startsWith("/**") && text.endsWith("*/");
-        int end = tags.length == 0 ? (block ? text.length() - 2 : text.length())
-                : tags[0].getTextRange().getStartOffset() - comment.getTextRange().getStartOffset();
+        int end = block ? text.length() - 2 : text.length();
+        if (tags.length != 0) {
+            end = tags[0].getTextRange().getStartOffset() - comment.getTextRange().getStartOffset();
+        }
         if (!block) {
             return text.substring(0, end).lines().map(String::strip)
                     .map(line -> line.startsWith("///") ? line.substring(3).strip() : line)
@@ -196,7 +206,7 @@ public class CustomPsiCommentUtils {
             if (docComment != null) {
                 for (PsiElement element : docComment.getChildren()) {
 
-                    if ("PsiDocToken:DOC_COMMENT_DATA".equalsIgnoreCase(element.toString())) {
+                    if (DOC_COMMENT_DATA_TOKEN.equalsIgnoreCase(element.toString())) {
                         // 只获取第一行注释
                         return element.getText().replaceAll("[* \n]+", StringUtils.EMPTY);
                     }
@@ -225,13 +235,12 @@ public class CustomPsiCommentUtils {
             }
 
             // JavaDoc 注释 (/** ... */)：提取主注释文本并处理 @see 枚举
-            if (psiComment instanceof PsiDocComment) {
-                PsiDocComment docComment = (PsiDocComment) psiComment;
+            if (psiComment instanceof PsiDocComment docComment) {
 
                 // 提取主注释文本（与 tagDocComment 逻辑一致）
                 StringBuilder sb = new StringBuilder();
                 for (PsiElement element : docComment.getChildren()) {
-                    if ("PsiDocToken:DOC_COMMENT_DATA".equalsIgnoreCase(element.toString())) {
+                    if (DOC_COMMENT_DATA_TOKEN.equalsIgnoreCase(element.toString())) {
                         sb.append(element.getText().replaceAll("[* \\n]|<p>|</p>", ""));
                     }
                 }
@@ -469,7 +478,7 @@ public class CustomPsiCommentUtils {
                     PsiExpressionList argList = enumConstant.getArgumentList();
                     if (argList != null && i < argList.getExpressionCount()) {
                         // 去掉字符串字面量两侧的双引号
-                        return argList.getExpressions()[i].getText().replaceAll("^\"|\"$", "");
+                        return Strings.CS.removeEnd(Strings.CS.removeStart(argList.getExpressions()[i].getText(), "\""), "\"");
                     }
                 }
             }
@@ -500,7 +509,7 @@ public class CustomPsiCommentUtils {
                 for (PsiElement child : element.getChildren()) {
                     if (StringUtils.isBlank(paramName) && "PsiElement(DOC_PARAMETER_REF)".equals(child.toString())) {
                         paramName = StringUtils.trim(child.getText());
-                    } else if (StringUtils.isBlank(paramData) && "PsiDocToken:DOC_COMMENT_DATA".equals(child.toString())) {
+                    } else if (StringUtils.isBlank(paramData) && DOC_COMMENT_DATA_TOKEN.equals(child.toString())) {
                         paramData = StringUtils.trim(child.getText());
                     }
                 }
@@ -579,7 +588,7 @@ public class CustomPsiCommentUtils {
                 for (PsiElement child : element.getChildren()) {
                     if (StringUtils.isBlank(exceptionName) && "PsiElement(DOC_TAG_VALUE_ELEMENT)".equals(child.toString())) {
                         exceptionName = StringUtils.trim(child.getText());
-                    } else if (StringUtils.isBlank(exceptionData) && "PsiDocToken:DOC_COMMENT_DATA".equals(child.toString())) {
+                    } else if (StringUtils.isBlank(exceptionData) && DOC_COMMENT_DATA_TOKEN.equals(child.toString())) {
                         exceptionData = StringUtils.trim(child.getText());
                     }
                 }
@@ -628,13 +637,13 @@ public class CustomPsiCommentUtils {
         // 2) 某些 PSI 结构下，{@link ...} 可能未按独立元素暴露。
         String rawText = docComment.getText().replace("&#64;", "@");
 
-        Matcher seeMatcher = Pattern.compile("@see\\s+([\\w.#$()]+)", Pattern.CASE_INSENSITIVE)
+        Matcher seeMatcher = SEE_REFERENCE
                 .matcher(rawText);
         while (seeMatcher.find()) {
             addReference(references, extractFirstReferenceToken(seeMatcher.group(1)));
         }
 
-        Matcher linkMatcher = Pattern.compile("\\{@link\\s+([^\\s}]+)", Pattern.CASE_INSENSITIVE)
+        Matcher linkMatcher = LINK_REFERENCE
                 .matcher(rawText);
         while (linkMatcher.find()) {
             addReference(references, extractFirstReferenceToken(linkMatcher.group(1)));

@@ -12,7 +12,12 @@ import javax.swing.*;
 import java.awt.FlowLayout;
 import java.util.Arrays;
 
+/**
+ * YApi integration settings.
+ */
 public class YApiSettingForm {
+    private static final String INVALID_PROJECT_ID = "notify.yapi.project.id";
+    private static final String PROJECT_ID_PATTERN = "\\d+";
     private JPanel rootPanel;
     private JPanel yapiProjectPanel;
     private JLabel urlLabel;
@@ -72,18 +77,18 @@ public class YApiSettingForm {
         if (projectId.isEmpty()) {
             return null;
         }
-        if (!projectId.matches("[0-9]+")) {
-            throw new ConfigurationException(DocViewBundle.message("notify.yapi.project.id"));
+        if (!projectId.matches(PROJECT_ID_PATTERN)) {
+            throw new ConfigurationException(DocViewBundle.message(INVALID_PROJECT_ID));
         }
 
         try {
             long parsedProjectId = Long.parseLong(projectId);
             if (parsedProjectId <= 0) {
-                throw new ConfigurationException(DocViewBundle.message("notify.yapi.project.id"));
+                throw new ConfigurationException(DocViewBundle.message(INVALID_PROJECT_ID));
             }
             return parsedProjectId;
         } catch (NumberFormatException exception) {
-            throw new ConfigurationException(DocViewBundle.message("notify.yapi.project.id"));
+            throw new ConfigurationException(DocViewBundle.message(INVALID_PROJECT_ID));
         }
     }
 

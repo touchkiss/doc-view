@@ -58,7 +58,7 @@ public class CustomTranslator extends AbstractTranslator {
                 return StringUtils.EMPTY;
             }
             return response.getString("data");
-        } catch (Exception e) {
+        } catch (Exception _) {
             LOGGER.warn("Custom translation failed");
             return StringUtils.EMPTY;
         }

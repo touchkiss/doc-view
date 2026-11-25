@@ -18,8 +18,8 @@ import com.intellij.psi.util.PsiTreeUtil;
 import com.liuzhihang.doc.view.service.PackageInfoService;
 import com.liuzhihang.doc.view.service.WriterService;
 import com.liuzhihang.doc.view.service.translator.TranslatorService;
-import com.liuzhihang.doc.view.view.inner.GenerateAllView;
-import com.liuzhihang.doc.view.view.inner.PackageDescribeView;
+import com.liuzhihang.doc.view.ui.inner.GenerateAllView;
+import com.liuzhihang.doc.view.ui.inner.PackageDescribeView;
 import org.jetbrains.annotations.NotNull;
 
 import java.util.ArrayList;
@@ -134,7 +134,7 @@ public class GenerateAllJavadocAction extends AnAction {
             Map<PsiPackage, String> translated = new LinkedHashMap<>();
             for (var pkg : directories.keySet()) {
                 ProgressManager.checkCanceled();
-                String name = ReadAction.compute(pkg::getName);
+                String name = ReadAction.computeBlocking(pkg::getName);
                 String description = translator.translate(name, pkg);
                 translated.put(pkg, description.isBlank() ? name : description);
             }
